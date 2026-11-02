@@ -2,6 +2,7 @@ import { useI18n } from '../i18n'
 import type { Dispatch, SetStateAction } from 'react'
 import Hero68Preview from '../components/Hero68Preview'
 import type { AdvancedBinding } from '../protocol/hero68/advanced'
+import type { HeroDeviceModelId } from '../keyboard/devices'
 import { RAPID_TRIGGER_VALUES } from '../app/helpers'
 import type { SwitchOption } from '../app/switchAssets'
 import { SwitchStemMenuIcon } from '../app/components/SwitchStemMenuIcon'
@@ -10,6 +11,7 @@ import { RangeControl } from '../app/components/RangeControl'
 import { VerticalRangeControl } from '../app/components/VerticalRangeControl'
 
 export interface QuickSettingsPageProps {
+  model: HeroDeviceModelId
   advancedBindings: AdvancedBinding[]
   selectedKeys: Set<string>
   toggleKey: (keyId: string) => void
@@ -61,6 +63,7 @@ export interface QuickSettingsPageProps {
 }
 
 function QuickSettingsPage({
+  model,
   advancedBindings,
   selectedKeys,
   toggleKey,
@@ -115,6 +118,7 @@ function QuickSettingsPage({
             <div className="page quick-page page-enter">
               <section className="keyboard-stage">
                 <Hero68Preview
+                  model={model}
                   advancedBindings={advancedBindings}
                   selectedKeys={selectedKeys}
                   onToggleKey={toggleKey}

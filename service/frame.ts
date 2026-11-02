@@ -1,13 +1,22 @@
 import { buildReport } from '../src/protocol/hero68/codec'
-import { HERO68_KEY_POSITIONS } from '../src/protocol/hero68/keyPositions'
+import { keyPositionsForModel } from '../src/protocol/hero68/keyPositions'
 import { HERO68_KEY_IDS } from '../src/keyboard/hero68Layout'
+import { HERO84_COLOR_SOURCES, HERO84_ONLY_KEYS } from '../src/keyboard/hero84Layout'
+import type { HeroDeviceModelId } from '../src/keyboard/devices'
+
+const HERO84_KEY_IDS = [...HERO68_KEY_IDS, ...HERO84_ONLY_KEYS.map(key=>key.id)]
+export const frameKeyIds = (model: HeroDeviceModelId = 'hero68') => model==='hero84' ? HERO84_KEY_IDS : HERO68_KEY_IDS
 
 const channels = (hex: string) => [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16))
 const distance = (a:number[],b:number[]) => (a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2
 type PaletteState = { assignments: number[] }
-// CMD08's aggregate-length counter is a byte. 68 IDs + 32*4 <= 196 bytes.
-export function prepareFrame(frame: Record<string,string>, previous?: PaletteState) {
-  const values=HERO68_KEY_IDS.map(id=>channels(frame[id]))
+// CMD08's aggregate-length counter is a byte. 68 IDs + 32*4 <= 196 bytes; HERO84: 84 + 128 = 212 bytes.
+// The engine only renders the 68 HERO68 keys; HERO84-only keys copy a neighbouring key's colour
+// (unless the caller supplies their own colour), so the palette never gains a new colour.
+export function prepareFrame(frame: Record<string,string>, previous?: PaletteState, model: HeroDeviceModelId = 'hero68') {
+  const keyIds=frameKeyIds(model),positions=keyPositionsForModel(model)
+  const colorOf=(id:string)=>frame[id]??frame[HERO84_COLOR_SOURCES[id]]
+  const values=keyIds.map(id=>channels(colorOf(id)))
   if(values.some(v=>v.some(n=>!Number.isInteger(n)||n<0||n>255)))throw Error('Invalid RGB frame')
   const unique=new Map<string,{color:number[];members:number[];black:boolean;prior:number}>()
   values.forEach((color,i)=>{
@@ -47,23 +56,25 @@ export function prepareFrame(frame: Record<string,string>, previous?: PaletteSta
   groups.forEach((group,index)=>{
     group.color=group.color.map(Math.round)
     const hex='#'+group.color.map(c=>c.toString(16).padStart(2,'0')).join('')
-    group.members.forEach(i=>{assignments[i]=index;keys[HERO68_KEY_IDS[i]]=hex})
+    group.members.forEach(i=>{assignments[i]=index;keys[keyIds[i]]=hex})
   })
-  const body=groups.flatMap(g=>[...g.color,g.members.length,...g.members.map(i=>HERO68_KEY_POSITIONS[HERO68_KEY_IDS[i]])])
+  const body=groups.flatMap(g=>[...g.color,g.members.length,...g.members.map(i=>positions[keyIds[i]])])
   const parts:number[][]=[]
   for(let i=0;i<body.length;i+=56)parts.push(body.slice(i,i+56))
   return {keys,packets:parts.map((data,sequence)=>buildReport({command:8,zone:1,total:parts.length,sequence,data})),palette:{assignments}}
 }
 export class RgbFrameEncoder {
+  private model: HeroDeviceModelId = 'hero68'
   private previous?: PaletteState
   private input?: Record<string,string>
   private result?: ReturnType<typeof prepareFrame>
   prepare(frame: Record<string,string>){
-    if(this.result&&HERO68_KEY_IDS.every(id=>frame[id]===this.input?.[id]))return this.result
-    const result=prepareFrame(frame,this.previous)
+    if(this.result&&frameKeyIds(this.model).every(id=>frame[id]===this.input?.[id]))return this.result
+    const result=prepareFrame(frame,this.previous,this.model)
     this.previous=result.palette;this.input={...frame};this.result=result
     return result
   }
+  setModel(model:HeroDeviceModelId){if(model!==this.model){this.model=model;this.reset()}}
   reset(){this.previous=undefined;this.input=undefined;this.result=undefined}
 }
-export function framePackets(frame:Record<string,string>){return prepareFrame(frame).packets}
+export function framePackets(frame:Record<string,string>,model:HeroDeviceModelId='hero68'){return prepareFrame(frame,undefined,model).packets}

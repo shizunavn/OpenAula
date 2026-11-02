@@ -1,19 +1,23 @@
-import { HERO68_LAYOUT } from '../../keyboard/hero68Layout'
+import { heroLayout } from '../../keyboard/layout'
+import type { HeroDeviceModelId } from '../../keyboard/devices'
 import { SwitchStemMenuIcon } from './SwitchStemMenuIcon'
 
 function SwitchSelectorBoard({
+  model,
   selectedKeys,
   onToggleKey,
   switchImagesByKey,
 }: {
+  model: HeroDeviceModelId
   selectedKeys: Set<string>
   onToggleKey: (keyId: string) => void
   switchImagesByKey: Record<string, string>
 }) {
+  const rows = heroLayout(model).rows
   return (
-    <div className="switch-board-wrap">
+    <div className={`switch-board-wrap is-${model}`}>
       <div className="switch-board-preview">
-        {HERO68_LAYOUT.map((row, rowIndex) => (
+        {rows.map((row, rowIndex) => (
           <div className="switch-board-row" key={rowIndex}>
             {row.map((key) => (
               <button

@@ -13,7 +13,7 @@ An open-source, browser-based configurator for the **AULA HERO68** Hall-effect k
 >
 > No coding needed. Share your exact model, firmware version, USB IDs and a layout photo; write **Unknown** if you need help. Protocol captures are optional. Owners who can test on real hardware are especially welcome.
 >
-> **Currently verified: AULA HERO68.** HERO84 and other models still need protocol and hardware validation.
+> **Currently verified: AULA HERO68.** HERO84 and other models still need protocol and hardware validation. The Windows service has HERO84 code paths (84-key RGB frames, Hall stream, Rhythm), but they have not been tested on a real HERO84.
 
 ![Openhero68 Main Page](docs/images/Open-hero68.png)
 ![OpenHero68 RGB Settings page](docs/images/RGB-Setting-Page.png)
@@ -143,15 +143,14 @@ still adds origins explicitly. These variables are not exposed to browser code.
 
 Tech stack: React, TypeScript, Vite, WebHID; the service uses a bundled Node runtime with a native C++ launcher and HID bridge.
 
-### Cloudflare Pages ZIP deployment
+### Cloudflare deployment (Workers + Static Assets)
 
-Run `npm ci`, `npm run build` and `node tools/package-pages.mjs`, then upload
-`open-hero68-pages.zip` through the Cloudflare Pages dashboard. The packaging
-script generates `_worker.js` and `_routes.json` from `functions/api/region.js`;
-do not put generated copies in `public/`. A bare `dist/` upload does not include
-the region endpoint. Use the same ZIP workflow for Preview before Production,
-then check `/api/region` and `/api/region/` return JSON. Access-protected previews
-require sign-in before checking the endpoint.
+The web app deploys as a Cloudflare Worker with static assets (`wrangler.jsonc`). The Worker (`worker/`) serves `/api/region` and `/api/health`; everything else is served from `dist/`.
+
+- Git integration: set the build command to `npm run build` and the deploy command to `npx wrangler deploy`.
+- CLI: `npm run cf:deploy` (or `npm run cf:dev` for a local preview).
+
+Cloudflare Pages-only files (`_routes.json`, `_worker.js`, `functions/`, a `/* /index.html 200` rule in `_redirects`) are not supported here; SPA fallback is handled by `assets.not_found_handling`. See `docs/CLOUDFLARE_PAGES.md`.
 
 ## Building the Windows service
 
@@ -184,7 +183,7 @@ src/
   protocol/          WebHID transport and the HERO68 protocol (hero68/)
   state/             Persisted app state, macros, remap presets
   i18n/              English / Vietnamese translations
-functions/           Cloudflare Pages Functions (region detection)
+worker/              Cloudflare Worker (region detection, health check)
 public/              Optional static files copied by Vite (create as needed)
 service/             Tray service: TypeScript core + native C++ (native/)
 tools/               Build, packaging, verification and release scripts

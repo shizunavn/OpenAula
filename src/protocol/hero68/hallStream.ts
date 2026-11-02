@@ -7,25 +7,15 @@ import {
   writeAutoCalibration,
 } from './commands'
 import { decodeDistanceCalibrationLive } from './codec'
-import { HERO68_KEY_POSITIONS, keyIdToPos, posToKeyId } from './keyPositions'
+import { HERO68_KEY_POSITIONS, HERO84_KEY_POSITIONS, keyIdToPos, posToKeyId } from './keyPositions'
 import { hero68DeviceManager } from './webhid'
 import { rgbService, type RgbServiceHallRecord } from '../rgbService'
 import { HERO68_DISTANCE_UNIT_MM } from './precision'
 import { runHallPolling } from './hallPolling'
 
-/** The usable HERO68 key travel tops out around 3.4 mm. Clamp the UI to 3.40 mm so full travel visually reaches 100%. */
+/** The usable HERO68/HERO84 key travel tops out around 3.4 mm. Clamp the UI to 3.40 mm so full travel visually reaches 100%. */
 export const HERO68_HALL_VISUAL_MAX_MM = 3.4 as const
 
-/**
- * Firmware-reversed Hall sources. None uses 0x94 manual calibration, so none
- * triggers the red/green calibration LED state.
- *
- * direct-poll: repeated 0x98/01 snapshot reads WITHOUT 0x98/00 START. Static
- *              firmware RE shows zone 1 reads Hall state directly and is not
- *              gated by the 0x98 mode bit. This is the passive path candidate.
- * mode-poll:   same multi-key snapshots after entering 0x98 mode; fallback if
- *              firmware 0323 differs from the 0320 image.
- */
 export type HallStreamSource = 'direct-poll' | 'mode-poll'
 
 export type HallStreamSample = {
@@ -165,8 +155,6 @@ class Hero68HallStream {
   #recordKeyFrameTime(keyId: string, now: number): number | null {
     const times = this.#keyFrameTimes.get(keyId) ?? []
     times.push(now)
-    // Keep enough history to smooth the very low-rate secondary-key case while
-    // still reacting quickly when the scheduler changes.
     while (times.length > 32) times.shift()
     while (times.length > 2 && now - times[0] > 2500) times.shift()
     this.#keyFrameTimes.set(keyId, times)
@@ -277,11 +265,6 @@ class Hero68HallStream {
   }
 
   async #runFirmwarePolling(generation: number, positions: readonly number[]): Promise<void> {
-    // Firmware 0320 disassembly shows the host-side 0x98/01 handler loops every
-    // requested POS and returns one 6-byte POS/DISTANCE/ADC record per key.
-    // A 63-byte HID payload can safely carry 9 such records (54 data bytes), so
-    // start with 9-key batches and reduce their size if matching snapshots time
-    // out repeatedly. Direct polling never enters calibration/LED mode.
     await runHallPolling({
       positions,
       isActive: () => generation === this.#pollGeneration && hero68DeviceManager.connected,
@@ -305,9 +288,12 @@ class Hero68HallStream {
     })
   }
 
-  async start(preferredKeyIds: Iterable<string> = [], source: HallStreamSource = 'direct-poll'): Promise<void> {
+  async start(
+    preferredKeyIds: Iterable<string> = [],
+    source: HallStreamSource = 'direct-poll',
+    modelKeyIds?: readonly string[],
+  ): Promise<void> {
     if (this.#state.active || this.#state.starting) return
-    // Failure cleanup may still be exiting distance mode/restoring calibration.
     if (this.#pollPromise) await this.#pollPromise
     if (this.#state.active || this.#state.starting) return
     if (!hero68DeviceManager.connected) throw new Error('Connect HERO68 before starting Hall Stream')
@@ -317,17 +303,19 @@ class Hero68HallStream {
     const preferredPositions: number[] = []
     const seenPositions = new Set<number>()
     for (const keyId of preferredKeyIds) {
-      const pos = HERO68_KEY_POSITIONS[keyId]
+      const pos = HERO84_KEY_POSITIONS[keyId]
       if (pos === undefined || seenPositions.has(pos)) continue
       seenPositions.add(pos)
       preferredPositions.push(pos)
     }
-    // The diagnostics page can still request the whole matrix by passing no
-    // preferred keys. Actuation passes its current selection, so Visual Feedback
-    // polls only those keys instead of hammering all 68 keys unnecessarily.
+    const defaultPositionMap = modelKeyIds
+      ? Object.fromEntries(modelKeyIds.filter((id) => HERO84_KEY_POSITIONS[id] !== undefined).map((id) => [id, HERO84_KEY_POSITIONS[id]]))
+      : hero68DeviceManager.getSnapshot().detectedModel === 'hero84'
+        ? HERO84_KEY_POSITIONS
+        : HERO68_KEY_POSITIONS
     const pollingPositions = preferredPositions.length > 0
       ? preferredPositions
-      : Object.values(HERO68_KEY_POSITIONS)
+      : Object.values(defaultPositionMap)
 
     const viaService=hero68DeviceManager.viaService
     if(viaService){
@@ -362,8 +350,6 @@ class Hero68HallStream {
 
     try {
       if (source !== 'direct-poll'&&!viaService) {
-        // Only the started modes need the safe 0x98 precondition discovered on
-        // hardware. Direct polling never sets the 0x98 mode bit at all.
         this.#stage = 'read-auto-calibration'
         const autoCalibration = await hero68DeviceManager.request(readAutoCalibration(), 0x84, 25, 1000)
         this.#restoreAutoCalibration = (autoCalibration.data[0] ?? 0) !== 0
@@ -379,7 +365,7 @@ class Hero68HallStream {
       this.#stage = `${source}-streaming`
       this.#setState({ active: true, starting: false, error: null })
       if(viaService){
-        const ids=preferredPositions.length?Array.from(preferredKeyIds).filter(id=>HERO68_KEY_POSITIONS[id]!==undefined):Object.keys(HERO68_KEY_POSITIONS)
+        const ids=preferredPositions.length?Array.from(preferredKeyIds).filter(id=>HERO84_KEY_POSITIONS[id]!==undefined):Object.keys(defaultPositionMap)
         this.#unsubscribeReport=rgbService.hallStream(ids,(records:RgbServiceHallRecord[])=>this.#ingestRecords(records.map(record=>({keyId:record.pos,distanceUnits:record.distanceUnits,adc:record.adc,pressed:record.pressed}))),()=>{
           this.#cleanupListeners()
           this.#setState({active:false,starting:false,recovering:false,samples:this.#zeroVisualSamples(),error:'Service Hall stream disconnected',telemetryHz:null,keyTelemetryHz:{}})
@@ -446,9 +432,6 @@ class Hero68HallStream {
   async stop(): Promise<void> {
     if (!this.#state.active && !this.#state.starting) return
 
-    // Reset every visible Hall value immediately so stopping the stream never
-    // leaves a stale pressed/travel overlay on the keyboard preview while the
-    // transport finishes its final in-flight request/cleanup.
     this.#setState({
       samples: this.#zeroVisualSamples(),
       keyTelemetryHz: {},
@@ -469,7 +452,6 @@ class Hero68HallStream {
     } finally {
       try { await this.#restoreAutoCalibrationIfNeeded() } finally {
         this.#cleanupListeners()
-        // A final response during shutdown must not repaint an old value.
         this.#setState({
           active: false,
           starting: false,

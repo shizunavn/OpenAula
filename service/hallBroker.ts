@@ -1,4 +1,4 @@
-import { HERO68_KEY_POSITIONS } from "../src/protocol/hero68/keyPositions";
+import { HERO84_KEY_POSITIONS } from "../src/protocol/hero68/keyPositions";
 export type HallSubscription = {
   id: string;
   keys: readonly string[];
@@ -17,7 +17,7 @@ export class HallBroker {
       !Number.isFinite(hz) ||
       hz < 1 ||
       hz > 200 ||
-      keys.some((key) => HERO68_KEY_POSITIONS[key] === undefined)
+      keys.some((key) => HERO84_KEY_POSITIONS[key] === undefined)
     )
       throw Error("Invalid Hall subscription");
     if (!keys.length) {
@@ -48,7 +48,7 @@ export class HallBroker {
     return (
       "hall-config:" +
       [...demands]
-        .map(([key, hz]) => `${HERO68_KEY_POSITIONS[key]},${hz}`)
+        .map(([key, hz]) => `${HERO84_KEY_POSITIONS[key]},${hz}`)
         .join("|")
     );
   }

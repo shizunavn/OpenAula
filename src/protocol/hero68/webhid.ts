@@ -5,15 +5,23 @@ import { buildReport, decodeReport } from './codec'
 import { hero68ProtocolEncoder } from './hero68Encoder'
 import type { DecodedReport } from './types'
 import { rgbService } from '../rgbService'
+import {
+  detectHeroDeviceModelFromProductName,
+  detectHeroDeviceModelFromUuid,
+  HERO_PRODUCT_IDS,
+  HERO_VENDOR_ID,
+  heroDeviceModel,
+  type HeroDeviceModelId,
+} from '../../keyboard/devices'
 
-const HERO68_VENDOR_ID = 0x372e
-const HERO68_PRODUCT_ID = 0x103e
+const HERO68_VENDOR_ID = HERO_VENDOR_ID
 const HERO68_USAGE_PAGE = 0xff60
 const HERO68_USAGE = 0x0061
 const HERO68_REPORT_ID = 0x09
 
 interface HIDReportInfoLike {
   reportId?: number
+  featureId?: number
   items?: Array<{ reportSize?: number; reportCount?: number; usages?: number[] }>
 }
 
@@ -73,6 +81,7 @@ export type Hero68ConnectionState = 'unsupported' | 'disconnected' | 'connecting
 export type Hero68DeviceSnapshot = {
   state: Hero68ConnectionState
   deviceName: string
+  detectedModel?: HeroDeviceModelId | null
   error: string | null
 }
 
@@ -103,9 +112,20 @@ function collectionMatches(collection: HIDCollectionInfoLike): boolean {
 }
 
 function isHero68ControlDevice(device: HIDDeviceLike): boolean {
-  if (device.vendorId !== HERO68_VENDOR_ID || device.productId !== HERO68_PRODUCT_ID) return false
+  if (device.vendorId !== HERO68_VENDOR_ID || !HERO_PRODUCT_IDS.includes(device.productId as typeof HERO_PRODUCT_IDS[number])) return false
   if (!device.collections?.length) return true
   return device.collections.some(collectionMatches)
+}
+
+function inferModelFromHidDevice(device: HIDDeviceLike): HeroDeviceModelId | null {
+  const byName = detectHeroDeviceModelFromProductName(device.productName)
+  if (byName) return byName
+  if (device.productId === 0x1000) return 'hero84'
+  return null
+}
+
+function deviceDisplayName(device: HIDDeviceLike | undefined, model: HeroDeviceModelId): string {
+  return device?.productName || heroDeviceModel(model).label
 }
 
 function errorMessage(error: unknown): string {
@@ -117,6 +137,7 @@ export class Hero68DeviceManager implements Hero68Transport {
   #snapshot: Hero68DeviceSnapshot = {
     state: getHid() ? 'disconnected' : 'unsupported',
     deviceName: 'AULA Hero68',
+    detectedModel: null,
     error: null,
   }
   #subscribers = new Set<() => void>()
@@ -177,22 +198,16 @@ export class Hero68DeviceManager implements Hero68Transport {
     try {
       let devices = (await hid.getDevices()).filter(isHero68ControlDevice)
       if (devices.length === 0 && !requestPermission) {
-        // getDevices() is intentionally safe to call during page startup: it
-        // only returns devices this origin has already been granted. Do not
-        // fall through to requestDevice() here because that API requires a
-        // fresh user gesture and would make F5 show an unnecessary error.
         this.#setSnapshot({ state: 'disconnected', error: null })
         return false
       }
       if (devices.length === 0 && requestPermission) {
         const requested = await hid.requestDevice({
-          // Official AULA HUB asks by VID/PID only. Do the same so Chromium
-          // grants the whole vendor HID interface, including its second vendor
-          // top-level collection (Windows exposes MI_02 Col01 + Col02).
-          filters: [{
+          // Official AULA HUB asks by VID/PID (0x372e:0x103e wired + 0x372e:0x1000 2.4G receiver).
+          filters: HERO_PRODUCT_IDS.map((productId) => ({
             vendorId: HERO68_VENDOR_ID,
-            productId: HERO68_PRODUCT_ID,
-          }],
+            productId,
+          })),
         })
         devices = requested.filter(isHero68ControlDevice)
       }
@@ -202,7 +217,6 @@ export class Hero68DeviceManager implements Hero68Transport {
       }
 
       const device = devices[0]
-      // Transfer ownership after the chooser to preserve browser user activation.
       if(typeof location!=='undefined'&&location.protocol.startsWith('http')){
         const service=await rgbService.status().catch(()=>null)
         if(service?.enabled)await rgbService.stop()
@@ -210,9 +224,11 @@ export class Hero68DeviceManager implements Hero68Transport {
       if (!device.opened) await device.open()
       device.addEventListener('inputreport', this.#onInputReport)
       this.#device = device
+      const detectedModel = inferModelFromHidDevice(device)
       this.#setSnapshot({
         state: 'connected',
-        deviceName: device.productName || 'AULA Hero68',
+        detectedModel,
+        deviceName: device.productName || (detectedModel ? heroDeviceModel(detectedModel).label : 'AULA Hero68'),
         error: null,
       })
       return true
@@ -221,6 +237,41 @@ export class Hero68DeviceManager implements Hero68Transport {
       this.#setSnapshot({ state: 'error', error: errorMessage(error) })
       throw error
     }
+  }
+
+  /**
+   * Identify whether the connected keyboard is HERO68 (`0x110000000003`) or
+   * HERO84 (`0x110000000005` / `0x120000000015`) using `productName` or
+   * CMD `0x82` zone `1` (`readDeviceUuid`).
+   */
+  async detectConnectedModel(): Promise<HeroDeviceModelId | null> {
+    if (!this.connected) return null
+    if (this.#snapshot.detectedModel) return this.#snapshot.detectedModel
+    const fromDevice = this.#device ? inferModelFromHidDevice(this.#device) : null
+    if (fromDevice) {
+      this.#setSnapshot({
+        detectedModel: fromDevice,
+        deviceName: deviceDisplayName(this.#device, fromDevice),
+      })
+      return fromDevice
+    }
+    try {
+      const reply = await this.request(buildReport({ command: 0x82, zone: 1 }), 0x82, 1, 600)
+      const fromUuid = detectHeroDeviceModelFromUuid(reply.data)
+      if (fromUuid) {
+        // Keep a detailed productName ("AULA HERO 84 HE") instead of the generic
+        // "AULA Hero84" label; this also runs on the service transport, where
+        // `#device` is undefined.
+        this.#setSnapshot({
+          detectedModel: fromUuid,
+          deviceName: deviceDisplayName(this.#device, fromUuid),
+        })
+        return fromUuid
+      }
+    } catch {
+      /* Preserve existing model selection if UUID read is unsupported in a mock/fixture. */
+    }
+    return null
   }
 
   async disconnect(): Promise<void> {
@@ -233,7 +284,7 @@ export class Hero68DeviceManager implements Hero68Transport {
       device.removeEventListener('inputreport', this.#onInputReport)
       if (device.opened) await device.close()
     }
-    this.#setSnapshot({ state: getHid() ? 'disconnected' : 'unsupported', error: null })
+    this.#setSnapshot({ state: getHid() ? 'disconnected' : 'unsupported', detectedModel: null, error: null })
   }
 
   /** Keep the same configuration transport while the service owns the HID handle. */
@@ -241,9 +292,17 @@ export class Hero68DeviceManager implements Hero68Transport {
     const device=this.#device
     if(device){device.removeEventListener('inputreport',this.#onInputReport);if(device.opened)await device.close();this.#device=undefined}
     try {
-      // An identity read verifies that the native helper can access this keyboard.
-      await rgbService.deviceRequest(buildReport({command:0x82,zone:1}))
-      this.#viaService=true;this.#reconnectViaService=false;this.#setSnapshot({state:'connected',deviceName:'AULA Hero68',error:null})
+      // Identity read verifies native helper access and returns the 6-byte deviceId UUID.
+      const identity = await rgbService.deviceRequest(buildReport({command:0x82,zone:1}))
+      const detectedModel = detectHeroDeviceModelFromUuid(identity?.data)
+      this.#viaService=true
+      this.#reconnectViaService=false
+      this.#setSnapshot({
+        state:'connected',
+        detectedModel,
+        deviceName: detectedModel ? heroDeviceModel(detectedModel).label : 'AULA Hero68',
+        error:null,
+      })
     }catch(error){this.#viaService=false;this.#setSnapshot({state:'error',error:errorMessage(error)});throw error}
   }
 
@@ -254,10 +313,6 @@ export class Hero68DeviceManager implements Hero68Transport {
     }
   }
 
-  /** Listen to every input report on the opened HERO68 WebHID interface.
-   * This is intentionally pre-decoder and includes secondary vendor report IDs.
-   * The passive Hall probe uses it without sending any stream/calibration command.
-   */
   onRawReport(listener: (report: Hero68RawInputReport) => void): () => void {
     this.#rawReportListeners.add(listener)
     return () => {
@@ -275,7 +330,7 @@ export class Hero68DeviceManager implements Hero68Transport {
         type: collection.type ?? null,
         inputReportIds: (collection.inputReports ?? []).map((report) => Number(report.reportId ?? 0)),
         outputReportIds: (collection.outputReports ?? []).map((report) => Number(report.reportId ?? 0)),
-        featureReportIds: (collection.featureReports ?? []).map((report) => Number(report.reportId ?? 0)),
+        featureReportIds: (collection.featureReports ?? []).map((report) => Number(report.featureId ?? report.reportId ?? 0)),
       })
       ;(collection.children ?? []).forEach((child, index) => visit(child, `${path}.${index + 1}`))
     }
@@ -293,12 +348,6 @@ export class Hero68DeviceManager implements Hero68Transport {
     await device.sendReport(HERO68_REPORT_ID, report.slice(1))
   }
 
-  /**
-   * Send a command that intentionally makes HERO68 re-enumerate (polling-rate
-   * writes on firmware 0323 do this). There is no reliable normal ACK: the old
-   * HID handle disappears first. Wait for the authorized control interface to
-   * come back, reopen it, and leave the manager connected to the fresh handle.
-   */
   async sendReenumerating(report: Uint8Array, timeoutMs = 7000): Promise<void> {
     if(this.#viaService){await rgbService.deviceRequest(report,true);return}
     const hid = getHid()
@@ -309,8 +358,6 @@ export class Hero68DeviceManager implements Hero68Transport {
     try {
       await this.send(report)
     } catch (error) {
-      // A write can race the USB reset. Verification after re-enumeration is
-      // authoritative, so retain the error but still try to recover the device.
       sendError = error
     }
 
@@ -331,23 +378,22 @@ export class Hero68DeviceManager implements Hero68Transport {
           candidate.removeEventListener('inputreport', this.#onInputReport)
           candidate.addEventListener('inputreport', this.#onInputReport)
           this.#device = candidate
+          const detectedModel = inferModelFromHidDevice(candidate) ?? this.#snapshot.detectedModel
           this.#setSnapshot({
             state: 'connected',
-            deviceName: candidate.productName || 'AULA Hero68',
+            detectedModel,
+            deviceName: candidate.productName || (detectedModel ? heroDeviceModel(detectedModel).label : 'AULA Hero68'),
             error: null,
           })
           return
         } catch {
-          // The interface can be visible a moment before Windows finishes
-          // reopening it. Keep polling until the timeout.
+          // Keep polling until the timeout.
         }
       }
 
       await new Promise((resolve) => window.setTimeout(resolve, 120))
     }
 
-    // Some firmware/host combinations may apply the setting without a visible
-    // re-enumeration. Preserve a still-live handle in that case.
     if (this.#device?.opened) {
       this.#setSnapshot({ state: 'connected', error: null })
       return
@@ -362,9 +408,6 @@ export class Hero68DeviceManager implements Hero68Transport {
     const report = hexToBytes(hex)
     const decoded = decodeReport(report)
 
-    // The official HERO68 driver retries RT / safe-area / switch-type writes
-    // up to three times with ~100 ms spacing. These commands are the ones most
-    // likely to be dropped while the firmware is busy applying a batch.
     const maxAttempts = [0x19, 0x16, 0x15].includes(decoded.command) ? 3 : 1
     let lastError: unknown
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -387,7 +430,6 @@ export class Hero68DeviceManager implements Hero68Transport {
     for(let i=0;i<packets.length;i+=128)await rgbService.deviceBatch(packets.slice(i,i+128))
   }
 
-  /** Reopen a stalled host handle without resetting firmware or changing settings. */
   async recoverControlChannel(): Promise<void> {
     return this.#queueControlOperation(async () => {
       if (!this.connected) throw new Error('HERO68 is not connected')
@@ -400,7 +442,6 @@ export class Hero68DeviceManager implements Hero68Transport {
         await device.open()
         if (this.#device !== device) throw new Error('HERO68 disconnected')
         device.addEventListener('inputreport', this.#onInputReport)
-        // Read-only identity verifies the fresh handle before polling resumes.
         await this.#requestOnce(buildReport({ command: 0x82, zone: 1 }), 0x82, 1, 1500)
       } finally {
         if (this.#device === device) {
@@ -428,8 +469,6 @@ export class Hero68DeviceManager implements Hero68Transport {
     timeoutMs = 800,
     predicate?: (report: DecodedReport) => boolean,
   ): Promise<DecodedReport> {
-    // One transaction at a time: overlapping waiters for the same command can
-    // consume each other's ACKs. Web Locks also serialize direct HID across tabs.
     const work = async () => {
       const run = async () => {
         const selecting = report[1] === 0x10 && report[2] === 0 && report[6] === 1 && report[7] <= 2
@@ -437,8 +476,6 @@ export class Hero68DeviceManager implements Hero68Transport {
           try { return await this.#requestOnce(report, expectedCommand, expectedZone, timeoutMs, predicate) }
           catch (error) {
             if (!selecting || !/timed out|timeout/i.test(errorMessage(error))) throw error
-            // Selection is idempotent. A lost ACK is not a failed write: verify
-            // the active slot before retrying, and never accept a different slot.
             try {
               const active = await this.#requestOnce(buildReport({command:0x90,data:[0]}), 0x90, 0, timeoutMs)
               const verified = decodeReport(report)
@@ -483,15 +520,11 @@ export class Hero68DeviceManager implements Hero68Transport {
           this.#waiters.delete(waiter)
           const error = timeoutError('send')
           reject(error)
-          // A write whose delivery is still pending must not let queued
-          // configuration commands overtake it. Fail the channel explicitly.
           this.#setSnapshot({ state: 'error', error: error.message })
         }, Math.max(2000, timeoutMs)),
       }
       this.#waiters.add(waiter)
 
-      // Register before writing so fast replies are caught, but start the read
-      // deadline only after Windows confirms that the report was delivered.
       void this.send(report).then(() => {
         if (!this.#waiters.has(waiter)) return
         window.clearTimeout(waiter.timer)
@@ -551,7 +584,7 @@ export class Hero68DeviceManager implements Hero68Transport {
     this.#device.removeEventListener('inputreport', this.#onInputReport)
     this.#device = undefined
     this.#rejectWaiters(new Error('HERO68 disconnected'))
-    this.#setSnapshot({ state: 'disconnected', error: 'HERO68 was disconnected.' })
+    this.#setSnapshot({ state: 'disconnected', detectedModel: null, error: 'HERO68 was disconnected.' })
   }
 }
 

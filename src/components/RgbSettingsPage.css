@@ -30,6 +30,7 @@
 .rgb-preview-hint {color:var(--rgb-muted);font-size:11px;line-height:1.5}
 .rgb-preview-stage {max-width:800px;width:calc(100% - 32px);margin:0 auto 16px;padding:0}
 .rgb-preview-stage .hero68-preview-wrap {height:auto;aspect-ratio:64.05/21.35;animation:none}
+.rgb-preview-stage .hero68-preview-wrap.is-hero84 {aspect-ratio:64.05/25.2462}
 .rgb-settings-page .hero-key-label {color:var(--rgb-label-color,#fff)}
 .rgb-settings-page .hero-key-render {transition:none}
 .rgb-settings-page .hero-key.is-selected {border-color:#ffd95a;box-shadow:inset 0 0 0 1px #ffd95a}

@@ -195,8 +195,13 @@ inline Report report(uint8_t command,uint8_t zone,uint8_t total,uint8_t sequence
   Report p{};p[0]=9;p[1]=command;p[2]=zone;p[4]=total;p[5]=sequence;p[6]=uint8_t(data.size());std::copy(data.begin(),data.end(),p.begin()+7);
   unsigned sum=0;for(size_t i=0;i<63;++i)sum+=p[i];p[63]=uint8_t(255-sum);return p;
 }
+// HERO84-only keys as {hardware position, HERO68 position whose colour they copy}.
+// Mirrors HERO84_COLOR_SOURCES in src/keyboard/hero84Layout.ts (checked by tests/hero84-service.test.mjs).
+constexpr std::array<std::array<uint8_t, 2>, 16> hero84Extras = {{
+  {14,1},{2,15},{3,16},{4,17},{5,18},{6,19},{7,20},{8,21},{9,22},{10,23},{11,24},{12,25},{13,26},{95,27},{100,98},{101,99}
+}};
 struct Encoded { std::array<Color,68> keys{};std::vector<Report> packets; };
-inline Encoded encode(const Frame& f) {
+inline Encoded encode(const Frame& f, bool hero84 = false) {
   Encoded out;out.keys=f.keys;
   if(f.direct) { out.packets.push_back(report(8,2,1,0,{f.global[0],f.global[1],f.global[2]}));return out; }
   struct Group { Color color; std::vector<size_t> members; };
@@ -222,7 +227,13 @@ inline Encoded encode(const Frame& f) {
   }
   std::vector<uint8_t> body;
   // Include black explicitly: HERO68 firmware needs complete frames to clear old keys.
-  for(size_t index=0;index<count;++index)if(active[index]){const auto& g=groups[index];body.insert(body.end(),g.color.begin(),g.color.end());body.push_back(uint8_t(g.members.size()));for(auto i:g.members){body.push_back(positions[i]);out.keys[i]=g.color;} }
+  for(size_t index=0;index<count;++index)if(active[index]){
+    const auto& g=groups[index];std::vector<uint8_t> ids;
+    for(auto i:g.members){ids.push_back(positions[i]);out.keys[i]=g.color;}
+    // HERO84-only keys join the palette group of the HERO68 key they copy, so the colour count never grows.
+    if(hero84)for(const auto& extra:hero84Extras){const size_t source=size_t(std::find(positions.begin(),positions.end(),extra[1])-positions.begin());if(std::find(g.members.begin(),g.members.end(),source)!=g.members.end())ids.push_back(extra[0]);}
+    body.insert(body.end(),g.color.begin(),g.color.end());body.push_back(uint8_t(ids.size()));body.insert(body.end(),ids.begin(),ids.end());
+  }
   const size_t total=(body.size()+55)/56;
   for(size_t i=0;i<total;++i)out.packets.push_back(report(8,1,uint8_t(total),uint8_t(i),std::vector<uint8_t>(body.begin()+i*56,body.begin()+std::min(body.size(),(i+1)*56))));
   return out;

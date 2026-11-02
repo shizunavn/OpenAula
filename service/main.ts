@@ -12,7 +12,10 @@ import type {GamepadStatus,SharedHallSample,HallKeyMetric} from '../src/protocol
 import { defaultRgb, type RgbProfile } from '../src/protocol/hero68/rgb'
 import { buildReport, decodeReport } from '../src/protocol/hero68/codec'
 import { HERO68_KEY_IDS } from '../src/keyboard/hero68Layout'
-import { HERO68_KEY_POSITIONS } from '../src/protocol/hero68/keyPositions'
+import { HERO84_KEY_POSITIONS } from '../src/protocol/hero68/keyPositions'
+import { detectHeroDeviceModelFromUuid, heroDeviceModel, type HeroDeviceModelId } from '../src/keyboard/devices'
+import { heroLayout } from '../src/keyboard/layout'
+import { HERO84_COLOR_SOURCES } from '../src/keyboard/hero84Layout'
 import { RgbFrameEncoder } from './frame'
 import { validateDeviceRequest } from './deviceRequests'
 import { decodeHero68Input } from './keyInput'
@@ -97,6 +100,7 @@ function persist(){
 }
 const presetSave=deferredSave(persist,error=>{lastError=String(error);log('Preset save failed: '+String(error))})
 const frameEncoder=new RgbFrameEncoder()
+let deviceModel:HeroDeviceModelId|null=null
 const playback=new CustomPlayback(profile)
 let engine=playback.engine, reconnectAt=0
 let lastError:string|null=null, frames=0, packets=0, hallSnapshots=0, timeouts=0, lastFrameAt=0, maxGapMs=0, frameMs=0
@@ -153,6 +157,11 @@ function onCustomFrame(value:NativeFrameTotals&{submission:number;frameMs:number
 }
 let audioState='stopped',audioError='',audioLevel=0,audioEndpoint='',sampleRate=0,droppedFrames=0,audioTimestampInvalid=0,renderMs=0,encodeMs=0,writeMs=0
 const audioLatencies:number[]=[],captureLatencies:number[]=[]
+function rhythmPreviewKeys(colors:string[]){
+  const keys:Record<string,string>=Object.fromEntries(HERO68_KEY_IDS.map((id,i)=>[id,colors[i]]))
+  if(deviceModel==='hero84')for(const [id,source] of Object.entries(HERO84_COLOR_SOURCES))keys[id]=keys[source]
+  return keys
+}
 function onNativeFrame(value:NativeFrameTotals&{colors:string[];frameMs:number;gapMs:number;droppedFrames:number;audioLevel:number;audioState:string;audioError:string;audioEndpoint:string;sampleRate:number;audioToWriteMs:number;captureToWriteMs:number;audioTimestampInvalid:boolean;renderMs:number;encodeMs:number;writeMs:number}){
   if(mode!=='rhythm'||value.colors?.length!==68)return
   const delta=rhythmDelivery.observe(value)
@@ -164,7 +173,7 @@ function onNativeFrame(value:NativeFrameTotals&{colors:string[];frameMs:number;g
   renderMs=value.renderMs;encodeMs=value.encodeMs;writeMs=value.writeMs
   recordFrameGap(value.gapMs,value)
   const now=performance.now();if(now-windowStart>=1000){fps=windowFrames*1000/(now-windowStart);windowFrames=0;windowStart=now}
-  if(frameClients.size)publishFrame({enabled:true,connected:true,mode:'rhythm',keys:Object.fromEntries(HERO68_KEY_IDS.map((id,i)=>[id,value.colors[i]])),audioLevel,sequence:++frameSequence,sessionId,sideOutput:false})
+  if(frameClients.size)publishFrame({enabled:true,connected:true,mode:'rhythm',keys:rhythmPreviewKeys(value.colors),audioLevel,sequence:++frameSequence,sessionId,sideOutput:false})
   else frameSequence++
 }
 const frameClients=new Set<ServerResponse>()
@@ -227,7 +236,7 @@ function publishHall(records:HallRecord[]){
     subscription.pending.clear();subscription.lastSent=now
   }
 }
-const keyByPosition=new Map(Object.entries(HERO68_KEY_POSITIONS).map(([id,pos])=>[pos,id]))
+const keyByPosition=new Map(Object.entries(HERO84_KEY_POSITIONS).map(([id,pos])=>[pos,id]))
 function onHallSnapshot(value:{publishedMs?:number;requests:number;timeouts:number;records:Omit<HallRecord,'keyId'>[]}){
   const records:HallRecord[]=[]
   for(const s of value.records){const keyId=keyByPosition.get(s.pos);if(!keyId||!hallBroker.demands.has(keyId))continue;const record={...s,keyId};hallSamples.set(keyId,record);hallReceivedAt.set(keyId,performance.now()-Math.max(0,(value.publishedMs??s.timestampMs)-s.timestampMs));records.push(record);if(firmware.active&&gamepadState.enabled&&gamepadConfigurations[gamepadSlot].bindings.some(b=>b.keyId===keyId))onRgbKey(keyId,s.pressed)}
@@ -309,7 +318,8 @@ class Bridge {
   async stopCustom(){const result=await this.line('custom-stop');if(result!=='custom-stopped')throw Error('Native custom scheduler did not stop')}
   async queueFrame(id:number,values:Uint8Array[]){const result=await this.line('frame:'+id+':'+values.map(p=>Buffer.from(p).toString('hex')).join(','));if(result!=='frame-queued')throw Error(result.startsWith('error:')?result.slice(6):'Invalid frame queue acknowledgement')}
   async batch(values:Uint8Array[]){const result=await this.line('batch:'+values.map(p=>Buffer.from(p).toString('hex')).join(','));if(result!=='batch-written')throw Error(result.startsWith('error:')?result.slice(6):'Invalid RGB batch acknowledgement');packets+=values.length}
-  async configureRhythm(value:RhythmConfiguration){const result=await this.line(nativeRhythmCommand(value));if(result!=='rhythm-ready')throw Error(result.startsWith('error:')?result.slice(6):'Native rhythm did not start');if(mode!=='rhythm')rhythmDelivery.reset()}
+  async syncModel(){if(deviceModel)try{await this.line('device-model:'+deviceModel)}catch{/* older native bridge: Rhythm stays 68-key */}}
+  async configureRhythm(value:RhythmConfiguration){await this.syncModel();const result=await this.line(nativeRhythmCommand(value));if(result!=='rhythm-ready')throw Error(result.startsWith('error:')?result.slice(6):'Native rhythm did not start');if(mode!=='rhythm')rhythmDelivery.reset()}
   async stopRhythm(){const result=await this.line('rhythm-stop');if(result!=='rhythm-stopped')throw Error('Native rhythm did not stop')}
   async audioDevices(){const result=await this.line('audio-devices');if(!result.startsWith('audio-devices:'))throw Error('Audio enumeration failed');return JSON.parse(result.slice(14))}
   async close(){await this.line('close')}
@@ -351,10 +361,12 @@ async function configureNativeGamepad(config:GamepadConfiguration,running:boolea
 const lightingTransport={request:(packet:Uint8Array)=>bridge.request(packet)}
 async function connect(){
   const identity=await bridge.request(buildReport({command:0x82,zone:1}))
-  if(![0x11,0,0,0,0,3].every((v,i)=>identity.data[i]===v))throw Error('Device is not the supported HERO68')
+  const detected=detectHeroDeviceModelFromUuid(identity.data)
+  if(!detected)throw Error('Device is not a supported HERO68/HERO84 keyboard')
+  deviceModel=detected;frameEncoder.setModel(detected);await bridge.syncModel()
   connected=true;lastError=null;hallSamples.clear();frameEncoder.reset();engine=playback.start(profile);outputHeld.clear();pendingInputs.length=0;lastFrameAt=0
   if(tachyon){try{await tachyonLighting.disable(lightingTransport)}catch(e){connected=false;throw e}}
-  log('HERO68 connected')
+  log(heroDeviceModel(detected).name.toUpperCase()+' connected')
 }
 async function setTachyon(enabled:boolean){
   if(enabled){
@@ -440,7 +452,7 @@ async function loop(){
 
 function percentile(values:readonly number[],fraction=.95){if(!values.length)return null;const sorted=[...values].sort((a,b)=>a-b);return sorted[Math.ceil(sorted.length*fraction)-1]}
 function status(){const now=performance.now();if(now-cpuAt>=1000){const next=process.cpuUsage();cpuPercent=((next.user-cpuPrevious.user)+(next.system-cpuPrevious.system))/(now-cpuAt)/10;cpuPrevious=next;cpuAt=now}return {
-  service:'OpenHero68 RGB',version:2,apiVersion:CORE_API_VERSION,
+  service:'OpenHero68 RGB',version:2,apiVersion:CORE_API_VERSION,deviceModel,
   supportedEffects:CUSTOM_RGB_EFFECTS.map(effect=>effect.id),supportedBaseEffects:['aurora'],
   pid:process.pid,coreVersion,launcherVersion:LAUNCHER_VERSION,supportsFullUpdate:setupUpdater.supported,driverInstalled,updateOperation:option('--update-operation'),mode,tachyon,supportsTachyon:true,enabled:mode!=='onboard',connected,
   preset:!!profile||savedMode==='rhythm',savedMode,configurationBusy,pendingRequests,sessionId,
@@ -494,7 +506,8 @@ const server=createServer(async(req,res)=>{
     }
     if(req.method==='GET'&&req.url?.startsWith('/hall/stream?')){
       const ids=new URL(req.url,`http://127.0.0.1:${port}`).searchParams.get('keys')?.split(',')??[]
-      if(ids.length<1||ids.length>HERO68_KEY_IDS.length||ids.some(id=>!HERO68_KEY_IDS.includes(id)))throw Error('Expected 1-68 valid Hall keys')
+      const hallKeyIds=heroLayout(deviceModel??'hero84').keyIds
+      if(ids.length<1||ids.length>hallKeyIds.length||ids.some(id=>!hallKeyIds.includes(id)))throw Error(`Expected 1-${hallKeyIds.length} valid Hall keys`)
       const keys=new Set(ids)
       res.writeHead(200,{'Content-Type':'text/event-stream','Connection':'keep-alive','X-Accel-Buffering':'no'})
       const id='web:'+randomUUID()

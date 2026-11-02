@@ -1,5 +1,5 @@
 import {isAnalogAction,type GamepadConfiguration} from '../src/keyboard/gamepad'
-import {HERO68_KEY_POSITIONS} from '../src/protocol/hero68/keyPositions'
+import {HERO84_KEY_POSITIONS} from '../src/protocol/hero68/keyPositions'
 import {readActuation,readRapidTrigger,readDeadZone} from '../src/protocol/hero68/commands'
 import {decodeActuationRecords,decodeRapidTriggerRecords,decodeDeadZoneRecords} from '../src/protocol/hero68/codec'
 import type {DecodedReport} from '../src/protocol/hero68/types'
@@ -8,7 +8,7 @@ type Setting={ap:number;rt:number;release:number;press:number;dz:number;top:numb
 /** Read the selected firmware profile, rather than a browser draft or the Hall
  * diagnostic pressed flag. Require complete readback before enabling output. */
 export async function digitalSettingsCommand(config:GamepadConfiguration,request:(packet:Uint8Array)=>Promise<DecodedReport>){
-  const keys=config.bindings.filter(b=>!isAnalogAction(b.action)).map(b=>HERO68_KEY_POSITIONS[b.keyId])
+  const keys=config.bindings.filter(b=>!isAnalogAction(b.action)).map(b=>HERO84_KEY_POSITIONS[b.keyId])
   const settings=new Map<number,Setting>(keys.map(pos=>[pos,{ap:0,rt:0,release:0,press:0,dz:0,top:0,bottom:0}]))
   const readers=[
     {size:11,bytes:5,command:0x93,packet:readActuation,decode:(data:Uint8Array)=>decodeActuationRecords(data).map(r=>({keyId:r.keyId,values:{ap:r.distanceUnits}}))},

@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowDown, ArrowUp, Plus, Search, Trash2, X } from 'lucide-react'
 import Hero68Preview from './Hero68Preview'
 import AdvancedKeyIcon from './AdvancedKeyIcon'
 import FeatureHelp from './FeatureHelp'
 import { useI18n } from '../i18n'
-import { HERO68_KEY_IDS, HERO68_LAYOUT } from '../keyboard/hero68Layout'
+import { HERO68_KEY_LABEL_BY_ID } from '../app/helpers'
+import { heroLayout } from '../keyboard/layout'
+import { DeviceModelContext } from '../app/DeviceModelContext'
 import { ADVANCED_KINDS, ADVANCED_LIMIT, newAdvanced, validateAdvanced, type AdvancedBinding, type AdvancedKind } from '../protocol/hero68/advanced'
 import { REMAP_CATEGORIES, remapLabel } from '../protocol/hero68/remap'
 import { ADVANCED_PRESETS, applyAdvancedPreset, presetConflicts, type AdvancedPreset } from '../protocol/hero68/advancedPresets'
@@ -21,8 +23,7 @@ const INFO: Record<AdvancedKind,{title:string;description:string}> = {
   END:{title:'Release Action (END)',description:'Keep the normal key press and send an additional action when you release it.'},
 }
 const phases = ['Start of press','Deep press','Release from deep','End of release']
-const label = (key:string) => HERO68_LAYOUT.flat().find(k=>k.id===key)?.label ?? key
-const neutral = Object.fromEntries(HERO68_KEY_IDS.map(k=>[k,'#292d2f']))
+const label = (key:string) => HERO68_KEY_LABEL_BY_ID[key] ?? key
 const SOCD_OPTIONS = [{value:1,title:'Last input priority',desc:'The last key pressed overrides the first.'},{value:3,title:'First key priority',desc:'Key 1 wins whenever both keys are active.'},{value:4,title:'Second key priority',desc:'Key 2 wins whenever both keys are active.'},{value:0,title:'Neutral',desc:'Neither key is active while both are pressed.'}]
 type Props = {bindings:AdvancedBinding[];busy:boolean;pending:boolean;connected:boolean;onChange:(bindings:AdvancedBinding[])=>void}
 type View = 'overview'|'assign'|'edit'
@@ -102,6 +103,9 @@ function OutputTester() {
 }
 export default function AdvancedKeysPage({bindings,busy,pending,connected,onChange}:Props) {
   const { tr } = useI18n()
+  const model = useContext(DeviceModelContext)
+  const modelKeyIds = useMemo(() => heroLayout(model).keyIds, [model])
+  const neutral = useMemo(() => Object.fromEntries(modelKeyIds.map(k=>[k,'#292d2f'])), [modelKeyIds])
   const [view,setView] = useState<View>('overview'), [kind,setKind] = useState<AdvancedKind>('SOCD')
   const [presetReview,setPresetReview] = useState<AdvancedPreset|null>(null)
   const page = useRef<HTMLDivElement>(null)
@@ -116,7 +120,7 @@ export default function AdvancedKeysPage({bindings,busy,pending,connected,onChan
   const occupied = useMemo(()=>new Map(bindings.flatMap(b=>b.keys.map(k=>[k,b] as const))),[bindings])
   const highlighted = new Set(view==='edit'?draft?.keys:view==='assign'?assignedKeys:hovered?occupied.get(hovered)?.keys:assignedKeys)
   const decorations:Record<string,React.ReactNode>={}
-  for(const key of HERO68_KEY_IDS)if(!occupied.has(key))decorations[key]=<span className="ak-preview-key"><span>{label(key)}</span><span className={`ak-preview-plus ${keys.includes(key)?'is-remove':''}`}>{keys.includes(key)?<X size={13}/>:<Plus size={13}/>}</span></span>
+  for(const key of modelKeyIds)if(!occupied.has(key))decorations[key]=<span className="ak-preview-key"><span>{label(key)}</span><span className={`ak-preview-plus ${keys.includes(key)?'is-remove':''}`}>{keys.includes(key)?<X size={13}/>:<Plus size={13}/>}</span></span>
   function assign(key:string){
     if(busy)return
     setError('');setNotice('')
@@ -144,7 +148,7 @@ export default function AdvancedKeysPage({bindings,busy,pending,connected,onChan
       </div></>:<section className="ak-workbench"><header className="ak-workbench-head"><h2>{tr(info.title)}</h2><FeatureHelp title={info.title} paragraphs={[info.description,kind==='DKS'?'The columns follow the press and release journey. Click a point to trigger once, or drag across points to hold the selected action.':'Choose the physical key above and set its behavior below. Save the profile before testing it on your keyboard.']}/><div><button className="secondary-button" onClick={cancel}>{tr('Cancel')}</button>{view==='edit'&&editingId&&<button className="secondary-button ak-delete" onClick={()=>setRemoveOpen(true)}><Trash2 size={15}/>{tr('Delete')}</button>}<button className="apply-button" disabled={busy||(view==='assign'&&!ready)} onClick={()=>{if(view==='assign'){setDraft(newAdvanced(kind,assignedKeys));setView('edit')}else commit()}}>{tr(view==='assign'?'Configure binding':editingId?'Apply changes':'Add binding')}</button></div></header>
       <p className="ak-step-status">{view==='assign'?tr('Step 1 of 2 · {count} / {required} keys selected',{count:assignedKeys.length,required})+(ready?' · '+tr('Ready to configure'):''):tr('Step 2 of 2 · Configure the behavior, then add it to your profile draft.')}</p>
       <div className="ak-workbench-body"><article className="ak-editor">
-        {view==='assign'?<><h3>{tr(required===2?'Select two keys from the keyboard preview above':'Select a key from the keyboard preview above')}</h3><p>{tr(info.description)}</p><div className="ak-assign-slots">{Array.from({length:required},(_,i)=><label key={i}><span>{tr('Key')} {i+1}</span><button className={`ak-assign-slot ${keys[i]?'is-filled':''} ${slot===i?'is-active':''}`} aria-label={tr('Assign key {count}',{count:i+1})} onClick={()=>setSlot(i)}>{keys[i]?label(keys[i]):tr('Assign')}</button></label>)}</div><div className="ak-physical-input" tabIndex={0} aria-label={tr('Assign using physical keyboard')} onKeyDown={e=>{if(e.key==='Tab')return;if(HERO68_KEY_IDS.includes(e.code)){e.preventDefault();if(!e.repeat)assign(e.code)}}}>{tr('Or click here and press a physical key to assign it.')}</div></>:draft&&<><div className="ak-target-keys">{draft.keys.map(k=><kbd key={k}>{label(k)}</kbd>)}<span>{tr(info.title)}</span></div>
+        {view==='assign'?<><h3>{tr(required===2?'Select two keys from the keyboard preview above':'Select a key from the keyboard preview above')}</h3><p>{tr(info.description)}</p><div className="ak-assign-slots">{Array.from({length:required},(_,i)=><label key={i}><span>{tr('Key')} {i+1}</span><button className={`ak-assign-slot ${keys[i]?'is-filled':''} ${slot===i?'is-active':''}`} aria-label={tr('Assign key {count}',{count:i+1})} onClick={()=>setSlot(i)}>{keys[i]?label(keys[i]):tr('Assign')}</button></label>)}</div><div className="ak-physical-input" tabIndex={0} aria-label={tr('Assign using physical keyboard')} onKeyDown={e=>{if(e.key==='Tab')return;if(modelKeyIds.includes(e.code)){e.preventDefault();if(!e.repeat)assign(e.code)}}}>{tr('Or click here and press a physical key to assign it.')}</div></>:draft&&<><div className="ak-target-keys">{draft.keys.map(k=><kbd key={k}>{label(k)}</kbd>)}<span>{tr(info.title)}</span></div>
           {kind==='SOCD'?<div className="ak-socd-options"><h3>{tr('When both keys are pressed')}</h3>{SOCD_OPTIONS.map(o=><label key={o.value} className={draft.mode===o.value?'is-active':''}><input type="radio" name="socd" checked={draft.mode===o.value} onChange={()=>setDraft({...draft,mode:o.value})}/><span><strong>{tr(o.title)}{o.value===3?` (${label(draft.keys[0])})`:o.value===4?` (${label(draft.keys[1])})`:''}</strong><span>{tr(o.desc)}</span></span></label>)}{draft.mode===2&&<p>{tr('Mode 2 is retained from the keyboard; choose a verified mode to change it.')}</p>}</div>
           :kind==='DKS'?<DksGrid binding={draft} onChange={setDraft}/>
           :kind==='MPT'?<div className="ak-mpt"><h3>{tr('Depth-triggered actions')}</h3><p>{tr('Deeper presses add actions. Releasing the key removes them in reverse order.')}</p>{draft.actions.map((_,i)=><div key={i}><span>{tr('Point {count}',{count:i+1})}</span>{action(i,tr('Action {count}',{count:i+1}))}<Depth title={tr('Point {count} depth',{count:i+1})} value={draft.thresholds[i]} onChange={v=>setDraft({...draft,thresholds:draft.thresholds.map((d,j)=>i===j?v:d)})}/></div>)}</div>

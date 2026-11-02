@@ -301,3 +301,8 @@
   .remap-macro-controls { grid-template-columns: 1fr; }
   .remap-macro-grid { grid-template-columns: 1fr; }
 }
+
+.actuation-page .actuation-keyboard-stage:has(.is-hero84) {
+  height: 328px;
+  min-height: 328px;
+}

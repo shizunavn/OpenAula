@@ -14,7 +14,8 @@ import GamepadControlIcon from "../components/GamepadControlIcon";
 import GamepadDragPreview from "../components/GamepadDragPreview";
 import { AppSelect } from "../app/components/AppSelect";
 import { useI18n } from "../i18n";
-import { HERO68_LAYOUT } from "../keyboard/hero68Layout";
+import { heroLayout } from "../keyboard/layout";
+import { HERO68_KEY_LABEL_BY_ID } from "../app/helpers";
 import {
   defaultGamepad,
   restoreGamepad,
@@ -33,7 +34,7 @@ import { GamepadAutoApply, type GamepadSaveState } from "../protocol/gamepadAuto
 import "./GamepadPage.css";
 const storage = "openhero68:gamepad:v1";
 const neutralLighting = Object.fromEntries(
-  HERO68_LAYOUT.flat().map((k) => [k.id, "#35393b"]),
+  heroLayout("hero84").rows.flat().map((k) => [k.id, "#35393b"]),
 );
 const palette: GamepadAction[] = [
   "A",
@@ -88,7 +89,7 @@ function save(slot: number, value: GamepadConfiguration) {
   }
 }
 const physicalLabel = (id: string) =>
-  HERO68_LAYOUT.flat().find((k) => k.id === id)?.label ?? id;
+  HERO68_KEY_LABEL_BY_ID[id] ?? id;
 const actionLabel = (a: GamepadAction) =>
   (
     ({
@@ -540,7 +541,7 @@ export default function GamepadPage({
             liveStore={liveStore}
             keyLabels={labels}
             keyDecorations={{...Object.fromEntries(config.bindings.map(b=>[b.keyId,<span key={`${b.keyId}:${assigned?.keyId===b.keyId?assigned.sequence:0}`} className={assigned?.keyId===b.keyId?'gp-assigned-pop':''}><GamepadControlIcon action={b.action}/></span>])),...(dropTarget&&dragged?{[dropTarget]:<span className="gp-drop-preview"><GamepadControlIcon action={dragged.action}/></span>}:{})}}
-            keyClassNames={Object.fromEntries(HERO68_LAYOUT.flat().map(k=>[k.id,[k.id===dropTarget&&dragged?'gp-drop-target':'',k.id===dragged?.sourceKeyId?'gp-drag-source':''].filter(Boolean).join(' ')]))}
+            keyClassNames={Object.fromEntries(heroLayout('hero84').rows.flat().map(k=>[k.id,[k.id===dropTarget&&dragged?'gp-drop-target':'',k.id===dragged?.sourceKeyId?'gp-drag-source':''].filter(Boolean).join(' ')]))}
             draggableKeys={new Set(!disabled && tab === 'setup' ? config.bindings.map(b => b.keyId) : [])}
             onDragStartKey={(id, e) => {
               const source = config.bindings.find(b => b.keyId === id);

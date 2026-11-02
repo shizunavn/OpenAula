@@ -4,6 +4,8 @@ export type Hero68Key = {
   width?: number
   matrixKey?: number
   indicator?: 'lock' | 'fn'
+  /** Padding slot that keeps a shorter row's columns aligned; never interactive. */
+  spacer?: boolean
 }
 
 export type Hero68Row = Hero68Key[]

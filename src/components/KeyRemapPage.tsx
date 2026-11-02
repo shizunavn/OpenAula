@@ -6,7 +6,7 @@ import './KeyRemapPage.css'
 import RemapIcon, { RemapActionIcon, hasRemapActionIcon } from "./RemapIcon"
 import Hero68Preview from './Hero68Preview'
 import type { AdvancedBinding } from '../protocol/hero68/advanced'
-import { HERO68_LAYOUT } from '../keyboard/hero68Layout'
+import { FACTORY_REMAP_LAYERS, HERO68_KEY_LABEL_BY_ID } from '../app/helpers'
 import {
   decodeMacroRemap,
   defaultRemapLayers,
@@ -33,7 +33,6 @@ type Props = {
   onAssign: (layer: RemapLayer, keyId: string, value: number) => void
   onCopyLayer: (source: RemapLayer, target: RemapLayer) => void
 }
-const FACTORY_REMAP_LAYERS = defaultRemapLayers()
 const MACRO_MODES: Array<{ id: MacroRemapMode; label: string }> = [
   { id: 'circle', label: 'Run N times' },
   { id: 'button', label: 'Toggle' },
@@ -89,7 +88,7 @@ export default function KeyRemapPage({ advancedBindings, layers, busy, dirtyCoun
     return () => { window.removeEventListener(MACRO_LIBRARY_EVENT, refresh); window.removeEventListener('storage', storage) }
   }, [])
 
-  const physicalLabel = HERO68_LAYOUT.flat().find(key => key.id === keyId)?.label
+  const physicalLabel = keyId ? HERO68_KEY_LABEL_BY_ID[keyId] ?? keyId : undefined
   const selected = useMemo(() => new Set(keyId ? [keyId] : []), [keyId])
   const presetHighlights = useMemo(() => hoveredPreset ? remapPresetDifferences(hoveredPreset, layer, layers[layer]) : new Set<string>(), [hoveredPreset, layer, layers])
   const previewMappings = useMemo(() => hoveredPreset ? { ...layers[layer], ...remapPreset(hoveredPreset, layer) } : layers[layer], [hoveredPreset, layer, layers])

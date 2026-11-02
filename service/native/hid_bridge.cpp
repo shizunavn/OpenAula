@@ -119,7 +119,7 @@ std::unique_ptr<Device> openDevice() {
         HIDD_ATTRIBUTES attrs{}; attrs.Size = sizeof(attrs);
         PHIDP_PREPARSED_DATA prepared = nullptr; HIDP_CAPS caps{};
         const bool match = HidD_GetAttributes(d->h, &attrs) && attrs.VendorID == 0x372e &&
-            attrs.ProductID == 0x103e && HidD_GetPreparsedData(d->h, &prepared) &&
+            (attrs.ProductID == 0x103e || attrs.ProductID == 0x1000) && HidD_GetPreparsedData(d->h, &prepared) &&
             HidP_GetCaps(prepared, &caps) == HIDP_STATUS_SUCCESS && caps.UsagePage == 0xff60 &&
             caps.Usage == 0x61 && caps.InputReportByteLength >= 64 && caps.OutputReportByteLength >= 64;
         if (prepared) HidD_FreePreparsedData(prepared);
@@ -184,6 +184,7 @@ int main() {
     hall::Scheduler hallScheduler;gamepad::Config gamepadConfig;gamepad::Output gamepadOutput;
     powerGamepad=&gamepadOutput;
     bool gamepadPaused=false,hallFault=false,ioPaused=false,wasSuspended=false,wasGamepadEnabled=false;
+    bool hero84Rhythm=false; // set by TS via device-model:<id>; HERO84-only keys copy a HERO68 key's colour
     auto setGamepadPause=[&]{gamepadOutput.pause(gamepadPaused||rhythmPaused||powerSuspended.load()||hallFault||ioPaused);};
     std::array<double,hall::Capacity> consumerHz{};
     double nextHallPublish=0,nextGamepadPublish=0,nextInputPublish=0;bool inputStreaming=false;uint64_t inputSequence=0;
@@ -255,7 +256,7 @@ int main() {
         nextFrame+=1000./60;if(nextFrame<=now)nextFrame=now+1000./60;
         if(now>=reconnectAt) {
           auto audio=capture.snapshot();rhythm::Frame frame;
-          frame=engine.render(audio.audio,now);const double renderedAt=rhythm::clockMs();const auto encoded=rhythm::encode(frame);const double encodedAt=rhythm::clockMs();
+          frame=engine.render(audio.audio,now);const double renderedAt=rhythm::clockMs();const auto encoded=rhythm::encode(frame,hero84Rhythm);const double encodedAt=rhythm::clockMs();
           bool okay=true;for(const auto& p:encoded.packets)if(!writeReport(p)){okay=false;break;}
           if(okay) {
             const double completed=rhythm::clockMs();std::ostringstream event;
@@ -291,6 +292,7 @@ int main() {
       if(line=="gamepad-start"||line=="gamepad-start-paused"){gamepadPaused=line=="gamepad-start-paused";if(gamepadOutput.start()){setGamepadPause();updateHall();emitLine("gamepad-ready");}else emitLine("error:"+gamepadOutput.error());continue;}
       if(line=="gamepad-stop"){gamepadOutput.stop();updateHall();emitLine("gamepad-stopped");continue;}
       if(line=="gamepad-status"){emitLine("gamepad-state:"+gamepadOutput.status());continue;}
+      if(line.rfind("device-model:",0)==0){hero84Rhythm=line.substr(13)=="hero84";emitLine("device-model-ready");continue;}
       if(line=="device-identity"){if(!device)device=openDevice();if(!device){emitLine("error:Device disconnected");continue;}std::ostringstream id;id<<"device-identity:"<<std::hex<<std::setfill('0');for(auto c:device->identity)id<<std::setw(4)<<unsigned(std::towlower(c));emitLine(id.str());continue;}
       if(line=="gamepad-input-on"||line=="gamepad-input-off"){inputStreaming=line=="gamepad-input-on";nextInputPublish=0;emitLine("gamepad-input-ready");continue;}
       if(line=="gamepad-pause"){gamepadPaused=true;setGamepadPause();emitLine("gamepad-paused");continue;}

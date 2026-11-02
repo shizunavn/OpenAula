@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Download, Layers, Plus, Play, Square, RotateCcw, Sparkles, Trash2, Waves } from 'lucide-react'
 import Hero68Preview from './Hero68Preview'
 import RgbColorPicker from './RgbColorPicker'
@@ -6,6 +6,8 @@ import RgbKeyPaintTools, { RgbKeySelectionTools } from './RgbKeyPaintTools'
 import { RgbPreviewPanel, RgbToolbarSlot } from './RgbWorkspace'
 import { CUSTOM_RGB_EFFECTS, CustomRgbEngine, MAX_RGB_LAYERS, RGB_EFFECT_METADATA, RGB_GRADIENT_PALETTES, createRgbLayer, restoreCustomRgb, type CustomRgbConfiguration, type CustomRgbEffect, type CustomRgbLayer, type RgbGradientPalette } from '../keyboard/customRgb'
 import { HERO68_KEY_IDS } from '../keyboard/hero68Layout'
+import { heroLayout } from '../keyboard/layout'
+import { DeviceModelContext } from '../app/DeviceModelContext'
 import { KEY_RGB_MODES } from '../keyboard/rgbCatalog'
 import { acceptsRgbPreviewKey } from '../keyboard/rgbPreviewInput'
 import { rgbPreviewDarkReason } from '../keyboard/rgbPreviewDefaults'
@@ -27,6 +29,8 @@ function Slider({label,value,min,max,step=1,unit,disabled,onChange}:{label:strin
 type Props={value:RgbProfile;onChange:(v:RgbProfile)=>void;busy:boolean;advancedBindings:AdvancedBinding[];visible:boolean;onSetup:()=>void;playback:ReturnType<typeof useCustomRgbPlayback>}
 export default function CustomRgbEditor({value,onChange,busy,advancedBindings,visible,onSetup,playback}:Props) {
   const { tr } = useI18n()
+  const model = useContext(DeviceModelContext)
+  const modelKeyIds = useMemo(() => heroLayout(model).keyIds, [model])
   const config=restoreCustomRgb(value.custom,value)
   const [active,setActive]=useState('base')
   const [selected,setSelected]=useState(new Set<string>())
@@ -35,7 +39,7 @@ export default function CustomRgbEditor({value,onChange,busy,advancedBindings,vi
   const [adding,setAdding]=useState(false)
   const [choosing,setChoosing]=useState(false)
   const [demo,setDemo]=useState(false)
-  const [frame,setFrame]=useState<{keys:LightingFrame;side:string[]}>({keys:Object.fromEntries(HERO68_KEY_IDS.map(id=>[id,'#35393b'])),side:[]})
+  const [frame,setFrame]=useState<{keys:LightingFrame;side:string[]}>({keys:Object.fromEntries(modelKeyIds.map(id=>[id,'#35393b'])),side:[]})
   const [previewError,setPreviewError]=useState<string|null>(null)
   const [synced,setSynced]=useState(false)
   const engineRef=useRef<CustomRgbEngine|null>(null)
@@ -142,7 +146,7 @@ export default function CustomRgbEditor({value,onChange,busy,advancedBindings,vi
       {status?.enabled&&status.mode==='custom'&&status.lastError&&<p className="stream-error" role="alert">{status.lastError}</p>}
     </RgbToolbarSlot>
     <div className={`custom-rgb-content ${locked?'is-locked':''}`} inert={locked}>
-      <RgbPreviewPanel source={demo?tr('Simulation'):live?(synced?tr('Live keyboard'):tr('Waiting for live frames')):tr('Draft preview')} hint={perKey?tr('Select keys on the preview to paint.'):layer?tr('Select the LED region for this layer.'):tr('Side lights keep their onboard effect.')} actions={!live&&samplePreview?<button className="secondary-button" disabled={disabled} onClick={()=>setReplay(n=>n+1)}><RotateCcw size={15}/>{tr('Try effect')}</button>:undefined} footer={perKey?<RgbKeyPaintTools selected={selected} onSelect={setSelected} color={paint} onColor={setPaint} disabled={disabled} onPaint={()=>{const colors={...value.colors};for(const id of selected)colors[id]=rgb(paint);onChange({...value,colors})}}/>:layer&&!adding?<div className="rgb-key-scope-tools"><RgbKeySelectionTools selected={selected} onSelect={setSelected} disabled={disabled}/><div className="rgb-key-scope-actions"><small>{tr('Layer affects {count}',{count:layer.keys.length})}</small><button className="apply-button" disabled={disabled||!selected.size} onClick={()=>patchLayer({keys:[...selected]})}>{tr('Use selection')}</button><button className="secondary-button" disabled={disabled} onClick={()=>patchLayer({keys:[...HERO68_KEY_IDS]})}>{tr('Affect all keys')}</button></div></div>:undefined}>
+      <RgbPreviewPanel source={demo?tr('Simulation'):live?(synced?tr('Live keyboard'):tr('Waiting for live frames')):tr('Draft preview')} hint={perKey?tr('Select keys on the preview to paint.'):layer?tr('Select the LED region for this layer.'):tr('Side lights keep their onboard effect.')} actions={!live&&samplePreview?<button className="secondary-button" disabled={disabled} onClick={()=>setReplay(n=>n+1)}><RotateCcw size={15}/>{tr('Try effect')}</button>:undefined} footer={perKey?<RgbKeyPaintTools selected={selected} onSelect={setSelected} color={paint} onColor={setPaint} disabled={disabled} onPaint={()=>{const colors={...value.colors};for(const id of selected)colors[id]=rgb(paint);onChange({...value,colors})}}/>:layer&&!adding?<div className="rgb-key-scope-tools"><RgbKeySelectionTools selected={selected} onSelect={setSelected} disabled={disabled}/><div className="rgb-key-scope-actions"><small>{tr('Layer affects {count}',{count:layer.keys.length})}</small><button className="apply-button" disabled={disabled||!selected.size} onClick={()=>patchLayer({keys:[...selected]})}>{tr('Use selection')}</button><button className="secondary-button" disabled={disabled} onClick={()=>patchLayer({keys:[...modelKeyIds]})}>{tr('Affect all keys')}</button></div></div>:undefined}>
         <Hero68Preview advancedBindings={advancedBindings} showAdvancedIcons={false} selectedKeys={selectable?selected:new Set()} onToggleKey={toggle} lightingFrame={frame.keys} lightingSource="local" selectionEnabled={selectable}/>
         <div className="rgb-side-preview" aria-label={tr('18 side light positions')}>{(frame.side.length?frame.side:Array(18).fill('#35393b')).map((color,i)=><span key={i} style={{background:color,color}}/>)}</div>
       </RgbPreviewPanel>

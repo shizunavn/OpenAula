@@ -1,6 +1,7 @@
 import type { RemapLayers } from '../protocol/hero68/remap'
 import type { RgbProfile, RgbDirty } from '../protocol/hero68/rgb'
 import type { AdvancedBinding } from '../protocol/hero68/advanced'
+import type { HeroDeviceModelId } from '../keyboard/devices'
 import type { LanguagePreference } from '../i18n'
 
 export const OPENHERO68_STATE_KEY = 'openhero68:web-state:v1'
@@ -9,6 +10,7 @@ export type PersistedOpenHeroState = {
   activeRail?: 'keyboard' | 'settings' | 'help'
   activePage?: string
   activeSettingsPage?: string
+  deviceModel?: HeroDeviceModelId
   selectedKeys?: string[]
   selectedSwitchId?: string
   assignedSwitchesByKey?: Record<string, string>

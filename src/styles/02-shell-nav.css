@@ -109,11 +109,54 @@
   background: #17191a;
   border-radius: 7px;
   overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.045);
 }
-.device-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
-.device-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.device-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 3px;
+  animation: device-thumb-in 220ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes device-thumb-in {
+  from { opacity: 0; transform: scale(.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+.device-copy { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .device-copy small { color: var(--text-3); font-size: 11px; }
 .device-copy strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
+
+/* Custom animated keyboard model selector inside the sidebar device card */
+.app-select.device-model-select {
+  width: 100%;
+  margin: 0;
+}
+.app-select.device-model-select .app-select-trigger {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .05);
+  color: var(--text-1);
+  font-size: 13.5px;
+  font-weight: 700;
+  gap: 6px;
+}
+.app-select.device-model-select .app-select-trigger:hover:enabled {
+  background: rgba(255, 255, 255, .09);
+  border-color: rgba(255, 255, 255, .20);
+}
+.app-select.device-model-select .app-select-trigger[aria-expanded="true"] {
+  background: rgba(255, 212, 92, .10);
+  border-color: rgba(255, 212, 92, .52);
+  box-shadow: 0 0 0 2px rgba(255, 212, 92, .12);
+}
+.app-select.device-model-select .app-select-trigger-meta {
+  display: none;
+}
+
 .sidebar-section-label { color: var(--text-3); font-size: 11px; margin: 18px 12px 6px; }
 .sidebar-item {
   width: 100%;
@@ -275,6 +318,7 @@
   padding: 0 18px;
 }
 .profile-control:hover { background: #242829; }
+.profile-control > svg { transition: transform 220ms cubic-bezier(.16, 1, .3, 1); }
 .profile-icon {
   width: 36px;
   height: 36px;
@@ -285,7 +329,7 @@
   background: #2c3032;
   box-shadow: 0 0 0 2px #2848ff, 0 0 18px rgba(43,72,255,.58);
 }
-.rotate { transform: rotate(180deg); transition: transform var(--duration) var(--ease); }
+.rotate { transform: rotate(180deg); transition: transform 220ms cubic-bezier(.16, 1, .3, 1); }
 .profile-menu {
   position: absolute;
   top: 47px;
@@ -294,12 +338,15 @@
   padding: 7px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
-  background: #25292b;
-  box-shadow: 0 20px 60px rgba(0,0,0,.38);
-  animation: menu-in var(--duration) var(--ease) both;
+  background: rgba(37, 41, 43, .96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+  transform-origin: top left;
+  animation: menu-in 185ms cubic-bezier(.16, 1, .3, 1) both;
 }
-.profile-menu button { width: 100%; border: 0; background: transparent; color: var(--text-2); border-radius: 7px; padding: 10px 12px; text-align: left; display: flex; justify-content: space-between; cursor: pointer; }
-.profile-menu button:hover, .profile-menu button.is-selected { background: rgba(255,255,255,.055); color: var(--text-1); }
+.profile-menu button { width: 100%; border: 0; background: transparent; color: var(--text-2); border-radius: 7px; padding: 10px 12px; text-align: left; display: flex; justify-content: space-between; cursor: pointer; transition: background 130ms ease, color 130ms ease; }
+.profile-menu button:hover, .profile-menu button.is-selected { background: rgba(255,255,255,.065); color: var(--text-1); }
 .profile-menu span { color: var(--brand); font-size: 11px; }
 .topbar-actions { display: flex; gap: 4px; align-items: center; }
 .apply-button, .secondary-button, .ghost-button {

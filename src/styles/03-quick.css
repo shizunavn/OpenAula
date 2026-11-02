@@ -108,3 +108,7 @@
   padding: 10px 0 4px;
   min-width: 0;
 }
+
+.keyboard-stage:has(.is-hero84) {
+  min-height: clamp(268px, 33vh, 338px);
+}

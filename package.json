@@ -14,6 +14,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "cf:dev": "npm run build && npx wrangler@4 dev",
+    "cf:deploy": "npm run build && npx wrangler@4 deploy",
+    "pages:deploy": "npm run build && npx wrangler@4 pages deploy dist --project-name open-hero68 --branch main",
     "test:profile-remap": "node --test tests/profile-remap.test.mjs",
     "prepare:setup": "node tools/prepare-setup-tools.mjs",
     "build:setup": "npm run build:service && node tools/package-service-setup.mjs",
@@ -31,10 +34,10 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-basic-ssl": "2.3.0",
-    "typescript": "7.0.2",
-    "vite": "8.3.0",
     "@vitejs/plugin-react": "6.1.1",
-    "rolldown": "1.2.9"
+    "rolldown": "1.2.9",
+    "typescript": "7.0.2",
+    "vite": "8.3.0"
   },
   "engines": {
     "node": ">=22.12.0"

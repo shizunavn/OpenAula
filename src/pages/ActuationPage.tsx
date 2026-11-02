@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { Info } from 'lucide-react'
 import Hero68Preview from '../components/Hero68Preview'
 import FeatureHelp from '../components/FeatureHelp'
+import type { HeroDeviceModelId } from '../keyboard/devices'
 import type { AdvancedBinding } from '../protocol/hero68/advanced'
 import { hallKeyLabel } from '../app/helpers'
 import type { SwitchOption } from '../app/switchAssets'
@@ -12,6 +13,7 @@ import { Toggle } from '../app/components/Toggle'
 import { VerticalRangeControl } from '../app/components/VerticalRangeControl'
 
 export interface ActuationPageProps {
+  model: HeroDeviceModelId
   actuationPreviewWidth: number | undefined
   advancedBindings: AdvancedBinding[]
   selectedKeys: Set<string>
@@ -40,6 +42,7 @@ export interface ActuationPageProps {
 }
 
 function ActuationPage({
+  model,
   actuationPreviewWidth,
   advancedBindings,
   selectedKeys,
@@ -71,6 +74,7 @@ function ActuationPage({
             <div className="page quick-page actuation-page page-enter" style={{ '--actuation-preview-width': actuationPreviewWidth ? `${actuationPreviewWidth}px` : undefined } as React.CSSProperties}>
               <section className={`keyboard-stage actuation-keyboard-stage ${hallStream.active ? 'is-streaming' : ''}`}>
                 <Hero68Preview
+                  model={model}
                   advancedBindings={advancedBindings}
                   selectedKeys={selectedKeys}
                   onToggleKey={toggleKey}

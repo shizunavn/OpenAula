@@ -1,31 +1,18 @@
-// Frontend key id -> real hardware key ID ("pos" in the RE workspace) mapping.
+// Frontend key id -> real hardware key ID ("pos" / "keyValue" in the official AULA web driver).
 //
-// *** THIS TABLE REPLACES THE FAKE `matrixKey` UI ADDRESSING SCHEME. ***
-//
-// `matrixKey` in ../../keyboard/hero68Layout.ts (e.g. Escape=256, KeyW=514) is a
-// made-up row/column UI addressing scheme invented for the baseline UI. It has no
-// relationship to the AULA wire protocol and must never be sent to the device -
-// doing so would silently apply commands to the wrong physical key.
-//
-// The values below are the real hardware key IDs ("pos") that command builders in
-// ./commands.ts expect for their `keyId` parameter (see writeActuation, readActuation,
-// writeRapidTrigger, writeDeadZone, etc., and codec.ts's decode*Records functions).
-//
-// Provenance: every pos value here was looked up programmatically from
-// hero68_re/python/hero68/layout.py::HERO68_DEFAULT_KEYS (the ARM32_HID_68 factory
-// layer recovered verbatim from the official AULA web bundle) by matching each
-// frontend key id to the corresponding physical key's name in that table - e.g.
-// frontend "KeyW" -> layout.py name "W" -> pos 30. That correspondence was verified
-// against fixtures/golden_packets.json, whose "ap_w_0_10mm_firmware0323" fixture
-// hardware-confirms POS=30 for W (packet data: keyId=30, distance=100 units).
-//
-// The full 68-key table was generated and cross-checked by script against
-// layout.py (position-set equality, no duplicates, exactly 68 keys) rather than
-// hand-typed from these hardware IDs directly, to avoid re-introducing the same
-// class of bug this table exists to fix. See ../README.md#sources-and-evidence.
-// The original layout and golden packet fixtures belong to the external
-// hero68_re workspace and are not shipped in this repository.
+// Both AULA HERO 68 HE (`deviceId = 0x110000000003`) and AULA HERO 84 HE
+// (`deviceId = 0x110000000005`) share the exact same physical `keyValue` IDs
+// (`1..103`) in the official ByteTech SDK:
+// - All 68 keys of HERO68 keep the exact same `keyValue` on HERO84.
+// - HERO84 adds 16 keys:
+//   - `2..13`: `F1`..`F12`
+//   - `14`: `Backquote` (`~ / \``)
+//   - `95`: `PrintScreen` (`PrtSc`)
+//   - `100`: `Home`
+//   - `101`: `End`
 import { HERO68_KEY_IDS } from "../../keyboard/hero68Layout";
+import { HERO84_ONLY_KEYS } from "../../keyboard/hero84Layout";
+import type { HeroDeviceModelId } from "../../keyboard/devices";
 
 export const HERO68_KEY_POSITIONS: Readonly<Record<string, number>> = {
   Escape: 1,
@@ -102,35 +89,83 @@ export const HERO68_KEY_POSITIONS: Readonly<Record<string, number>> = {
   ArrowRight: 77,
 };
 
+/** The 16 hardware keyValue positions added by the 75% AULA HERO 84 HE layout. */
+export const HERO84_ONLY_KEY_POSITIONS: Readonly<Record<string, number>> = {
+  F1: 2,
+  F2: 3,
+  F3: 4,
+  F4: 5,
+  F5: 6,
+  F6: 7,
+  F7: 8,
+  F8: 9,
+  F9: 10,
+  F10: 11,
+  F11: 12,
+  F12: 13,
+  Backquote: 14,
+  PrintScreen: 95,
+  Home: 100,
+  End: 101,
+};
+
+export const HERO84_KEY_POSITIONS: Readonly<Record<string, number>> = {
+  ...HERO68_KEY_POSITIONS,
+  ...HERO84_ONLY_KEY_POSITIONS,
+};
+
 export const HERO68_KEY_ID_BY_POSITION: ReadonlyMap<number, string> = new Map(
   Object.entries(HERO68_KEY_POSITIONS).map(([keyId, pos]) => [pos, keyId]),
 );
 
+export const HERO84_KEY_ID_BY_POSITION: ReadonlyMap<number, string> = new Map(
+  Object.entries(HERO84_KEY_POSITIONS).map(([keyId, pos]) => [pos, keyId]),
+);
+
+export function keyPositionsForModel(model: HeroDeviceModelId = "hero68"): Readonly<Record<string, number>> {
+  return model === "hero84" ? HERO84_KEY_POSITIONS : HERO68_KEY_POSITIONS;
+}
+
 export function keyIdToPos(keyId: string): number {
-  const pos = HERO68_KEY_POSITIONS[keyId];
+  const pos = HERO84_KEY_POSITIONS[keyId];
   if (pos === undefined) throw new RangeError(`no hardware position mapping for key id "${keyId}"`);
   return pos;
 }
 
 export function posToKeyId(pos: number): string | undefined {
-  return HERO68_KEY_ID_BY_POSITION.get(pos);
+  return HERO84_KEY_ID_BY_POSITION.get(pos);
 }
 
 // Fail loudly at import time (mirroring layout.py's own self-check) rather than
 // silently mis-addressing keys: catches a missing/duplicated entry immediately
 // instead of at first device write.
 (function assertKeyPositionsComplete() {
-  const mappedIds = Object.keys(HERO68_KEY_POSITIONS);
-  if (mappedIds.length !== HERO68_KEY_IDS.length) {
+  const mapped68Ids = Object.keys(HERO68_KEY_POSITIONS);
+  if (mapped68Ids.length !== HERO68_KEY_IDS.length) {
     throw new Error(
-      `HERO68_KEY_POSITIONS has ${mappedIds.length} entries but HERO68_LAYOUT declares ${HERO68_KEY_IDS.length} keys`,
+      `HERO68_KEY_POSITIONS has ${mapped68Ids.length} entries but HERO68_LAYOUT declares ${HERO68_KEY_IDS.length} keys`,
     );
   }
   for (const keyId of HERO68_KEY_IDS) {
     if (!(keyId in HERO68_KEY_POSITIONS)) throw new Error(`HERO68_KEY_POSITIONS is missing frontend key id "${keyId}"`);
   }
-  const positions = Object.values(HERO68_KEY_POSITIONS);
-  if (new Set(positions).size !== positions.length) {
+  const positions68 = Object.values(HERO68_KEY_POSITIONS);
+  if (new Set(positions68).size !== positions68.length) {
     throw new Error("HERO68_KEY_POSITIONS assigns the same hardware pos to more than one key id");
+  }
+
+  const expected84Ids = [...HERO68_KEY_IDS, ...HERO84_ONLY_KEYS.map((key) => key.id)];
+  const mapped84Ids = Object.keys(HERO84_KEY_POSITIONS);
+  if (mapped84Ids.length !== expected84Ids.length) {
+    throw new Error(
+      `HERO84_KEY_POSITIONS has ${mapped84Ids.length} entries but HERO84 layout declares ${expected84Ids.length} keys`,
+    );
+  }
+  for (const keyId of expected84Ids) {
+    if (!(keyId in HERO84_KEY_POSITIONS)) throw new Error(`HERO84_KEY_POSITIONS is missing frontend key id "${keyId}"`);
+  }
+  const positions84 = Object.values(HERO84_KEY_POSITIONS);
+  if (new Set(positions84).size !== positions84.length) {
+    throw new Error("HERO84_KEY_POSITIONS assigns the same hardware pos to more than one key id");
   }
 })();

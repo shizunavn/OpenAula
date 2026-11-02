@@ -3,6 +3,14 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## Unreleased — HERO84 support in the Windows service (untested on hardware)
+
+- Service remembers the connected model (HERO68/HERO84, detected from the device UUID), logs the real model name and reports `deviceModel` in `/status`.
+- Custom RGB frames for a HERO84 also address its 16 extra keys (F1–F12, `` ` ``, PrtSc, Home, End). The engine still renders 68 keys, so each extra key copies the colour of the HERO68 key in the same column/slot, adding no palette colours (84 + 32×4 = 212 bytes, still ≤ 4 packets). HERO68 output is unchanged.
+- Native Rhythm gets the same mapping through a new `device-model:<id>` bridge command (older bridges ignore it and stay 68-key); the Rhythm preview frame includes the extra keys.
+- `/hall/stream` accepts all 84 HERO84 keys once a HERO84 is connected (or before the first connect), and still limits a HERO68 to 68.
+- Not yet done: per-key custom effects and Rhythm patterns do not have HERO84 geometry, so the extra keys mirror their source keys instead of animating independently. Needs a real HERO84 to validate the 212-byte CMD08 frame and the mirrored colours.
+
 ## Service 0.5.3.2 / UI 0.9.57 — remove Beat Pulse
 
 - Remove audio Beat Pulse from Rhythm Sync because beat detection was unreliable on real music. Remove its native detector, renderer and timing controls.

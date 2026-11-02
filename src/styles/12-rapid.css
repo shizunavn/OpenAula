@@ -254,3 +254,7 @@
     min-height: 300px;
   }
 }
+
+.rapid-keyboard-stage:has(.is-hero84) {
+  min-height: clamp(268px, 33vh, 338px);
+}

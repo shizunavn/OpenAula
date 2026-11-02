@@ -3,13 +3,15 @@ import type { Dispatch, SetStateAction } from 'react'
 import Hero68Preview from '../components/Hero68Preview'
 import FeatureHelp from '../components/FeatureHelp'
 import type { AdvancedBinding } from '../protocol/hero68/advanced'
-import { HERO68_KEY_IDS } from '../keyboard/hero68Layout'
+import { heroLayout } from '../keyboard/layout'
+import type { HeroDeviceModelId } from '../keyboard/devices'
 import { RAPID_TRIGGER_VALUES } from '../app/helpers'
 import { Toggle } from '../app/components/Toggle'
 import { RangeControl } from '../app/components/RangeControl'
 import { VerticalRangeControl } from '../app/components/VerticalRangeControl'
 
 export interface RapidPageProps {
+  model: HeroDeviceModelId
   advancedBindings: AdvancedBinding[]
   selectedKeys: Set<string>
   toggleKey: (keyId: string) => void
@@ -52,6 +54,7 @@ export interface RapidPageProps {
 }
 
 function RapidPage({
+  model,
   advancedBindings,
   selectedKeys,
   toggleKey,
@@ -97,6 +100,7 @@ function RapidPage({
             <div className="page quick-page rapid-page page-enter">
               <section className="keyboard-stage rapid-keyboard-stage">
                 <Hero68Preview
+                  model={model}
                   advancedBindings={advancedBindings}
                   selectedKeys={selectedKeys}
                   onToggleKey={toggleKey}
@@ -139,7 +143,7 @@ function RapidPage({
                     {tr('Rapid Trigger dynamically actuates and resets your key based on your intention to press or release the key. Rapid Trigger starts and ends after the actuation point.')}
                   </p>
                   <div className="rapid-enabled-summary">
-                    <span>{tr('ENABLED ON')} <strong>{HERO68_KEY_IDS.filter((keyId) => rapidTriggerByKey[keyId]).length}</strong> {tr('KEYS')}</span>
+                    <span>{tr('ENABLED ON')} <strong>{heroLayout(model).keyIds.filter((keyId) => rapidTriggerByKey[keyId]).length}</strong> {tr('KEYS')}</span>
                   </div>
                 </article>
 

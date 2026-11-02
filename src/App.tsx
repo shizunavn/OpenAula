@@ -29,6 +29,8 @@ import { mergeRgb, readRgbProfile, restoreStoredRgb, rgbChanges, rgbDirtyCount, 
 import { rgbService } from './protocol/rgbService'
 import { publishRgbServiceStatus } from './protocol/rgbServiceState'
 import { HERO68_KEY_IDS } from './keyboard/hero68Layout'
+import { heroLayout } from './keyboard/layout'
+import { heroDeviceModel, HERO_DEVICE_MODELS, type HeroDeviceModelId } from './keyboard/devices'
 import { loadOpenHeroState, saveOpenHeroState, type PersistedOpenHeroState, type ProfileDraft } from './state/persistence'
 import { createTranslator, I18nProvider, type LanguagePreference } from './i18n'
 import { browserSuggestedLanguage, detectRegion } from './i18n/region'
@@ -57,6 +59,9 @@ import {
 import type { PollingRate, ProfileSlot } from './protocol/hero68/types'
 import logo from './assets/openhero68-logo.png'
 import hero68 from './assets/hero68.png'
+import hero84 from './assets/hero84.png'
+import { AppSelect } from './app/components/AppSelect'
+import { DeviceModelContext } from './app/DeviceModelContext'
 import { FACTORY_REMAP_LAYERS, HERO68_KEY_ID_SET, isWholeKeyboardSelected, mergeHydratedBooleans, mergeHydratedNumbers, mergePerKeyState, normalizeHero68Selection, RAPID_TRIGGER_VALUES, selectionHasMixedValues, snapToAllowedValue, snapToStep } from './app/helpers'
 import { SWITCH_OPTIONS, type SwitchOption, type SwitchTone } from './app/switchAssets'
 import { SwitchSelectorBoard } from './app/components/SwitchSelectorBoard'
@@ -91,6 +96,12 @@ function App() {
   const [activeRail, setActiveRail] = useState<'keyboard' | 'settings' | 'help'>(() => persistedState?.activeRail ?? 'keyboard')
   const [activePage, setActivePage] = useState(() => persistedState?.activePage ?? 'quick')
   const [activeSettingsPage, setActiveSettingsPage] = useState(() => persistedState?.activeSettingsPage ?? 'general')
+  // The HERO84 still needs protocol validation, so it stays selectable but is
+  // not the default board.
+  const [deviceModel, setDeviceModel] = useState<HeroDeviceModelId>(() => persistedState?.deviceModel === 'hero84' ? 'hero84' : 'hero68')
+  const selectedModel = useMemo(() => heroDeviceModel(deviceModel), [deviceModel])
+  const selectedLayout = useMemo(() => heroLayout(deviceModel), [deviceModel])
+  const modelKeyIds = selectedLayout.keyIds
   const [rgbCustomEntry, setRgbCustomEntry] = useState(false)
   const [activeRgbTab, setActiveRgbTab] = useState<import('./components/RgbSettingsPage').RgbTab>('onboard')
   const [actuation, setActuation] = useState(1.6)
@@ -106,23 +117,23 @@ function App() {
   const [tachyonPreviousPollingRate, setTachyonPreviousPollingRate] = useState<PollingRate | null>(() => persistedState?.tachyonPreviousPollingRate ?? null)
   const [rgbStreamActive, setRgbStreamActive] = useState(false)
   const [quickPreviewMode, setQuickPreviewMode] = useState<'none' | 'actuation' | 'rapid' | 'deadzone'>('none')
-  const [actuationByKey, setActuationByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.actuationByKey, 1.6))
-  const [rapidTriggerByKey, setRapidTriggerByKey] = useState<Record<string, boolean>>(() => mergePerKeyState(persistedState?.rapidTriggerByKey, false))
-  const [splitSensitivityByKey, setSplitSensitivityByKey] = useState<Record<string, boolean>>(() => mergePerKeyState(persistedState?.splitSensitivityByKey, false))
-  const [rapidSensitivityByKey, setRapidSensitivityByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.rapidSensitivityByKey, 0.65))
-  const [pressSensitivityByKey, setPressSensitivityByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.pressSensitivityByKey, 0.5))
-  const [releaseSensitivityByKey, setReleaseSensitivityByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.releaseSensitivityByKey, 0.55))
-  const [deadzoneEnabledByKey, setDeadzoneEnabledByKey] = useState<Record<string, boolean>>(() => mergePerKeyState(persistedState?.deadzoneEnabledByKey, true))
-  const [topDeadzoneByKey, setTopDeadzoneByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.topDeadzoneByKey, 0))
-  const [bottomDeadzoneByKey, setBottomDeadzoneByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.bottomDeadzoneByKey, 0))
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => normalizeHero68Selection(persistedState?.selectedKeys ?? []))
+  const [actuationByKey, setActuationByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.actuationByKey, 1.6, modelKeyIds))
+  const [rapidTriggerByKey, setRapidTriggerByKey] = useState<Record<string, boolean>>(() => mergePerKeyState(persistedState?.rapidTriggerByKey, false, modelKeyIds))
+  const [splitSensitivityByKey, setSplitSensitivityByKey] = useState<Record<string, boolean>>(() => mergePerKeyState(persistedState?.splitSensitivityByKey, false, modelKeyIds))
+  const [rapidSensitivityByKey, setRapidSensitivityByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.rapidSensitivityByKey, 0.65, modelKeyIds))
+  const [pressSensitivityByKey, setPressSensitivityByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.pressSensitivityByKey, 0.5, modelKeyIds))
+  const [releaseSensitivityByKey, setReleaseSensitivityByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.releaseSensitivityByKey, 0.55, modelKeyIds))
+  const [deadzoneEnabledByKey, setDeadzoneEnabledByKey] = useState<Record<string, boolean>>(() => mergePerKeyState(persistedState?.deadzoneEnabledByKey, true, modelKeyIds))
+  const [topDeadzoneByKey, setTopDeadzoneByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.topDeadzoneByKey, 0, modelKeyIds))
+  const [bottomDeadzoneByKey, setBottomDeadzoneByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.bottomDeadzoneByKey, 0, modelKeyIds))
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => normalizeHero68Selection(persistedState?.selectedKeys ?? [], heroLayout(persistedState?.deviceModel === 'hero84' ? 'hero84' : 'hero68').keyIds))
   const [actuationPreviewWidth, setActuationPreviewWidth] = useState<number>()
   const [hallStreamPinnedKeyId, setHallStreamPinnedKeyId] = useState<string | null>(null)
   const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(() => new Set(persistedState?.profileDrafts?.[persistedState?.profileSlot ?? 1]?.dirtyKeys ?? []))
   const [profileOpen, setProfileOpen] = useState(false)
   const [selectedSwitchId, setSelectedSwitchId] = useState<SwitchTone>(() => isSwitchProfileId(persistedState?.selectedSwitchId) ? persistedState.selectedSwitchId : 'white')
   const [assignedSwitchesByKey, setAssignedSwitchesByKey] = useState<Record<string, SwitchTone>>(() =>
-    mergePerKeyState(persistedState?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined, 'white' as SwitchTone),
+    mergePerKeyState(persistedState?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined, 'white' as SwitchTone, modelKeyIds),
   )
   const [compactSidebar, setCompactSidebar] = useState(() => persistedState?.compactSidebar ?? false)
   const [showAdvancedPages, setShowAdvancedPages] = useState(() => persistedState?.showAdvancedPages ?? true)
@@ -140,10 +151,18 @@ function App() {
   const [rgb, setRgb] = useState<RgbProfile>(() => restoreStoredRgb(initialRgbDraft?.rgb, initialRgbDraft?.rgbFormat))
   const [rgbBaseline, setRgbBaseline] = useState<RgbProfile>(() => restoreStoredRgb(initialRgbDraft?.rgbBaseline, initialRgbDraft?.rgbFormat))
   const [rgbHydratedSlot, setRgbHydratedSlot] = useState<ProfileSlot | null>(null)
-  const rgbDirty = rgbChanges(rgb, rgbBaseline)
+  const rgbDirty = rgbChanges(rgb, rgbBaseline, modelKeyIds)
   const rgbPending = rgbDirtyCount(rgbDirty)
   const [loadedProfileSlot, setLoadedProfileSlot] = useState<ProfileSlot | null>(null)
-  const [remapLayers, setRemapLayers] = useState<RemapLayers>(() => persistedState?.remapLayers ?? defaultRemapLayers())
+  const [remapLayers, setRemapLayers] = useState<RemapLayers>(() => {
+    const base = defaultRemapLayers(modelKeyIds)
+    if (!persistedState?.remapLayers) return base
+    return {
+      0: { ...base[0], ...persistedState.remapLayers[0] },
+      1: { ...base[1], ...persistedState.remapLayers[1] },
+      2: { ...base[2], ...persistedState.remapLayers[2] },
+    }
+  })
   const [dirtyRemaps, setDirtyRemaps] = useState<Set<string>>(() => new Set(persistedState?.profileDrafts?.[persistedState?.profileSlot ?? 1]?.dirtyRemaps ?? []))
   const [profileNames, setProfileNames] = useState<Record<ProfileSlot, string>>(() => ({ 0: 'Onboard Profile 0', 1: 'Onboard Profile 1', 2: 'Onboard Profile 2', ...persistedState?.profileNames }))
   const [profileDrafts, setProfileDrafts] = useState<Partial<Record<ProfileSlot, ProfileDraft>>>(() => persistedState?.profileDrafts ?? {})
@@ -156,7 +175,7 @@ function App() {
   const profileBusyRef = useRef(false)
   const autoConnectStartedRef = useRef(false)
   const profileSwitchAllowedAtRef = useRef(0)
-  const remapBaselineRef = useRef<RemapLayers>(persistedState?.profileDrafts?.[persistedState?.profileSlot ?? 1]?.remapBaseline ?? defaultRemapLayers())
+  const remapBaselineRef = useRef<RemapLayers>(persistedState?.profileDrafts?.[persistedState?.profileSlot ?? 1]?.remapBaseline ?? defaultRemapLayers(modelKeyIds))
   const {
     devicePollingRate,
     deviceOsModeMac,
@@ -217,20 +236,22 @@ function App() {
 
   const selectedSwitch: SwitchOption = SWITCH_OPTIONS.find((option) => option.id === selectedSwitchId) ?? { id: selectedSwitchId, name: switchProfileLabel(selectedSwitchId), fullName: switchProfileLabel(selectedSwitchId), brand: 'Stored keyboard profile', accent: '#9ba3a8', note: '' }
   const switchTopImageById = useMemo(() => Object.fromEntries(SWITCH_OPTIONS.map((option) => [option.id, option.top ?? ''])) as Record<SwitchTone, string>, [])
-  const switchPreviewByKey = useMemo(() => Object.fromEntries(HERO68_KEY_IDS.map((keyId) => [keyId, switchTopImageById[assignedSwitchesByKey[keyId] ?? 'white']])) as Record<string, string>, [assignedSwitchesByKey, switchTopImageById])
-  const rapidPreviewByKey = useMemo(() => Object.fromEntries(HERO68_KEY_IDS.map((keyId) => {
+  const switchPreviewByKey = useMemo(() => Object.fromEntries(modelKeyIds.map((keyId) => [keyId, switchTopImageById[assignedSwitchesByKey[keyId] ?? 'white']])) as Record<string, string>, [modelKeyIds, assignedSwitchesByKey, switchTopImageById])
+  const rapidPreviewByKey = useMemo(() => Object.fromEntries(modelKeyIds.map((keyId) => {
     const split = splitSensitivityByKey[keyId] ?? false
+    // Keys added by a bigger board start from the same defaults as the HERO68 row.
+    const primary = split ? pressSensitivityByKey[keyId] ?? 0.5 : rapidSensitivityByKey[keyId] ?? 0.65
     return [keyId, {
-      primary: (split ? pressSensitivityByKey[keyId] : rapidSensitivityByKey[keyId]).toFixed(2),
-      secondary: split ? (releaseSensitivityByKey[keyId]).toFixed(2) : undefined,
+      primary: primary.toFixed(2),
+      secondary: split ? (releaseSensitivityByKey[keyId] ?? 0.55).toFixed(2) : undefined,
       active: rapidTriggerByKey[keyId] ?? false,
     }]
-  })) as Record<string, { primary: string; secondary?: string; active: boolean }>, [splitSensitivityByKey, pressSensitivityByKey, releaseSensitivityByKey, rapidSensitivityByKey, rapidTriggerByKey])
-  const deadzonePreviewByKey = useMemo(() => Object.fromEntries(HERO68_KEY_IDS.map((keyId) => [keyId, {
+  })) as Record<string, { primary: string; secondary?: string; active: boolean }>, [modelKeyIds, splitSensitivityByKey, pressSensitivityByKey, releaseSensitivityByKey, rapidSensitivityByKey, rapidTriggerByKey])
+  const deadzonePreviewByKey = useMemo(() => Object.fromEntries(modelKeyIds.map((keyId) => [keyId, {
     top: (topDeadzoneByKey[keyId] ?? 0).toFixed(2),
     bottom: (bottomDeadzoneByKey[keyId] ?? 0).toFixed(2),
     active: deadzoneEnabledByKey[keyId] ?? true,
-  }])) as Record<string, { top: string; bottom: string; active: boolean }>, [topDeadzoneByKey, bottomDeadzoneByKey, deadzoneEnabledByKey])
+  }])) as Record<string, { top: string; bottom: string; active: boolean }>, [modelKeyIds, topDeadzoneByKey, bottomDeadzoneByKey, deadzoneEnabledByKey])
   const hallStreamPreviewByKey = useMemo(() => Object.fromEntries(
     Object.entries(hallStream.samples).map(([keyId, sample]) => [keyId, {
       distanceMm: sample.visualDistanceMm,
@@ -261,7 +282,7 @@ function App() {
   const actuationHallThresholdPercent = Math.max(0, Math.min(100, (actuationHallThresholdMm / HERO68_HALL_VISUAL_MAX_MM) * 100))
   const actuationHallTriggered = Boolean(actuationHallFocusSample && actuationHallTravelMm >= actuationHallThresholdMm)
   const hasSelection = selectedKeys.size > 0
-  const allSelected = isWholeKeyboardSelected(selectedKeys)
+  const allSelected = isWholeKeyboardSelected(selectedKeys, modelKeyIds)
   const actuationMixed = selectionHasMixedValues(selectedKeys, actuationByKey)
   const rapidTriggerMixed = selectionHasMixedValues(selectedKeys, rapidTriggerByKey)
   const splitSensitivityMixed = selectionHasMixedValues(selectedKeys, splitSensitivityByKey)
@@ -359,6 +380,7 @@ function App() {
       activeRail,
       activePage,
       activeSettingsPage,
+      deviceModel,
       selectedKeys: rememberSelection ? Array.from(selectedKeys) : [],
       selectedSwitchId,
       assignedSwitchesByKey,
@@ -392,7 +414,7 @@ function App() {
       profileDrafts: { ...profileDrafts, [profileSlot]: currentProfileDraft() },
     }
     saveOpenHeroState(snapshot)
-  }, [activeRail, activePage, activeSettingsPage, selectedKeys, selectedSwitchId, assignedSwitchesByKey, actuationByKey, rapidTriggerByKey, splitSensitivityByKey, rapidSensitivityByKey, pressSensitivityByKey, releaseSensitivityByKey, deadzoneEnabledByKey, topDeadzoneByKey, bottomDeadzoneByKey, tachyon, tachyonPreviousPollingRate, compactSidebar, showAdvancedPages, rememberSelection, languagePreference, languageManuallySet, languageRegionDetected, devicePollingRate, deviceOsModeMac, deviceWinLock, deviceHallDebounce, deviceAutoCalibration, switchSearch, switchBrandFilter, profileSlot, profileNames, remapLayers, profileDrafts, dirtyKeys, dirtyRemaps, rgb, rgbBaseline, advancedBindings, advancedBaseline])
+  }, [activeRail, activePage, activeSettingsPage, deviceModel, selectedKeys, selectedSwitchId, assignedSwitchesByKey, actuationByKey, rapidTriggerByKey, splitSensitivityByKey, rapidSensitivityByKey, pressSensitivityByKey, releaseSensitivityByKey, deadzoneEnabledByKey, topDeadzoneByKey, bottomDeadzoneByKey, tachyon, tachyonPreviousPollingRate, compactSidebar, showAdvancedPages, rememberSelection, languagePreference, languageManuallySet, languageRegionDetected, devicePollingRate, deviceOsModeMac, deviceWinLock, deviceHallDebounce, deviceAutoCalibration, switchSearch, switchBrandFilter, profileSlot, profileNames, remapLayers, profileDrafts, dirtyKeys, dirtyRemaps, rgb, rgbBaseline, advancedBindings, advancedBaseline])
 
   function currentProfileDraft(): ProfileDraft {
     return { assignedSwitchesByKey, actuationByKey, rapidTriggerByKey, splitSensitivityByKey,
@@ -409,18 +431,18 @@ function App() {
     setRgb(restoreStoredRgb(draft?.rgb, draft?.rgbFormat))
     setRgbBaseline(restoreStoredRgb(draft?.rgbBaseline, draft?.rgbFormat))
     setRgbHydratedSlot(null)
-    remapBaselineRef.current = draft?.remapBaseline ?? defaultRemapLayers()
-    setAssignedSwitchesByKey(mergePerKeyState(draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined, 'white' as SwitchTone))
-    setActuationByKey(mergePerKeyState(draft?.actuationByKey, 1.6))
-    setRapidTriggerByKey(mergePerKeyState(draft?.rapidTriggerByKey, false))
-    setSplitSensitivityByKey(mergePerKeyState(draft?.splitSensitivityByKey, false))
-    setRapidSensitivityByKey(mergePerKeyState(draft?.rapidSensitivityByKey, 0.65))
-    setPressSensitivityByKey(mergePerKeyState(draft?.pressSensitivityByKey, 0.5))
-    setReleaseSensitivityByKey(mergePerKeyState(draft?.releaseSensitivityByKey, 0.55))
-    setDeadzoneEnabledByKey(mergePerKeyState(draft?.deadzoneEnabledByKey, true))
-    setTopDeadzoneByKey(mergePerKeyState(draft?.topDeadzoneByKey, 0))
-    setBottomDeadzoneByKey(mergePerKeyState(draft?.bottomDeadzoneByKey, 0))
-    setRemapLayers(draft?.remapLayers ?? defaultRemapLayers())
+    remapBaselineRef.current = draft?.remapBaseline ?? defaultRemapLayers(modelKeyIds)
+    setAssignedSwitchesByKey(mergePerKeyState(draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined, 'white' as SwitchTone, modelKeyIds))
+    setActuationByKey(mergePerKeyState(draft?.actuationByKey, 1.6, modelKeyIds))
+    setRapidTriggerByKey(mergePerKeyState(draft?.rapidTriggerByKey, false, modelKeyIds))
+    setSplitSensitivityByKey(mergePerKeyState(draft?.splitSensitivityByKey, false, modelKeyIds))
+    setRapidSensitivityByKey(mergePerKeyState(draft?.rapidSensitivityByKey, 0.65, modelKeyIds))
+    setPressSensitivityByKey(mergePerKeyState(draft?.pressSensitivityByKey, 0.5, modelKeyIds))
+    setReleaseSensitivityByKey(mergePerKeyState(draft?.releaseSensitivityByKey, 0.55, modelKeyIds))
+    setDeadzoneEnabledByKey(mergePerKeyState(draft?.deadzoneEnabledByKey, true, modelKeyIds))
+    setTopDeadzoneByKey(mergePerKeyState(draft?.topDeadzoneByKey, 0, modelKeyIds))
+    setBottomDeadzoneByKey(mergePerKeyState(draft?.bottomDeadzoneByKey, 0, modelKeyIds))
+    setRemapLayers(draft?.remapLayers ?? defaultRemapLayers(modelKeyIds))
     setDirtyKeys(new Set(draft?.dirtyKeys ?? []))
     setDirtyRemaps(new Set(draft?.dirtyRemaps ?? []))
   }
@@ -456,7 +478,7 @@ function App() {
 
   function copyRemapLayer(source: RemapLayer, target: RemapLayer) {
     if (profileBusyRef.current) return
-    const keys = HERO68_KEY_IDS.filter(keyId => remapLayers[source][keyId] !== remapLayers[target][keyId])
+    const keys = modelKeyIds.filter(keyId => remapLayers[source][keyId] !== remapLayers[target][keyId])
     setRemapLayers(previous => ({ ...previous, [target]: { ...previous[source] } }))
     setDirtyRemaps(previous => {
       const next = new Set(previous)
@@ -507,12 +529,53 @@ function App() {
   }, [showAdvancedPages, activeRail, activePage, hallStream.active, hallStream.starting, selectedKeys.size])
 
   function toggleKey(keyId: string) {
-    if (!HERO68_KEY_ID_SET.has(keyId)) return
+    if (!selectedLayout.keyIdSet.has(keyId)) return
     setSelectedKeys((previous) => {
-      const next = normalizeHero68Selection(previous)
+      const next = normalizeHero68Selection(previous, modelKeyIds)
       if (next.has(keyId)) next.delete(keyId)
       else next.add(keyId)
       return next
+    })
+  }
+
+  function selectDeviceModel(nextModel: HeroDeviceModelId) {
+    if (nextModel === deviceModel) return
+    const nextKeyIds = heroLayout(nextModel).keyIds
+    setDeviceModel(nextModel)
+    // Keys that only exist on the other board must not stay selected.
+    setSelectedKeys((previous) => normalizeHero68Selection(previous, nextKeyIds))
+    setHallStreamPinnedKeyId((previous) => previous && nextKeyIds.includes(previous) ? previous : null)
+    // Give keys the new board adds the same defaults the HERO68 row starts with.
+    setActuationByKey((previous) => mergePerKeyState(previous, 1.6, nextKeyIds))
+    setRapidTriggerByKey((previous) => mergePerKeyState(previous, false, nextKeyIds))
+    setSplitSensitivityByKey((previous) => mergePerKeyState(previous, false, nextKeyIds))
+    setRapidSensitivityByKey((previous) => mergePerKeyState(previous, 0.65, nextKeyIds))
+    setPressSensitivityByKey((previous) => mergePerKeyState(previous, 0.5, nextKeyIds))
+    setReleaseSensitivityByKey((previous) => mergePerKeyState(previous, 0.55, nextKeyIds))
+    setDeadzoneEnabledByKey((previous) => mergePerKeyState(previous, true, nextKeyIds))
+    setTopDeadzoneByKey((previous) => mergePerKeyState(previous, 0, nextKeyIds))
+    setBottomDeadzoneByKey((previous) => mergePerKeyState(previous, 0, nextKeyIds))
+    setAssignedSwitchesByKey((previous) => mergePerKeyState(previous, 'white' as SwitchTone, nextKeyIds))
+    const fallbackRemap = defaultRemapLayers(nextKeyIds)
+    setRemapLayers((previous) => ({
+      0: { ...fallbackRemap[0], ...previous[0] },
+      1: { ...fallbackRemap[1], ...previous[1] },
+      2: { ...fallbackRemap[2], ...previous[2] },
+    }))
+    remapBaselineRef.current = {
+      0: { ...fallbackRemap[0], ...remapBaselineRef.current[0] },
+      1: { ...fallbackRemap[1], ...remapBaselineRef.current[1] },
+      2: { ...fallbackRemap[2], ...remapBaselineRef.current[2] },
+    }
+    setRgb((previous) => {
+      const colors = { ...previous.colors }
+      for (const id of nextKeyIds) if (!colors[id]) colors[id] = [255, 255, 255]
+      return { ...previous, colors }
+    })
+    setRgbBaseline((previous) => {
+      const colors = { ...previous.colors }
+      for (const id of nextKeyIds) if (!colors[id]) colors[id] = [255, 255, 255]
+      return { ...previous, colors }
     })
   }
 
@@ -523,9 +586,9 @@ function App() {
   function selectAll() {
     setSelectedKeys((previous) => {
       // Rebuild from the canonical layout instead of trusting Set.size. This
-      // makes Select All converge to the exact same 68-key state every time.
-      if (isWholeKeyboardSelected(previous) && previous.size === HERO68_KEY_IDS.length) return previous
-      return new Set(HERO68_KEY_IDS)
+      // makes Select All converge to the exact same state every time.
+      if (isWholeKeyboardSelected(previous, modelKeyIds) && previous.size === modelKeyIds.length) return previous
+      return new Set(modelKeyIds)
     })
   }
 
@@ -688,7 +751,7 @@ function App() {
         setHallStreamPinnedKeyId(null)
       } else {
         // Explicit UI telemetry is allowed while Tachyon keeps all RGB idle.
-        await hero68HallStream.start(preferredKeyIds, 'direct-poll')
+        await hero68HallStream.start(preferredKeyIds, 'direct-poll', modelKeyIds)
       }
     } catch (error) {
       setDeviceActionError(error instanceof Error ? error.message : String(error))
@@ -707,6 +770,9 @@ function App() {
     setDeviceActionError(null)
     setDeviceReadState('idle')
     setLoadedProfileSlot(null)
+    const detectedModel = await hero68DeviceManager.detectConnectedModel().catch(() => null)
+    const targetModel: HeroDeviceModelId = detectedModel ?? deviceModel
+    if (targetModel !== deviceModel) selectDeviceModel(targetModel)
     const activeSlot = await readCurrentProfileSlot().catch(() => profileSlot)
     setProfileDrafts(previous => ({ ...previous, [profileSlot]: currentProfileDraft() }))
     const savedDraft = activeSlot === profileSlot ? currentProfileDraft() : profileDrafts[activeSlot]
@@ -715,7 +781,7 @@ function App() {
     const draft = savedDraft ? { ...savedDraft, dirtyKeys: [] } : undefined
     restoreProfileDraft(draft)
     setProfileSlot(activeSlot)
-    await handleReadFromDevice(activeSlot, draft)
+    await handleReadFromDevice(activeSlot, draft, targetModel)
     await readDeviceGeneralSettings()
   }
 
@@ -744,26 +810,27 @@ function App() {
     }
   }
 
-  async function handleReadFromDevice(slot: ProfileSlot = profileSlot, draft?: ProfileDraft) {
+  async function handleReadFromDevice(slot: ProfileSlot = profileSlot, draft?: ProfileDraft, targetModel: HeroDeviceModelId = deviceModel) {
     if (!hero68DeviceManager.connected || profileBusyRef.current) return
     profileBusyRef.current = true
     setProfileBusy(true)
     try {
-      await readAndApplyProfile(slot, draft ?? (slot === profileSlot ? currentProfileDraft() : profileDrafts[slot]))
+      await readAndApplyProfile(slot, draft ?? (slot === profileSlot ? currentProfileDraft() : profileDrafts[slot]), targetModel)
     } finally {
       profileBusyRef.current = false
       setProfileBusy(false)
     }
   }
 
-  async function readAndApplyProfile(slot: ProfileSlot, draft?: ProfileDraft) {
+  async function readAndApplyProfile(slot: ProfileSlot, draft?: ProfileDraft, targetModel: HeroDeviceModelId = deviceModel) {
     setDeviceActionError(null)
     setDeviceReadState('reading')
     setLoadedProfileSlot(null)
+    const activeKeyIds = heroLayout(targetModel).keyIds
     try {
-      const hydrated = await hydrateFromDevice(hero68DeviceManager, slot)
-      const mappings = await readRemapLayers(hero68DeviceManager)
-      const freshRgb = await readRgbProfile(hero68DeviceManager)
+      const hydrated = await hydrateFromDevice(hero68DeviceManager, slot, activeKeyIds)
+      const mappings = await readRemapLayers(hero68DeviceManager, activeKeyIds)
+      const freshRgb = await readRgbProfile(hero68DeviceManager, activeKeyIds)
       setAdvancedHydratedSlot(null)
       try {
         const freshAdvanced = await readAdvancedBindings(hero68DeviceManager)
@@ -808,7 +875,7 @@ function App() {
         return preserveEdits(next, draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined)
       })
       for (const layer of REMAP_LAYERS) {
-        for (const keyId of HERO68_KEY_IDS) {
+        for (const keyId of activeKeyIds) {
           if (draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) && draft.remapLayers?.[layer][keyId] !== undefined) mappings[layer][keyId] = draft.remapLayers[layer][keyId]
         }
       }
@@ -855,6 +922,7 @@ function App() {
       activeRail,
       activePage,
       activeSettingsPage,
+      deviceModel,
       selectedKeys: rememberSelection ? Array.from(selectedKeys) : [],
       selectedSwitchId,
       assignedSwitchesByKey,
@@ -945,14 +1013,14 @@ function App() {
         await hero68DeviceManager.request(selectProfile(profileSlot), 0x10, 0)
         await syncHero68MacroLibrary(hero68DeviceManager, macroLibrary)
       }
-      await saveRemapChanges(hero68DeviceManager, profileSlot, remapLayers, dirtyRemaps)
+      await saveRemapChanges(hero68DeviceManager, profileSlot, remapLayers, dirtyRemaps, modelKeyIds)
       if (advancedPending) {
         const verified = await saveAdvancedBindings(hero68DeviceManager, profileSlot, advancedBindings, advancedBaseline)
         setAdvancedBaseline(verified)
       }
       if (rgbPending && !tachyon) {
         if(activePage==='rgb'&&activeRgbTab==='onboard'&&hero68DeviceManager.viaService){const result=await rgbService.mode('onboard');publishRgbServiceStatus(result)}
-        await saveRgbProfile(hero68DeviceManager, rgb, rgbBaseline, setRgbBaseline)
+        await saveRgbProfile(hero68DeviceManager, rgb, rgbBaseline, setRgbBaseline, modelKeyIds)
       }
       if(dirtyKeys.size)setDirtyKeys(new Set())
       if(dirtyRemaps.size){remapBaselineRef.current=structuredClone(remapLayers);setDirtyRemaps(new Set())}
@@ -982,13 +1050,25 @@ function App() {
   const deviceFeedback = (rawFeedback ? tr(rawFeedback) : null)
     ?? (deviceReadState === 'success' ? tr('Profile {slot} loaded from keyboard.', { slot: profileSlot }) : null)
 
+  const selectedModelThumb = deviceModel === 'hero84' ? hero84 : hero68
+  const deviceModelOptions = useMemo(
+    () => HERO_DEVICE_MODELS.map((option) => ({ value: option.id, label: option.label, meta: option.layout })),
+    [],
+  )
+
   const renderDevicePanel = () => (
     <div className={`device-panel is-${deviceConnectionState}`}>
       <div className="device-card device-card-static">
-        <span className="device-thumb"><img src={hero68} alt="AULA Hero68" /></span>
+        <span className="device-thumb"><img key={deviceModel} src={selectedModelThumb} alt={selectedModel.label} /></span>
         <span className="device-copy">
           <small><span className="device-status-dot" aria-hidden="true" />{deviceStatusLabel}</small>
-          <strong>{hero68Device.deviceName || 'AULA Hero68'}</strong>
+          <AppSelect<HeroDeviceModelId>
+            className="device-model-select"
+            label={tr('Keyboard model')}
+            value={deviceModel}
+            onChange={selectDeviceModel}
+            options={deviceModelOptions}
+          />
         </span>
         <Activity size={17} className="device-state-icon" aria-hidden="true" />
       </div>
@@ -1038,7 +1118,7 @@ function App() {
   const showKeyboardArea = activeRail === 'keyboard'
 
   return (
-    <I18nProvider language={resolvedLanguage}><TachyonContext.Provider value={tachyon}>
+    <I18nProvider language={resolvedLanguage}><DeviceModelContext.Provider value={deviceModel}><TachyonContext.Provider value={tachyon}>
     <div
       className={`app-shell ${compactSidebar ? 'is-sidebar-compact' : ''}`}
     >
@@ -1168,7 +1248,7 @@ function App() {
         <div key={`${activeRail}:${activePage}:${activeSettingsPage}`} className="workspace-content" inert={profileBusy || undefined}>
         {showKeyboardArea ? (
           activePage === 'profile' ? (
-            <MyProfilePage slot={profileSlot} names={profileNames} connected={deviceConnected} loaded={loadedProfileSlot === profileSlot} busy={profileBusy} pending={dirtyKeys.size + dirtyRemaps.size + rgbPending + Number(advancedPending)} rapidKeys={HERO68_KEY_IDS.filter(keyId => rapidTriggerByKey[keyId]).length} remappedKeys={REMAP_LAYERS.reduce<number>((count, layer) => count + HERO68_KEY_IDS.filter(keyId => remapLayers[layer][keyId] !== FACTORY_REMAP_LAYERS[layer][keyId]).length, 0)} onSelect={slot => void selectOnboardProfile(slot)} onRename={renameProfile} onExport={exportProfile} onRemap={() => setActivePage('remap')} onRefresh={() => void handleReadFromDevice()} />
+            <MyProfilePage slot={profileSlot} names={profileNames} connected={deviceConnected} loaded={loadedProfileSlot === profileSlot} busy={profileBusy} pending={dirtyKeys.size + dirtyRemaps.size + rgbPending + Number(advancedPending)} rapidKeys={modelKeyIds.filter(keyId => rapidTriggerByKey[keyId]).length} remappedKeys={REMAP_LAYERS.reduce<number>((count, layer) => count + modelKeyIds.filter(keyId => remapLayers[layer][keyId] !== FACTORY_REMAP_LAYERS[layer][keyId]).length, 0)} onSelect={slot => void selectOnboardProfile(slot)} onRename={renameProfile} onExport={exportProfile} onRemap={() => setActivePage('remap')} onRefresh={() => void handleReadFromDevice()} />
           ) : activePage === 'macros' ? (
             <MacroPage />
           ) : activePage === 'remap' ? (
@@ -1180,6 +1260,7 @@ function App() {
             </>
           ) : activePage === 'actuation' ? (
             <ActuationPage
+              model={deviceModel}
               actuationPreviewWidth={actuationPreviewWidth}
               advancedBindings={advancedBindings}
               selectedKeys={selectedKeys}
@@ -1208,6 +1289,7 @@ function App() {
             />
           ) : activePage === 'rapid' ? (
             <RapidPage
+              model={deviceModel}
               advancedBindings={advancedBindings}
               selectedKeys={selectedKeys}
               toggleKey={toggleKey}
@@ -1250,6 +1332,7 @@ function App() {
             />
           ) : activePage === 'quick' ? (
             <QuickSettingsPage
+              model={deviceModel}
               advancedBindings={advancedBindings}
               selectedKeys={selectedKeys}
               toggleKey={toggleKey}
@@ -1301,6 +1384,7 @@ function App() {
             />
           ) : activePage === 'stream' ? (
             <StreamPage
+              model={deviceModel}
               hallStream={hallStream}
               deviceConnected={deviceConnected}
               handleHallStreamToggle={handleHallStreamToggle}
@@ -1476,6 +1560,7 @@ function App() {
 
               <section className="switch-selector-stage">
                 <SwitchSelectorBoard
+                  model={deviceModel}
                   selectedKeys={selectedKeys}
                   onToggleKey={toggleKey}
                   switchImagesByKey={switchPreviewByKey}
@@ -1670,7 +1755,7 @@ function App() {
         </div>
       </main>
     </div>
-    </TachyonContext.Provider></I18nProvider>
+    </TachyonContext.Provider></DeviceModelContext.Provider></I18nProvider>
   )
 }
 

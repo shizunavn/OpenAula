@@ -1,11 +1,11 @@
 import {readActiveProfile,selectProfile,readRemap,writeRemap,readAdvancedKeyPositions} from '../src/protocol/hero68/commands'
 import {decodeRemapRecords,buildReport,u16be,u32be} from '../src/protocol/hero68/codec'
-import {HERO68_KEY_POSITIONS} from '../src/protocol/hero68/keyPositions'
+import {HERO84_KEY_POSITIONS} from '../src/protocol/hero68/keyPositions'
 import type {DecodedReport,ProfileSlot} from '../src/protocol/hero68/types'
 type Entry={layer:0|1|2;pos:number;value:number}
 export type FirmwareJournal={version:1;identity:string;slot:ProfileSlot;entries:Entry[]}
 type Storage={load:()=>unknown;save:(journal:FirmwareJournal)=>void;clear:()=>void}
-const positions=new Set(Object.values(HERO68_KEY_POSITIONS))
+const positions=new Set(Object.values(HERO84_KEY_POSITIONS))
 export function validateFirmwareJournal(value:unknown):FirmwareJournal {
   const j=value as FirmwareJournal
   if(!j||j.version!==1||!/^[a-f0-9]{64}$/.test(j.identity)||![0,1,2].includes(j.slot)||!Array.isArray(j.entries)||j.entries.length>204)throw Error('Invalid Gamepad remap recovery journal')
@@ -68,7 +68,7 @@ export class GamepadFirmware {
   }
   async apply(slot:ProfileSlot,keyIds:string[]){
     await this.restore();if(!keyIds.length)return
-    const keys=[...new Set(keyIds.map(id=>{const pos=HERO68_KEY_POSITIONS[id];if(!pos)throw Error('Invalid Gamepad key');return pos}))]
+    const keys=[...new Set(keyIds.map(id=>{const pos=HERO84_KEY_POSITIONS[id];if(!pos)throw Error('Invalid Gamepad key');return pos}))]
     const identity=await this.identity(),entries:Entry[]=[]
     if(await this.slot()!==slot)await this.request(selectProfile(slot))
     for(const layer of [0,1,2] as const){

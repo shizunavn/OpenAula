@@ -4,7 +4,7 @@ import Hero68Preview from './Hero68Preview'
 import RgbColorPicker from './RgbColorPicker'
 import { RgbPreviewPanel, RgbToolbarSlot } from './RgbWorkspace'
 import { defaultRhythm, validateRhythm, restoreRhythm, rhythmDemo, RHYTHM_MODES, RHYTHM_SIDE_MODES, type RhythmConfiguration } from '../keyboard/rhythm'
-import { HERO68_KEY_IDS } from '../keyboard/hero68Layout'
+import { heroLayout } from '../keyboard/layout'
 import type { AdvancedBinding } from '../protocol/hero68/advanced'
 import { rgbService, type AudioEndpoint, type RgbServiceFrame } from '../protocol/rgbService'
 import { publishRgbServiceStatus, useRgbServiceState, refreshRgbService, getRgbServiceState } from '../protocol/rgbServiceState'
@@ -17,7 +17,7 @@ import { AppSelect } from '../app/components/AppSelect'
 import './RhythmSyncEditor.css'
 
 const draftKey='openhero68:rhythm-draft:v1'
-const darkKeys=Object.fromEntries(HERO68_KEY_IDS.map(id=>[id,'#161a1e']))
+const darkKeys=Object.fromEntries(heroLayout('hero84').keyIds.map(id=>[id,'#161a1e']))
 function readDraft(){try{return restoreRhythm(JSON.parse(localStorage.getItem(draftKey)??'null'))}catch{return defaultRhythm()}}
 function Thumbnail({shape}:{shape:string}) {
   return <svg viewBox="0 0 104 48" aria-hidden="true" className={`rhythm-thumb rhythm-thumb-${shape}`}>

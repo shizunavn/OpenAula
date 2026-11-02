@@ -1,5 +1,5 @@
 import { HERO68_KEY_IDS } from "./hero68Layout";
-import { HERO68_KEY_POSITIONS } from "../protocol/hero68/keyPositions";
+import { HERO68_KEY_POSITIONS, HERO84_KEY_POSITIONS } from "../protocol/hero68/keyPositions";
 import { WINDOWS_SCANS } from "./windowsScans";
 
 export const GAMEPAD_ACTIONS = [
@@ -137,7 +137,7 @@ export function validateGamepad(input: unknown): GamepadConfiguration {
   const bindings = v.bindings.map((b) => {
     if (
       !b ||
-      !HERO68_KEY_IDS.includes(b.keyId) ||
+      HERO84_KEY_POSITIONS[b.keyId] === undefined ||
       seen.has(b.keyId) ||
       !GAMEPAD_ACTIONS.includes(b.action) ||
       !Number.isFinite(b.startMm) ||
@@ -305,7 +305,7 @@ export function nativeGamepadCommand(config: GamepadConfiguration) {
     v.bindings
       .map((b) =>
         [
-          HERO68_KEY_POSITIONS[b.keyId],
+          HERO84_KEY_POSITIONS[b.keyId],
           GAMEPAD_ACTIONS.indexOf(b.action),
           b.startMm,
           b.endMm,

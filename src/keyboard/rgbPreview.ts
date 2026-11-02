@@ -1,5 +1,4 @@
 import { RgbArm } from './rgbArm'
-import { HERO68_KEY_POSITIONS } from '../protocol/hero68/keyPositions'
 import { HERO68_LAYOUT } from './hero68Layout'
 import type { RgbProfile } from '../protocol/hero68/rgb'
 import type { LightingFrame } from './lightingPreviewBus'
@@ -11,14 +10,17 @@ export const RGB_LED_COORDINATES = Object.fromEntries(HERO68_LAYOUT.flatMap((row
 export class FirmwareRgbPreview {
   cpu = new RgbArm()
   ticks = 0
+  /** Keys whose stored colour is loaded; the emulated HERO68 engine only renders these. */
+  panels: readonly string[] = Object.keys(RGB_LED_COORDINATES)
   constructor(public config: RgbProfile, seed=1) {
     this.cpu.write(0x20000444,seed,4)
     this.configure(config,true)
   }
-  configure(config:RgbProfile, initial=false) {
+  configure(config:RgbProfile, initial=false, panels:readonly string[]=Object.keys(RGB_LED_COORDINATES)) {
     const keysChanged=initial||JSON.stringify(config.keys)!==JSON.stringify(this.config.keys)||JSON.stringify(config.colors)!==JSON.stringify(this.config.colors)
     const sideChanged=initial||JSON.stringify(config.side)!==JSON.stringify(this.config.side)
     this.config=config
+    this.panels=panels
     const c=this.cpu, k=config.keys,s=config.side
     c.write(0x200016d1,k.mode)
     c.write(0x20000068,k.mixValue??(k.mix?7:0))
@@ -28,7 +30,7 @@ export class FirmwareRgbPreview {
     c.write(0x2000006b,s.mode); c.write(0x2000006c,s.mixValue??(s.mix?7:0))
     s.rgb.forEach((v,i)=>c.write(0x20000061+i,v))
     c.write(0x2000006d,s.brightness); c.write(0x2000006e,s.speed)
-    for(const id of Object.keys(HERO68_KEY_POSITIONS)) {
+    for(const id of this.panels) {
       const pos=this.effectPosition(id)
       const color=config.colors[id]??[0,0,0]
       color.forEach((v,i)=>c.write(0x20006b77+pos+i*126,v))

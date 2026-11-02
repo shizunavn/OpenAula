@@ -47,6 +47,17 @@ int main() {
   Audio a;a.sequence=1;a.receivedMs=1000;a.envelope=1;auto f=stream.render(a,1000);assert(f.keys[0]!=Color{});assert(f.keys[1]==Color{});
   a.sequence++;a.receivedMs=1030;a.envelope=0;f=stream.render(a,1030);assert(f.keys[0]==Color{});assert(f.keys[1]!=Color{});
   for(int mode:{500,501,502,503}){c.sideMode=mode;stream.configure(c);a.sequence++;a.envelope=.7;a.receivedMs=1060;f=stream.render(a,1060);const auto packets=encodeSide(f,mode);if(mode==500)assert(packets.empty());for(const auto& p:packets){assert(p[1]==14);assert((std::accumulate(p.begin(),p.end(),0)&255)==255);}}
+  {
+    // HERO84: same palette groups, 16 extra positions joined to their HERO68 source key's group.
+    auto wide=encode(rainbow,true);assert(wide.packets.size()<=4);assert(wide.keys==encoded.keys);
+    std::vector<uint8_t> wideBody;for(const auto& p:wide.packets)wideBody.insert(wideBody.end(),p.begin()+7,p.begin()+7+p[6]);
+    std::set<int> wideSeen;size_t groupCount=0;for(size_t i=0;i<wideBody.size();){const size_t n=wideBody[i+3];++groupCount;for(size_t k=0;k<n;++k)assert(wideSeen.insert(wideBody[i+4+k]).second);i+=4+n;}
+    assert(wideSeen.size()==84&&groupCount<=32&&wideBody.size()<=255);
+    for(auto extra:hero84Extras)assert(wideSeen.count(extra[0])&&wideSeen.count(extra[1]));
+    const auto narrow=encode(rainbow,false);std::vector<uint8_t> narrowBody;for(const auto& p:narrow.packets)narrowBody.insert(narrowBody.end(),p.begin()+7,p.begin()+7+p[6]);
+    std::set<int> narrowSeen;for(size_t i=0;i<narrowBody.size();){const size_t n=narrowBody[i+3];for(size_t k=0;k<n;++k)narrowSeen.insert(narrowBody[i+4+k]);i+=4+n;}
+    assert(narrowSeen.size()==68);for(auto extra:hero84Extras)assert(!narrowSeen.count(extra[0]));
+  }
   const auto begin=std::chrono::steady_clock::now();for(int i=0;i<1000;++i)encode(rainbow);
   const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count()/1000;
   std::cout<<"Native rhythm tests passed; worst-palette encode mean "<<ms<<" ms\n";

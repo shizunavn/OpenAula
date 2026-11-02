@@ -11,6 +11,30 @@ export type RemapLayers = Record<RemapLayer, Record<string, number>>
 export const REMAP_LAYERS = [0, 1, 2] as const
 export const REMAP_LAYER_NAMES = ['Main Layer', 'Fn Layer 1', 'Fn Layer 2'] as const
 
+/**
+ * Factory HID keycodes for the 16 keys present on HERO84 (`0x110000000005`)
+ * that are not in the 68-key HERO68 catalog. Values come from the official
+ * `remapCatalog.json` `basic_key` table.
+ */
+export const HERO84_EXTRA_FACTORY_KEYCODES: Readonly<Record<string, number>> = {
+  Backquote: 53,   // `~ (0x35)
+  F1: 58,          // 0x3a
+  F2: 59,          // 0x3b
+  F3: 60,          // 0x3c
+  F4: 61,          // 0x3d
+  F5: 62,          // 0x3e
+  F6: 63,          // 0x3f
+  F7: 64,          // 0x40
+  F8: 65,          // 0x41
+  F9: 66,          // 0x42
+  F10: 67,         // 0x43
+  F11: 68,         // 0x44
+  F12: 69,         // 0x45
+  PrintScreen: 70, // PrtSc (0x46)
+  Home: 74,        // 0x4a
+  End: 77,         // 0x4d
+}
+
 export type MacroRemapMode = 'circle' | 'button' | 'repeat'
 export type MacroRemapBinding = { mode: MacroRemapMode; modeCode: 0x01 | 0x02 | 0x04; count: number; macroIndex: number }
 export const MACRO_REMAP_MODE_CODES: Record<MacroRemapMode, MacroRemapBinding['modeCode']> = { circle: 0x01, button: 0x02, repeat: 0x04 }
@@ -67,8 +91,8 @@ export function remapDisplayLabel(layer: RemapLayer, keyId: string, value: numbe
   if (resolved) return resolved
 
   if (layer !== 0) {
-    const fallbackValue = defaultRemapLayers()[layer][keyId]
-    const fallback = labels.get(fallbackValue)
+    const fallbackValue = defaultRemapLayers()[layer][keyId] ?? HERO84_EXTRA_FACTORY_KEYCODES[keyId]
+    const fallback = fallbackValue !== undefined ? labels.get(fallbackValue) : undefined
     if (fallback) return fallback
   }
 
@@ -158,7 +182,7 @@ export function remapPreviewPresentation(layer: RemapLayer, keyId: string, value
   }
 }
 
-export function defaultRemapLayers(): RemapLayers {
+export function defaultRemapLayers(keyIds?: readonly string[]): RemapLayers {
   const result: RemapLayers = { 0: {}, 1: {}, 2: {} }
   for (const layer of catalog.layers) {
     for (const key of layer.keys) {
@@ -166,13 +190,26 @@ export function defaultRemapLayers(): RemapLayers {
       if (keyId) result[layer.layer as RemapLayer][keyId] = key.value
     }
   }
+  if (keyIds) {
+    for (const keyId of keyIds) {
+      const extra = HERO84_EXTRA_FACTORY_KEYCODES[keyId]
+      if (extra !== undefined) {
+        for (const layer of REMAP_LAYERS) {
+          if (result[layer][keyId] === undefined) result[layer][keyId] = extra
+        }
+      }
+    }
+  }
   return result
 }
 
 /** Read every mapping; a partial reply never becomes a writable profile. */
-export async function readRemapLayers(requester: Hero68Requester): Promise<RemapLayers> {
+export async function readRemapLayers(
+  requester: Hero68Requester,
+  keyIds: readonly string[] = HERO68_KEY_IDS,
+): Promise<RemapLayers> {
   const result: RemapLayers = { 0: {}, 1: {}, 2: {} }
-  const positions = HERO68_KEY_IDS.map(keyIdToPos)
+  const positions = keyIds.map(keyIdToPos)
   for (const layer of REMAP_LAYERS) {
     for (const packet of readRemap(layer, positions)) {
       const expectedPositions = new Set<number>()
@@ -190,11 +227,23 @@ export async function readRemapLayers(requester: Hero68Requester): Promise<Remap
 }
 
 /** Writes only edited keys, using official independent nine-record requests. */
-export async function saveRemapChanges(requester: Hero68Requester, slot: ProfileSlot, layers: RemapLayers, dirty: ReadonlySet<string>) {
+export async function saveRemapChanges(
+  requester: Hero68Requester,
+  slot: ProfileSlot,
+  layers: RemapLayers,
+  dirty: ReadonlySet<string>,
+  keyIds?: readonly string[],
+) {
   if (!dirty.size) return
   await requester.request(selectProfile(slot), 0x10, 0)
+  const candidateKeys = keyIds ?? Array.from(
+    new Set([
+      ...HERO68_KEY_IDS,
+      ...Object.keys(HERO84_EXTRA_FACTORY_KEYCODES),
+    ]),
+  )
   for (const layer of REMAP_LAYERS) {
-    const keys = HERO68_KEY_IDS.filter(keyId => dirty.has(`${layer}:${keyId}`))
+    const keys = candidateKeys.filter(keyId => dirty.has(`${layer}:${keyId}`))
     if (!keys.length) continue
     for (const packet of writeRemap(layer, keys.map(keyId => [keyIdToPos(keyId), layers[layer][keyId]] as const))) {
       await requester.request(packet, 0x03, layer, 1000)

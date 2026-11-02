@@ -1,16 +1,23 @@
 import {Paintbrush} from 'lucide-react'
-import {useEffect,useState,type ReactNode} from 'react'
-import {HERO68_KEY_IDS} from '../keyboard/hero68Layout'
+import {useContext,useEffect,useState,type ReactNode} from 'react'
+import {heroLayout} from '../keyboard/layout'
+import {DeviceModelContext} from '../app/DeviceModelContext'
 import RgbColorPicker from './RgbColorPicker'
 import { useI18n } from '../i18n'
 
-const groups=[{name:'WASD',keys:['KeyW','KeyA','KeyS','KeyD']},{name:'Arrows',keys:['ArrowLeft','ArrowDown','ArrowUp','ArrowRight']},{name:'All keys',keys:HERO68_KEY_IDS}]
 export function RgbKeySelectionTools({selected,onSelect,disabled,children}: {
   selected:Set<string>;onSelect:(keys:Set<string>)=>void;disabled:boolean;children?:ReactNode
 }) {
   const { tr } = useI18n()
+  const model = useContext(DeviceModelContext)
+  const keyIds = heroLayout(model).keyIds
+  const groups = [
+    { name: 'WASD', keys: ['KeyW', 'KeyA', 'KeyS', 'KeyD'] },
+    { name: 'Arrows', keys: ['ArrowLeft', 'ArrowDown', 'ArrowUp', 'ArrowRight'] },
+    { name: 'All keys', keys: keyIds },
+  ]
   return <div className="rgb-key-paint-selection">
-    <span role="status" aria-live="polite">{selected.size} / {HERO68_KEY_IDS.length} {tr('selected')}</span>
+    <span role="status" aria-live="polite">{selected.size} / {keyIds.length} {tr('selected')}</span>
     <div role="group" aria-label={tr('Select key group')}>{groups.map(group=><button key={group.name} type="button" className="secondary-button" disabled={disabled} aria-pressed={selected.size===group.keys.length&&group.keys.every(id=>selected.has(id))} onClick={()=>onSelect(new Set(group.keys))}>{tr(group.name)}</button>)}<button type="button" className="secondary-button" disabled={disabled||!selected.size} onClick={()=>onSelect(new Set())}>{tr('Clear selection')}</button></div>
     {children}
   </div>

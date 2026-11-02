@@ -6,15 +6,16 @@ import type { AdvancedBinding } from '../protocol/hero68/advanced'
 import { HERO68_HALL_VISUAL_MAX_MM } from '../protocol/hero68/hallStream'
 import type { useHero68HallStream } from '../protocol/hero68/hallStream'
 import { hallKeyLabel } from '../app/helpers'
-import { HERO68_KEY_IDS } from '../keyboard/hero68Layout'
+import { heroLayout } from '../keyboard/layout'
+import type { HeroDeviceModelId } from '../keyboard/devices'
 
-const liveKeyOrder = new Map(HERO68_KEY_IDS.map((key, index) => [key, index]))
 const liveKeysPerGroup = 10
 
 type HallStream = ReturnType<typeof useHero68HallStream>
 type HallStreamSample = HallStream['samples'][string]
 
 export interface StreamPageProps {
+  model: HeroDeviceModelId
   hallStream: HallStream
   deviceConnected: boolean
   handleHallStreamToggle: () => Promise<void>
@@ -31,6 +32,7 @@ export interface StreamPageProps {
 }
 
 function StreamPage({
+  model,
   hallStream,
   deviceConnected,
   handleHallStreamToggle,
@@ -46,9 +48,11 @@ function StreamPage({
   hallStreamListKeyIds,
 }: StreamPageProps) {
   const { tr } = useI18n()
+  // Model order keeps unpressed keys stable; layout order is the visual order.
+  const liveKeyOrder = new Map(heroLayout(model).keyIds.map((key, index) => [key, index]))
   const orderedKeyIds = [...hallStreamListKeyIds].sort((a, b) =>
     Number(!!hallStream.samples[b]?.pressed) - Number(!!hallStream.samples[a]?.pressed)
-    || (liveKeyOrder.get(a) ?? 68) - (liveKeyOrder.get(b) ?? 68))
+    || (liveKeyOrder.get(a) ?? liveKeyOrder.size) - (liveKeyOrder.get(b) ?? liveKeyOrder.size))
   const groupCount = Math.max(1, Math.ceil(orderedKeyIds.length / liveKeysPerGroup))
   const [group, setGroup] = useState(0)
   const visibleGroup = group % groupCount
@@ -77,6 +81,7 @@ function StreamPage({
 
               <section className="keyboard-stage stream-keyboard-stage">
                 <Hero68Preview
+                  model={model}
                   advancedBindings={advancedBindings}
                   selectedKeys={hallStreamPreviewSelection}
                   onToggleKey={toggleHallStreamPin}

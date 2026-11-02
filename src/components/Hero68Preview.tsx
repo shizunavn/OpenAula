@@ -1,24 +1,36 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { HERO68_LAYOUT, makeDemoLighting } from '../keyboard/hero68Layout'
+import { heroLayout } from '../keyboard/layout'
+import type { HeroDeviceModelId } from '../keyboard/devices'
 import { subscribeLightingFrame, type LightingFrame } from '../keyboard/lightingPreviewBus'
 import { useServiceLighting } from '../protocol/serviceLighting'
 import { HERO68_HALL_VISUAL_MAX_MM } from '../protocol/hero68/hallStream'
 import type { AdvancedBinding } from '../protocol/hero68/advanced'
 import AdvancedKeyIcon from './AdvancedKeyIcon'
 import { TachyonContext } from '../app/TachyonContext'
-const tachyonLightingFrame = Object.fromEntries(HERO68_LAYOUT.flat().map(key => [key.id, '#000000']))
+import { DeviceModelContext } from '../app/DeviceModelContext'
+
+const tachyonLightingFrames = Object.fromEntries(
+  (['hero68', 'hero84'] as const).map(model => [
+    model,
+    Object.fromEntries(heroLayout(model).rows.flat().map(key => [key.id, '#000000'])),
+  ]),
+) as Record<HeroDeviceModelId, LightingFrame>
 
 
 const WOOTILITY_MAX_FONT_PX = 12.3199
 const HERO68_DESIGN_WIDTH_EM = 64.05
 const HERO68_DESIGN_HEIGHT_EM = 21.35
+// Each extra row adds one key pitch (3.815em key + 0.0812em gap); HERO84 has 6 rows.
+const HERO68_ROWS = 5
+const HERO_ROW_PITCH_EM = 3.8962
 const HERO68_MIN_FONT_PX = 7.4
 const HALL_STREAM_NOISE_FLOOR_MM = 0.05
 
-function fitKeyboardFontSize(width: number, height: number, maxFontPx = WOOTILITY_MAX_FONT_PX) {
+function fitKeyboardFontSize(width: number, height: number, rows: number, maxFontPx = WOOTILITY_MAX_FONT_PX) {
+  const designHeightEm = HERO68_DESIGN_HEIGHT_EM + (rows - HERO68_ROWS) * HERO_ROW_PITCH_EM
   const widthScale = width / HERO68_DESIGN_WIDTH_EM
-  const heightScale = height > 0 ? height / HERO68_DESIGN_HEIGHT_EM : maxFontPx
+  const heightScale = height > 0 ? height / designHeightEm : maxFontPx
   const fitted = Math.min(widthScale, heightScale, maxFontPx)
   // Preserve the preferred minimum only while the entire keyboard still fits.
   const minimum = Math.min(HERO68_MIN_FONT_PX, widthScale, heightScale)
@@ -26,6 +38,7 @@ function fitKeyboardFontSize(width: number, height: number, maxFontPx = WOOTILIT
 }
 
 export type Hero68PreviewProps = {
+  model?: HeroDeviceModelId
   selectedKeys: Set<string>
   highlightedKeys?: ReadonlySet<string>
   onToggleKey: (keyId: string) => void
@@ -55,6 +68,7 @@ export type Hero68PreviewProps = {
 }
 
 export default function Hero68Preview({
+  model: modelProp,
   selectedKeys,
   highlightedKeys,
   onToggleKey,
@@ -82,24 +96,32 @@ export default function Hero68Preview({
   maxFontPx = WOOTILITY_MAX_FONT_PX,
   onWidthChange,
 }: Hero68PreviewProps) {
-  const demoFrame = useMemo(() => makeDemoLighting(), [])
+  const contextModel = useContext(DeviceModelContext)
+  const model = modelProp ?? contextModel
+  const keyboard = useMemo(() => heroLayout(model), [model])
+  const baseDemoLighting = useMemo(() => keyboard.makeDemoLighting(), [keyboard])
+  // Model-aware lookups: the HERO84 has keys the HERO68 table does not.
+  const keyLabelById = useMemo(() => new Map(keyboard.rows.flat().map(key => [key.id, key.label])), [keyboard])
   const tachyon = useContext(TachyonContext)
   const serviceLighting = useServiceLighting(!tachyon && lightingSource !== 'local')
-  const displayedLighting = tachyon ? tachyonLightingFrame : lightingSource === 'local' ? lightingFrame : serviceLighting ?? lightingFrame
+  const displayedLighting = tachyon ? tachyonLightingFrames[model] : lightingSource === 'local' ? lightingFrame : serviceLighting ?? lightingFrame
   const advancedByKey = useMemo(() => new Map(advancedBindings.flatMap(binding => binding.keys.map(key => [key, binding] as const))), [advancedBindings])
   const previewTooltips = useMemo(() => {
     const result = { ...keyTooltips }
     for (const [keyId, binding] of advancedByKey) {
-      const physical = HERO68_LAYOUT.flat().find(key => key.id === keyId)?.label ?? keyId
+      const physical = keyLabelById.get(keyId) ?? keyId
       result[keyId] = {
         ...result[keyId],
         title: `${physical} · ${binding.kind === 'UNKNOWN' ? 'Advanced Key' : binding.kind}`,
-        detail: [result[keyId]?.title, result[keyId]?.detail, binding.kind === 'SOCD' ? `Paired with ${binding.keys.filter(key => key !== keyId).map(key => HERO68_LAYOUT.flat().find(item => item.id === key)?.label ?? key).join(', ')}` : 'Advanced Key binding'].filter(Boolean).join(' · '),
+        detail: [result[keyId]?.title, result[keyId]?.detail, binding.kind === 'SOCD' ? `Paired with ${binding.keys.filter(key => key !== keyId).map(key => keyLabelById.get(key) ?? key).join(', ')}` : 'Advanced Key binding'].filter(Boolean).join(' · '),
       }
     }
     return result
-  }, [advancedByKey, keyTooltips])
-  const [lighting, setLighting] = useState<LightingFrame>(demoFrame)
+  }, [advancedByKey, keyLabelById, keyTooltips])
+  const [lighting, setLighting] = useState<LightingFrame>(() => baseDemoLighting)
+  useEffect(() => {
+    setLighting((previous) => ({ ...baseDemoLighting, ...previous }))
+  }, [baseDemoLighting])
   const previewRef = useRef<HTMLDivElement>(null)
   const tooltipTimerRef = useRef<number | null>(null)
   const [keyboardFontSize, setKeyboardFontSize] = useState(maxFontPx)
@@ -141,6 +163,8 @@ export default function Hero68Preview({
     setKeyTooltip(null)
   }
 
+  const rows = keyboard.rows.length
+
   useLayoutEffect(() => {
     const preview = previewRef.current
     const container = preview?.parentElement
@@ -152,7 +176,7 @@ export default function Hero68Preview({
       const availableWidth = Math.max(1, container.clientWidth - horizontalPadding)
       const availableHeight = Math.max(1, container.clientHeight - verticalPadding)
       setKeyboardFontSize((current) => {
-        const next = fitKeyboardFontSize(availableWidth, availableHeight, maxFontPx)
+        const next = fitKeyboardFontSize(availableWidth, availableHeight, rows, maxFontPx)
         return Math.abs(current - next) > 0.01 ? next : current
       })
     }
@@ -161,19 +185,19 @@ export default function Hero68Preview({
     const observer = new ResizeObserver(updateSize)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [maxFontPx])
+  }, [maxFontPx, rows])
 
   useLayoutEffect(() => {
-    const keyboard = previewRef.current?.querySelector<HTMLElement>('.hero68-case')
-    if (!keyboard || !onWidthChange) return
+    const keyboardEl = previewRef.current?.querySelector<HTMLElement>('.hero68-case')
+    if (!keyboardEl || !onWidthChange) return
     // Use layout pixels: getBoundingClientRect includes the app's CSS zoom.
-    onWidthChange(keyboard.offsetWidth)
+    onWidthChange(keyboardEl.offsetWidth)
     const observer = new ResizeObserver(([entry]) => {
-      onWidthChange(entry.borderBoxSize[0]?.inlineSize ?? keyboard.offsetWidth)
+      onWidthChange(entry.borderBoxSize[0]?.inlineSize ?? keyboardEl.offsetWidth)
     })
-    observer.observe(keyboard)
+    observer.observe(keyboardEl)
     return () => observer.disconnect()
-  }, [onWidthChange])
+  }, [onWidthChange, model])
 
   useEffect(() => lightingFrame || tachyon ? undefined : subscribeLightingFrame((frame) => {
     // Realtime-ready: protocol can publish only the LEDs that changed.
@@ -197,19 +221,19 @@ export default function Hero68Preview({
     <>
     <div
       ref={previewRef}
-      className="hero68-preview-wrap"
-      aria-label="AULA Hero68 RGB preview"
+      className={`hero68-preview-wrap is-${model}`}
+      aria-label={`${keyboard.model.label} RGB preview`}
       style={{ '--keyboard-font-size': `${keyboardFontSize}px` } as React.CSSProperties}
     >
       <div className="hero68-case">
         <div className="hero68-layout" dir="ltr">
-          {HERO68_LAYOUT.map((row, rowIndex) => (
+          {keyboard.rows.map((row, rowIndex) => (
             <div className="hero68-row" key={rowIndex}>
               {row.map((key, keyIndex) => {
                 const selected = selectedKeys.has(key.id)
                 const advanced = overlayMode === 'deadzone' ? undefined : advancedByKey.get(key.id)
                 const advancedIcon = showAdvancedIcons && advanced && !(overlayMode==='rapid'&&rapidPreviewValues[key.id]?.active&&rapidPreviewValues[key.id]?.secondary) && <span className="hero-key-advanced-icon"><AdvancedKeyIcon kind={advanced.kind} /></span>
-                const keyColor = (displayedLighting ?? lighting)[key.id] ?? '#35393b'
+                const keyColor = (displayedLighting ?? lighting)[key.id] ?? baseDemoLighting[key.id] ?? '#35393b'
                 const channels = /^#[0-9a-f]{6}$/i.test(keyColor) ? [1,3,5].map(i=>parseInt(keyColor.slice(i,i+2),16)) : undefined
                 const rgbTextColor = displayedLighting && channels && channels[0]*0.2126+channels[1]*0.7152+channels[2]*0.0722 > 155 ? '#172022' : undefined
 
@@ -231,6 +255,10 @@ export default function Hero68Preview({
                 const streamTravelPercent = showStreamState && streamPreview
                   ? Math.max(0, Math.min(100, (streamPreview.distanceMm / HERO68_HALL_VISUAL_MAX_MM) * 100))
                   : 0
+
+                if (key.spacer) {
+                  return <div className="hero-key-slot is-spacer" key={key.id} aria-hidden="true" />
+                }
 
                 return (
                   <div
@@ -276,7 +304,7 @@ export default function Hero68Preview({
                           ) : showRapidOverlay && rapidPreview?.active ? (
                             <span className={`hero-key-rapid-overlay ${rapidPreview?.active ? 'is-active' : ''} ${rapidPreview?.secondary ? 'is-split' : ''}`}>
                               <span>{rapidPreview?.primary ?? '0.00'}</span>
-                              {rapidPreview?.secondary && <span>{rapidPreview.secondary}</span>}
+                              {rapidPreview.secondary && <span>{rapidPreview.secondary}</span>}
                             </span>
                           ) : showDeadzoneOverlay && deadzonePreview?.active ? (
                             <span className={`hero-key-deadzone-overlay ${deadzonePreview?.active ? 'is-active' : ''}`}>
@@ -307,7 +335,7 @@ export default function Hero68Preview({
         </div>
 
         <div className="hero68-case-lip" aria-hidden="true" />
-        <div className="hero68-badge">HERO68</div>
+        <div className="hero68-badge">{keyboard.model.name.toUpperCase()}</div>
       </div>
     </div>
     {keyTooltip && typeof document !== 'undefined' && createPortal(
