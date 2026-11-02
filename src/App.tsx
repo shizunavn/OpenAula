@@ -1464,6 +1464,9 @@ function App() {
                     <div className="device-setting-copy">
                       <h2>{tr('Polling Rate')}</h2>
                       <p>{tr('A higher polling rate lets the keyboard report to the computer more often. Changing it makes firmware 0323 briefly reconnect over USB.')}</p>
+                      <p className="device-setting-hint">
+                        {tr('HERO84: not verified. The official AULA driver has no polling-rate command for this board; it only reads the value. Changing it may show an error or be ignored.')}
+                      </p>
                     </div>
                     <div className="device-option-list polling-options" role="radiogroup" aria-label={tr('Polling rate')}>
                       {[...POLLING_RATES].reverse().map((rate) => (

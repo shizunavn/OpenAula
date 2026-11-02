@@ -33,6 +33,11 @@
   font-size: 13px;
   line-height: 1.52;
 }
+.device-setting-copy p.device-setting-hint {
+  color: var(--text-3);
+  font-size: 12px;
+  opacity: .85;
+}
 .device-option-list {
   display: grid;
   gap: 7px;

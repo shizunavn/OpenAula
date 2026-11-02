@@ -137,6 +137,7 @@ const VI: Record<string, string> = {
   'Device settings are synchronized with the keyboard.': 'Cài đặt thiết bị đã đồng bộ với bàn phím.',
   'Device-wide HERO68 settings. Values are read from the keyboard and writes are verified with readback.': 'Cài đặt áp dụng cho toàn bộ HERO68. Giá trị được đọc từ bàn phím và mỗi lần ghi đều được kiểm tra lại.',
   'A higher polling rate lets the keyboard report to the computer more often. Changing it makes firmware 0323 briefly reconnect over USB.': 'Polling rate cao hơn giúp bàn phím gửi dữ liệu tới máy tính thường xuyên hơn. Khi đổi, firmware 0323 sẽ kết nối lại USB trong chốc lát.',
+  'HERO84: not verified. The official AULA driver has no polling-rate command for this board; it only reads the value. Changing it may show an error or be ignored.': 'HERO84: chưa xác minh. Driver AULA chính thức không có lệnh đổi polling rate cho mẫu này, chỉ có lệnh đọc. Đổi có thể báo lỗi hoặc không có tác dụng.',
   'Select the keyboard OS mode stored by the HERO68 firmware.': 'Chọn chế độ hệ điều hành được lưu trong firmware HERO68.',
   'Lock or unlock the Windows key using the keyboard firmware setting.': 'Khóa hoặc mở khóa phím Windows bằng cài đặt trong firmware bàn phím.',
   'Firmware Hall-switch debounce (feature zone 24). Leave it off for the most direct Hall response unless you specifically need filtering.': 'Debounce cho switch Hall trong firmware (feature zone 24). Nên để tắt để có phản hồi Hall trực tiếp nhất, trừ khi bạn thật sự cần lọc nhiễu.',
