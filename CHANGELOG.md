@@ -12,7 +12,7 @@ their original validation scope; they are not claims of new hardware testing.
 - Fix the emulated RGB preview crashing on keys outside the 68-node LED map, name the offending position in per-key colour read errors, and keep the detailed USB product name after model detection.
 - The app asks the board for its device UUID on connect (WebHID or the Windows service) and refuses a board without a HERO68/HERO84 UUID; a connected board decides the model, the selector is locked, and profile reads/saves stay blocked until the model is verified.
 - Not validated on a physical HERO84: the 212-byte CMD08 frame, mirrored colours and remap/RGB batching still need a real board.
-- HERO84 key positions verified against the official AULA web driver (`AULA_2829` WIN layer): all 84 keys, the 16 extra keys and the layout row order match, and remap/switch batching matches the driver's chunk sizes (`tests/hero84-official-layout.test.mjs`). Remaining unknowns are tracked in `docs/hero84-verification.md`.
+- HERO84 key positions verified against the official AULA web driver (`AULA_2829` WIN layer, extracted with `tools/extract-hero84-layout.mjs`): all 84 keys, the 16 extra keys and the layout row order match, and remap/switch batching matches the driver's chunk sizes (`tests/hero84-official-layout.test.mjs`). Remaining unknowns are tracked in `docs/hero84-verification.md`. This landed after `v0.6.0` was published (the release process rejects re-publishing an existing tag), so it ships with the next version.
 
 ## Unreleased — HERO84 support in the Windows service (untested on hardware)
 
