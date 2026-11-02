@@ -17,6 +17,7 @@ import {
   Settings,
   SlidersHorizontal,
   Sparkles,
+  Stethoscope,
   ToggleLeft,
   Zap,
 } from 'lucide-react'
@@ -78,6 +79,7 @@ import { QuickSettingsPage } from './pages/QuickSettingsPage'
 import { StreamPage } from './pages/StreamPage'
 import { RgbPage } from './pages/RgbPage'
 import BackgroundServicePage from './pages/BackgroundServicePage'
+import DiagnosticsPage from './pages/DiagnosticsPage'
 import LocalServicePermissionGuide from './components/LocalServicePermissionGuide'
 import { ActuationPage } from './pages/ActuationPage'
 import { RapidPage } from './pages/RapidPage'
@@ -232,6 +234,7 @@ function App() {
   const uiSettingsItems = useMemo(() => [
     { id: 'interface', label: tr('Interface'), icon: <Palette size={18} /> },
     { id: 'background-service', label: tr('Background Service'), icon: <Activity size={18} /> },
+    { id: 'diagnostics', label: tr('Diagnostics'), icon: <Stethoscope size={18} /> },
   ], [tr])
 
   const selectedSwitch: SwitchOption = SWITCH_OPTIONS.find((option) => option.id === selectedSwitchId) ?? { id: selectedSwitchId, name: switchProfileLabel(selectedSwitchId), fullName: switchProfileLabel(selectedSwitchId), brand: 'Stored keyboard profile', accent: '#9ba3a8', note: '' }
@@ -1692,6 +1695,8 @@ function App() {
             </div>
           ) : activeSettingsPage === 'background-service' ? (
             <BackgroundServicePage onOpenCustom={() => { setRgbCustomEntry(true); setActivePage('rgb'); setActiveRail('keyboard') }} onOpenGamepad={() => { setActivePage('gamepad'); setActiveRail('keyboard') }} />
+          ) : activeSettingsPage === 'diagnostics' ? (
+            <DiagnosticsPage />
           ) : activeSettingsPage === 'interface' ? (
             <div className="page settings-page page-enter">
               <div className="settings-hero">

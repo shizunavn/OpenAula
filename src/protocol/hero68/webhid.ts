@@ -3,6 +3,7 @@ import { registerHero68Protocol, type Hero68Transport } from '../deviceBridge'
 import { hexToBytes } from '../hex'
 import { buildReport, decodeReport } from './codec'
 import { hero68ProtocolEncoder } from './hero68Encoder'
+import { reportTrace } from './reportTrace'
 import type { DecodedReport } from './types'
 import { rgbService } from '../rgbService'
 import {
@@ -360,6 +361,7 @@ export class Hero68DeviceManager implements Hero68Transport {
   }
 
   async send(report: Uint8Array): Promise<void> {
+    reportTrace.add('out', report[0] ?? 0, report)
     if(this.#viaService){await rgbService.deviceRequest(report);return}
     const device = this.#device
     if (!device?.opened) throw new Error('HERO68 is not connected')
@@ -521,7 +523,9 @@ export class Hero68DeviceManager implements Hero68Transport {
     // connect() asks for the UUID before the snapshot turns 'connected'.
     if (!this.#device?.opened && !this.#viaService) throw new Error('HERO68 is not connected')
     if(this.#viaService){
+      reportTrace.add('out', report[0] ?? 0, report)
       const reply=await rgbService.deviceRequest(report)
+      reportTrace.add('in', reply.reportId, reply.raw)
       if(reply.command!==expectedCommand||(expectedZone!==undefined&&reply.zone!==expectedZone)||(predicate&&!predicate(reply)))throw Error('Unexpected service configuration reply')
       this.#reportListeners.forEach(listener=>listener(reply))
       return reply
@@ -578,6 +582,7 @@ export class Hero68DeviceManager implements Hero68Transport {
       timestampMs: typeof performance !== 'undefined' ? performance.now() : Date.now(),
     }
     this.#rawReportListeners.forEach((listener) => listener(raw))
+    reportTrace.add('in', event.reportId, payload)
 
     if (event.reportId !== HERO68_REPORT_ID) return
     try {

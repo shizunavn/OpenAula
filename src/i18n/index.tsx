@@ -576,6 +576,7 @@ const VI: Record<string, string> = {
   "Aurora": "Aurora",
   "Aurora is now a Base effect. Move this layer to cover all keys and control its brightness directly.": "Aurora giờ là hiệu ứng nền. Chuyển layer này sang nền để phủ toàn bộ phím và điều khiển độ sáng trực tiếp.",
   "Background Service": "Dịch vụ nền",
+  "Diagnostics": "Chẩn đoán",
   "Background app update required": "Cần cập nhật ứng dụng nền",
   "Background service required": "Cần dịch vụ nền",
   "Base lighting is dark": "Ánh sáng nền đang tối",

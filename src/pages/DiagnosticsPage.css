@@ -1,0 +1,11 @@
+.diagnostics-heading { margin-bottom: 18px; }
+.diagnostics-heading h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -.02em; }
+.diagnostics-heading p { margin: 0; color: var(--text-2); font-size: 13px; }
+.diagnostics-card { display: grid; gap: 14px; padding: 20px; }
+.diagnostics-copy { margin: 0; max-width: 720px; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+.diagnostics-hint { color: var(--text-3); font-size: 12px; }
+.diagnostics-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.diagnostics-counts { display: flex; gap: 32px; margin: 0; }
+.diagnostics-counts dt { color: var(--text-3); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.diagnostics-counts dd { margin: 2px 0 0; font-size: 19px; font-variant-numeric: tabular-nums; }
+.diagnostics-note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--text-3); font-size: 12px; }
