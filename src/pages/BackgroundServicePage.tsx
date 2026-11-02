@@ -39,6 +39,10 @@ const VI: Record<string, string> = {
   'Keyboard not detected': 'Không tìm thấy bàn phím',
   'Close other keyboard configuration apps and reconnect HERO68.': 'Đóng ứng dụng cấu hình bàn phím khác và kết nối lại HERO68.',
   'Driver installed but Gamepad unavailable': 'Đã cài driver nhưng chưa dùng được Gamepad',
+  'Diagnostics': 'Chẩn đoán',
+  'Record what a keyboard sends and receives while the official app configures it. Useful only for a model OpenHero68 does not support yet; the file is saved on this computer and nothing is uploaded.': 'Ghi lại lệnh bàn phím nhận và gửi khi app chính hãng đang cấu hình nó. Chỉ hữu ích với mẫu OpenHero68 chưa hỗ trợ; file lưu trên máy này, không tải lên đâu.',
+  'Capture needs Windows app 0.6.2 or later.': 'Tính năng ghi cần ứng dụng Windows 0.6.2 trở lên.',
+  'Open capture page': 'Mở trang ghi lệnh',
   'Check again after restarting the service. If Xbox creation still fails, restart Windows.': 'Kiểm tra lại sau khi khởi động lại service. Nếu vẫn lỗi tạo Xbox controller, khởi động lại Windows.',
 }
 type DriverState = 'checking' | 'ready' | 'missing' | 'update' | 'unknown' | 'error'
@@ -96,6 +100,12 @@ export default function BackgroundServicePage({ onOpenCustom, onOpenGamepad }: {
         {serviceUpdate.update.phase==='downloading'&&<progress max={serviceUpdate.update.total||1} value={serviceUpdate.update.downloaded||0}/>}
         <p>{t('Press Update once. The app installs the update and restarts itself; Windows stays running.')}</p>
       </> : <p>{language==='vi'?'Chạy setup một lần để bật cập nhật tự động.':'Run setup once to enable automatic updates.'}</p>}
+    </section>
+    <section className="bs-connection" aria-label={t('Diagnostics')}>
+      <h2>{t('Diagnostics')}</h2>
+      <p>{t('Record what a keyboard sends and receives while the official app configures it. Useful only for a model OpenHero68 does not support yet; the file is saved on this computer and nothing is uploaded.')}</p>
+      <p>{t('Capture needs Windows app 0.6.2 or later.')}</p>
+      {online && <a className="bs-text-button" href="http://127.0.0.1:16868/capture" target="_blank" rel="noreferrer">{t('Open capture page')}<ExternalLink size={13}/></a>}
     </section>
     <div className="bs-actions"><button className="secondary-button" disabled={!online} onClick={onOpenCustom}>{tr('Open Custom Effects')}<ArrowRight size={15}/></button><button className="secondary-button" disabled={!online || driver !== 'ready'} onClick={onOpenGamepad}>{t('Open Gamepad')}<ArrowRight size={15}/></button>{online && <a className="bs-text-button" href="http://127.0.0.1:16868/" target="_blank" rel="noreferrer">{tr('Service panel')}<ExternalLink size={13}/></a>}</div>
     <details className="bs-help"><summary><CircleHelp size={17}/>{t('Need help?')}<ChevronRight size={16}/></summary><div className="bs-help-grid">{[

@@ -37,5 +37,6 @@ await copyFile(path.join(vigem,'LICENSE'),path.join(out,'VIGEMCLIENT-LICENSE.txt
 const license=await fetch('https://raw.githubusercontent.com/nodejs/node/v'+process.versions.node+'/LICENSE')
 if(!license.ok)throw Error('Cannot fetch Node license')
 await writeFile(path.join(out,'NODE-LICENSE.txt'),await license.text())
+await copyFile(path.join(root,'service/capture.html'),path.join(out,'capture.html'))
 await writeFile(path.join(out,'README.txt'),'OpenHero68 '+version.version+' - Windows x64\r\nInstall using OpenHero68-Setup-Windows-x64.exe. No Node/Python required.\r\nUpdates close and restart the app only, never Windows.\r\nSettings and logs: %LOCALAPPDATA%/OpenHero68/rgb-service\r\nGamepad driver is optional. Gamepad starts disabled.\r\nWebsite: https://open-hero68.pages.dev/\r\n')
 console.log('Built service '+version.version+' in '+out)
