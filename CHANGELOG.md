@@ -3,6 +3,16 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## Service 0.6.0 / UI 0.9.58 — HERO84 support
+
+- App and service recognize a HERO84 from its device UUID (the web app no longer falls back to the product name) and switch layout, key map and protocol tables to the 84-key (75%) board.
+- Custom RGB frames and `/hall/stream` address the 16 extra HERO84 keys; Rhythm preview includes them.
+- HERO84-only keys mirror the colour of the HERO68 key in the same column/slot; there is no HERO84 geometry for per-key effects or Rhythm patterns yet.
+- Deploy the static app as a Cloudflare Pages Worker (`wrangler.jsonc`, `worker/`, `/api/health`).
+- Fix the emulated RGB preview crashing on keys outside the 68-node LED map, name the offending position in per-key colour read errors, and keep the detailed USB product name after model detection.
+- The app asks the board for its device UUID on connect (WebHID or the Windows service) and refuses a board without a HERO68/HERO84 UUID; a connected board decides the model, the selector is locked, and profile reads/saves stay blocked until the model is verified.
+- Not validated on a physical HERO84: the 212-byte CMD08 frame, mirrored colours and remap/RGB batching still need a real board.
+
 ## Unreleased — HERO84 support in the Windows service (untested on hardware)
 
 - Service remembers the connected model (HERO68/HERO84, detected from the device UUID), logs the real model name and reports `deviceModel` in `/status`.

@@ -48,12 +48,15 @@ test('configuration manager stays connected through service and verifies reply c
   globalThis.fetch=async(url,options)=>{
     assert.match(url,/\/device\/request$/)
     const body=JSON.parse(options.body),request=decodeReport(Buffer.from(body.hex,'hex'));seen.push(request.command)
+    // Identity read: report a HERO68 so the service transport can verify the model.
+    if(request.command===0x82)return {ok:true,async json(){return {hex:Buffer.from(buildReport({command:0x82,zone:1,data:[0x11,0,0,0,0,0x03]})).toString('hex')}}}
     const reply=buildReport({command:wrong?0x99:request.command,zone:request.zone,data:[0,1,0,80,0]})
     return {ok:true,async json(){return {hex:Buffer.from(reply).toString('hex')}}}
   }
   try{
     const manager=new Hero68DeviceManager();await manager.connectViaService()
     assert.equal(manager.connected,true);assert.equal(manager.viaService,true);assert.equal(manager.getSnapshot().state,'connected')
+    assert.equal(manager.getSnapshot().detectedModel,'hero68')
     const report=buildReport({command:0x93,data:[0,1]})
     assert.equal((await manager.request(report,0x93,0)).data[3],80)
     await assert.rejects(()=>manager.request(report,0x93,0,800,()=>false),/Unexpected/)

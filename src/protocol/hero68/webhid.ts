@@ -82,6 +82,8 @@ export type Hero68DeviceSnapshot = {
   state: Hero68ConnectionState
   deviceName: string
   detectedModel?: HeroDeviceModelId | null
+  /** `detectedModel` came from the device UUID (CMD 0x82 zone 1), not a name heuristic. */
+  detectedModelFromUuid?: boolean
   error: string | null
 }
 
@@ -224,11 +226,15 @@ export class Hero68DeviceManager implements Hero68Transport {
       if (!device.opened) await device.open()
       device.addEventListener('inputreport', this.#onInputReport)
       this.#device = device
-      const detectedModel = inferModelFromHidDevice(device)
+      // Ask the board itself so a stale or generic productName cannot select
+      // the wrong model's key tables and overwrite the keyboard's settings.
+      const fromUuid = await this.#readModelUuid()
+      if (fromUuid === null) throw new Error('This keyboard did not report a HERO68/HERO84 device UUID')
       this.#setSnapshot({
         state: 'connected',
-        detectedModel,
-        deviceName: device.productName || (detectedModel ? heroDeviceModel(detectedModel).label : 'AULA Hero68'),
+        detectedModel: fromUuid,
+        detectedModelFromUuid: true,
+        deviceName: deviceDisplayName(device, fromUuid),
         error: null,
       })
       return true
@@ -239,6 +245,15 @@ export class Hero68DeviceManager implements Hero68Transport {
     }
   }
 
+  async #readModelUuid(): Promise<HeroDeviceModelId | null> {
+    try {
+      const reply = await this.request(buildReport({ command: 0x82, zone: 1 }), 0x82, 1, 600)
+      return detectHeroDeviceModelFromUuid(reply.data)
+    } catch {
+      return null
+    }
+  }
+
   /**
    * Identify whether the connected keyboard is HERO68 (`0x110000000003`) or
    * HERO84 (`0x110000000005` / `0x120000000015`) using `productName` or
@@ -246,7 +261,8 @@ export class Hero68DeviceManager implements Hero68Transport {
    */
   async detectConnectedModel(): Promise<HeroDeviceModelId | null> {
     if (!this.connected) return null
-    if (this.#snapshot.detectedModel) return this.#snapshot.detectedModel
+    // The device UUID is authoritative; a stale product name must not win.
+    if (this.#snapshot.detectedModelFromUuid) return this.#snapshot.detectedModel ?? null
     const fromDevice = this.#device ? inferModelFromHidDevice(this.#device) : null
     if (fromDevice) {
       this.#setSnapshot({
@@ -264,6 +280,7 @@ export class Hero68DeviceManager implements Hero68Transport {
         // `#device` is undefined.
         this.#setSnapshot({
           detectedModel: fromUuid,
+          detectedModelFromUuid: true,
           deviceName: deviceDisplayName(this.#device, fromUuid),
         })
         return fromUuid
@@ -284,7 +301,7 @@ export class Hero68DeviceManager implements Hero68Transport {
       device.removeEventListener('inputreport', this.#onInputReport)
       if (device.opened) await device.close()
     }
-    this.#setSnapshot({ state: getHid() ? 'disconnected' : 'unsupported', detectedModel: null, error: null })
+    this.#setSnapshot({ state: getHid() ? 'disconnected' : 'unsupported', detectedModel: null, detectedModelFromUuid: false, error: null })
   }
 
   /** Keep the same configuration transport while the service owns the HID handle. */
@@ -293,14 +310,18 @@ export class Hero68DeviceManager implements Hero68Transport {
     if(device){device.removeEventListener('inputreport',this.#onInputReport);if(device.opened)await device.close();this.#device=undefined}
     try {
       // Identity read verifies native helper access and returns the 6-byte deviceId UUID.
+      // It is the only model source on this transport: without it the app would
+      // write another model's key tables, so refuse instead of guessing.
       const identity = await rgbService.deviceRequest(buildReport({command:0x82,zone:1}))
       const detectedModel = detectHeroDeviceModelFromUuid(identity?.data)
+      if (!detectedModel) throw new Error('This keyboard did not report a HERO68/HERO84 device UUID')
       this.#viaService=true
       this.#reconnectViaService=false
       this.#setSnapshot({
         state:'connected',
         detectedModel,
-        deviceName: detectedModel ? heroDeviceModel(detectedModel).label : 'AULA Hero68',
+        detectedModelFromUuid:true,
+        deviceName:heroDeviceModel(detectedModel).label,
         error:null,
       })
     }catch(error){this.#viaService=false;this.#setSnapshot({state:'error',error:errorMessage(error)});throw error}
@@ -497,7 +518,8 @@ export class Hero68DeviceManager implements Hero68Transport {
     timeoutMs = 800,
     predicate?: (report: DecodedReport) => boolean,
   ): Promise<DecodedReport> {
-    if (!this.connected) throw new Error('HERO68 is not connected')
+    // connect() asks for the UUID before the snapshot turns 'connected'.
+    if (!this.#device?.opened && !this.#viaService) throw new Error('HERO68 is not connected')
     if(this.#viaService){
       const reply=await rgbService.deviceRequest(report)
       if(reply.command!==expectedCommand||(expectedZone!==undefined&&reply.zone!==expectedZone)||(predicate&&!predicate(reply)))throw Error('Unexpected service configuration reply')
@@ -584,7 +606,7 @@ export class Hero68DeviceManager implements Hero68Transport {
     this.#device.removeEventListener('inputreport', this.#onInputReport)
     this.#device = undefined
     this.#rejectWaiters(new Error('HERO68 disconnected'))
-    this.#setSnapshot({ state: 'disconnected', detectedModel: null, error: 'HERO68 was disconnected.' })
+    this.#setSnapshot({ state: 'disconnected', detectedModel: null, detectedModelFromUuid: false, error: 'HERO68 was disconnected.' })
   }
 }
 

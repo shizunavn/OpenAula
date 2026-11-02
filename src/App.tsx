@@ -770,8 +770,13 @@ function App() {
     setDeviceActionError(null)
     setDeviceReadState('idle')
     setLoadedProfileSlot(null)
+    // Never fall back to the remembered model: reading or saving a HERO84 with
+    // HERO68 tables writes the wrong key records into the keyboard.
     const detectedModel = await hero68DeviceManager.detectConnectedModel().catch(() => null)
     const targetModel: HeroDeviceModelId = detectedModel ?? deviceModel
+    // Connected without a verified model: the device panel itself warns and the
+    // model selector is locked; this banner covers browsers without that panel.
+    setDeviceActionError(detectedModel ? null : 'Could not verify whether this keyboard is a HERO68 or HERO84. Writes are blocked until it reconnects.')
     if (targetModel !== deviceModel) selectDeviceModel(targetModel)
     const activeSlot = await readCurrentProfileSlot().catch(() => profileSlot)
     setProfileDrafts(previous => ({ ...previous, [profileSlot]: currentProfileDraft() }))
@@ -826,6 +831,15 @@ function App() {
     setDeviceActionError(null)
     setDeviceReadState('reading')
     setLoadedProfileSlot(null)
+    // Writes stay blocked (loadedProfileSlot stays null) until the board itself
+    // confirmed its model, so HERO68/HERO84 tables are never mixed up.
+    const detectedModel = await hero68DeviceManager.detectConnectedModel().catch(() => null)
+    if (!detectedModel) {
+      setDeviceReadState('error')
+      setDeviceActionError('Could not verify whether this keyboard is a HERO68 or HERO84. Reconnect it and try again.')
+      return
+    }
+    targetModel = detectedModel
     const activeKeyIds = heroLayout(targetModel).keyIds
     try {
       const hydrated = await hydrateFromDevice(hero68DeviceManager, slot, activeKeyIds)
@@ -1055,6 +1069,9 @@ function App() {
     () => HERO_DEVICE_MODELS.map((option) => ({ value: option.id, label: option.label, meta: option.layout })),
     [],
   )
+  // A connected keyboard decides the model by its UUID. Letting the selector
+  // switch it would write another model's key tables into this board.
+  const modelLocked = deviceConnected || deviceConnectionState === 'connecting'
 
   const renderDevicePanel = () => (
     <div className={`device-panel is-${deviceConnectionState}`}>
@@ -1068,6 +1085,7 @@ function App() {
             value={deviceModel}
             onChange={selectDeviceModel}
             options={deviceModelOptions}
+            disabled={modelLocked}
           />
         </span>
         <Activity size={17} className="device-state-icon" aria-hidden="true" />
