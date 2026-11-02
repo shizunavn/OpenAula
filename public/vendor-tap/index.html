@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenHero68 · Ghi lệnh từ app hãng</title>
+  <style>
+    :root { color-scheme: light dark; --fg: #111; --muted: #666; --line: #e3e3e3; --bg: #fff; --accent: #1464f4; --warn: #8a4b00; }
+    @media (prefers-color-scheme: dark) { :root { --fg: #eee; --muted: #999; --line: #2c2c2c; --bg: #121212; --accent: #6ea2ff; --warn: #e0a458; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, "Segoe UI", sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -.02em; }
+    h2 { margin: 28px 0 8px; font-size: 16px; }
+    p, li { color: var(--muted); }
+    ol, ul { padding-left: 22px; margin: 8px 0; }
+    code { background: rgba(127, 127, 127, .14); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+    .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 16px; border: 1px solid var(--line); border-radius: 12px; margin-top: 20px; }
+    button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; }
+    button[data-primary] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button:disabled { opacity: .45; cursor: default; }
+    #status { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+    #status[data-warn] { color: var(--warn); }
+    #frame { width: 100%; height: 640px; border: 1px solid var(--line); border-radius: 12px; margin-top: 14px; }
+    .hidden { display: none; }
+    .note { border-left: 3px solid var(--accent); padding-left: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Ghi lệnh app hãng gửi xuống phím</h1>
+  <p>Trang này mở <strong>app cấu hình chính thức của AULA</strong> và ghi lại đúng những gói tin app đó trao đổi với bàn phím. Dùng để thêm phím mới vào OpenHero68 — không phải USB capture, không cần cài phần mềm.</p>
+
+  <section id="setup">
+    <h2>Trước khi bắt đầu</h2>
+    <ol>
+      <li>Cắm bàn phím bằng cáp USB vào máy. Đóng app khác đang điều khiển phím.</li>
+      <li>Bấm <strong>Mở app hãng</strong> bên dưới, chờ app tải xong.</li>
+      <li>Trong app, bấm nút <strong>kết nối / connect device</strong> và cho phép truy cập bàn phím.</li>
+      <li>Bấm <strong>Bắt đầu ghi</strong> ở thanh trên, rồi làm phần việc ở mục “Cần thao tác gì”.</li>
+      <li>Xong thì bấm <strong>Dừng &amp; tải file</strong> và gửi file <code>.json</code> vừa tải về cho người đã nhờ bạn.</li>
+    </ol>
+
+    <div class="bar">
+      <button type="button" data-primary id="open">Mở app hãng</button>
+      <button type="button" id="start" disabled>Bắt đầu ghi</button>
+      <button type="button" id="save" disabled>Dừng &amp; tải file</button>
+      <span id="status">chưa mở app</span>
+    </div>
+    <iframe id="frame" class="hidden" src="app.html" title="App cấu hình của hãng"></iframe>
+
+    <h2>Cần thao tác gì</h2>
+    <p>Mỗi lần chỉ đổi <strong>một</strong> thứ, chờ app báo xong rồi mới đổi thứ khác:</p>
+    <ul>
+      <li>Mở trang <em>cài đặt phím</em> (actuation / hành trình), xem giá trị đang có.</li>
+      <li>Đổi actuation của <strong>một phím</strong> (ví dụ W) từ A sang B rồi lưu; đổi về A và lưu lại.</li>
+      <li>Bật rồi tắt rapid trigger của cùng phím đó.</li>
+      <li>Chọn một hiệu ứng đèn có sẵn, đổi màu/độ sáng, lưu.</li>
+      <li>Mở <em>bài test hành trình</em> (key travel test) nếu app có: nhấn giữ phím W từ từ rồi nhả.</li>
+    </ul>
+    <p class="note">Không cần làm: cập nhật firmware, khôi phục cài đặt gốc, hiệu chỉnh (calibration). Không gõ văn bản gì trong lúc ghi.</p>
+
+    <h2>Nếu có trục trặc</h2>
+    <ul>
+      <li>Bấm “Mở app hãng” mà không thấy gì: thử trình duyệt Chrome hoặc Edge bản mới.</li>
+      <li>Không có nút cho phép truy cập bàn phím: bấm lại nút kết nối trong app; nếu vẫn không được, đóng tab và mở lại từ đầu.</li>
+      <li>Thanh trên báo <strong>lỗi</strong>: tải file và gửi kèm, phần “lỗi” nằm trong file.</li>
+    </ul>
+  </section>
+</main>
+<script type="module" src="capture.js"></script>
+</body>
+</html>
