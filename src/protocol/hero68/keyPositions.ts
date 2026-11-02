@@ -10,6 +10,8 @@
 //   - `95`: `PrintScreen` (`PrtSc`)
 //   - `100`: `Home`
 //   - `101`: `End`
+// Verified key by key against the AULA_2829 WIN layer of the official driver
+// (`tests/fixtures/hero84-official-layout.json`, `tests/hero84-official-layout.test.mjs`).
 import { HERO68_KEY_IDS } from "../../keyboard/hero68Layout";
 import { HERO84_ONLY_KEYS } from "../../keyboard/hero84Layout";
 import type { HeroDeviceModelId } from "../../keyboard/devices";

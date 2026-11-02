@@ -12,21 +12,11 @@ import type { Hero68Key, Hero68Row } from './hero68Layout'
  * Every row is flush at 16U with 84 total keys (the 68 HERO68 keys + 16 HERO84-only keys).
  */
 
-const HERO84_F_KEYS: Hero68Row = [
-  { id: 'F1', label: 'F1', matrixKey: 2305 },
-  { id: 'F2', label: 'F2', matrixKey: 2306 },
-  { id: 'F3', label: 'F3', matrixKey: 2307 },
-  { id: 'F4', label: 'F4', matrixKey: 2308 },
-  { id: 'F5', label: 'F5', matrixKey: 2309 },
-  { id: 'F6', label: 'F6', matrixKey: 2310 },
-  { id: 'F7', label: 'F7', matrixKey: 2311 },
-  { id: 'F8', label: 'F8', matrixKey: 2312 },
-  { id: 'F9', label: 'F9', matrixKey: 2313 },
-  { id: 'F10', label: 'F10', matrixKey: 2314 },
-  { id: 'F11', label: 'F11', matrixKey: 2315 },
-  { id: 'F12', label: 'F12', matrixKey: 2316 },
-  { id: 'PrintScreen', label: 'PrtSc', matrixKey: 2317 },
-]
+const F_KEY_MATRIX_BASE = 2305
+const HERO84_F_KEYS: Hero68Row = Array.from({ length: 13 }, (_, index) => {
+  const id = index < 12 ? `F${index + 1}` : 'PrintScreen'
+  return { id, label: index < 12 ? `F${index + 1}` : 'PrtSc', matrixKey: F_KEY_MATRIX_BASE + index }
+})
 
 const BACKQUOTE_KEY: Hero68Key = { id: 'Backquote', label: '`', matrixKey: 255 }
 const HOME_KEY: Hero68Key = { id: 'Home', label: 'Home', matrixKey: 271 }
