@@ -3,6 +3,13 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## Service 0.6.1 / UI 0.9.59 — HERO84 key table verified against the official driver
+
+- Extract the official AULA driver's `AULA_2829` (HERO 84 HE) WIN key layer into `tests/fixtures/hero84-official-layout.json` (`tools/extract-hero84-layout.mjs`) and assert every `pos`, the 16 extra keys and the row order/sizes in `tests/hero84-official-layout.test.mjs`.
+- Confirmed: HERO68 and HERO84 share one key table for the 68 common keys, and remap/switch batching matches the driver's chunk sizes.
+- Generate the HERO84 F1–F12 layout keys from one base value; the resulting layout is unchanged.
+- `docs/hero84-verification.md` lists what is proven and what still needs a physical board.
+
 ## Service 0.6.0 / UI 0.9.58 — HERO84 support
 
 - App and service recognize a HERO84 from its device UUID (the web app no longer falls back to the product name) and switch layout, key map and protocol tables to the 84-key (75%) board.
@@ -12,7 +19,7 @@ their original validation scope; they are not claims of new hardware testing.
 - Fix the emulated RGB preview crashing on keys outside the 68-node LED map, name the offending position in per-key colour read errors, and keep the detailed USB product name after model detection.
 - The app asks the board for its device UUID on connect (WebHID or the Windows service) and refuses a board without a HERO68/HERO84 UUID; a connected board decides the model, the selector is locked, and profile reads/saves stay blocked until the model is verified.
 - Not validated on a physical HERO84: the 212-byte CMD08 frame, mirrored colours and remap/RGB batching still need a real board.
-- HERO84 key positions verified against the official AULA web driver (`AULA_2829` WIN layer, extracted with `tools/extract-hero84-layout.mjs`): all 84 keys, the 16 extra keys and the layout row order match, and remap/switch batching matches the driver's chunk sizes (`tests/hero84-official-layout.test.mjs`). Remaining unknowns are tracked in `docs/hero84-verification.md`. This landed after `v0.6.0` was published (the release process rejects re-publishing an existing tag), so it ships with the next version.
+- HERO84 key positions verified against the official AULA web driver (`AULA_2829` WIN layer, extracted with `tools/extract-hero84-layout.mjs`): all 84 keys, the 16 extra keys and the layout row order match, and remap/switch batching matches the driver's chunk sizes (`tests/hero84-official-layout.test.mjs`). Remaining unknowns are tracked in `docs/hero84-verification.md`.
 
 ## Unreleased — HERO84 support in the Windows service (untested on hardware)
 
