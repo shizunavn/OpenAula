@@ -1,0 +1,25 @@
+/* Rhythm uses the same preview and library/parameter layout as other RGB tabs. */
+.rhythm-layout {display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;align-items:start;min-width:0}
+.rhythm-meter {display:flex;align-items:center;gap:10px;margin:auto;max-width:300px;color:#a8b3ba;font-size:11px}
+.rhythm-meter meter {width:100%;height:9px;accent-color:#ffd95a}.rhythm-meter span {min-width:32px;text-align:right;font-variant-numeric:tabular-nums}
+.rhythm-modes>h3:not(:first-child) {margin-top:20px}
+.rhythm-mode-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.rhythm-mode-grid button {display:flex;flex-direction:column;gap:6px;align-items:flex-start;text-align:left;padding:10px;border:1px solid #3b454a;border-radius:6px;background:#262d30;color:#c7cfd5;cursor:pointer;min-width:0}
+.rhythm-mode-grid button:hover {background:#313a3e}.rhythm-mode-grid button.active {border-color:#ffd95a;background:#373629}
+.rhythm-mode-grid strong {font-size:12px}.rhythm-mode-grid button>span {font-size:11px;line-height:1.5;color:#a8b3ba}
+.rhythm-thumb {width:100%;height:32px;color:#ffd95a}.rhythm-thumb-off {color:#83919a}
+.rhythm-side-modes {display:flex;gap:7px;flex-wrap:wrap}.rhythm-side-modes [aria-pressed=true] {border-color:#ffd95a;color:#ffe18b}
+.rhythm-controls {display:grid;gap:16px;min-width:0}
+.rhythm-control-heading {display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rgb-settings-page .rhythm-control-heading h3 {display:flex;gap:8px;align-items:center;margin:0;font-size:16px}
+.rhythm-reset {background:transparent;border:0;padding:8px;color:#a8b3ba;cursor:pointer;display:inline-flex}
+.rhythm-select {display:grid;gap:8px;font-size:12px;color:#c7cfd5;min-width:0}
+.rhythm-select small,.rhythm-sliders small {font-size:11px;line-height:1.5;color:#a8b3ba}
+.rhythm-sliders {display:grid;grid-template-columns:1fr;gap:18px}
+.rhythm-sliders small {grid-column:1/-1}.rhythm-color {display:flex;align-items:center;gap:10px;font:11px ui-monospace,monospace;color:#a8b3ba}
+.rhythm-advanced {border-top:1px solid #363e42;padding-top:12px;font-size:11px;color:#a8b3ba}
+.rhythm-advanced summary {cursor:pointer;color:#c2cdd5}.rhythm-advanced>label {margin-top:15px}
+.rhythm-advanced dl {display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:18px}.rhythm-advanced dt,.rhythm-advanced dd {margin:0}.rhythm-advanced dd {font-variant-numeric:tabular-nums}
+.rhythm-advanced p {font-size:11px;line-height:1.6}.rhythm-radius {display:grid;gap:8px}.rhythm-radius input {accent-color:#ffd95a}
+@container settingspage (max-width:959px) {.rhythm-layout {grid-template-columns:1fr}.rhythm-mode-grid {grid-template-columns:repeat(4,minmax(0,1fr))}}
+@container settingspage (max-width:599px) {.rhythm-mode-grid {grid-template-columns:repeat(2,minmax(0,1fr))}}

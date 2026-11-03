@@ -1,0 +1,1 @@
+import{a as n,l as r}from"./chunk-DhYw-kuD.js";const o={name:String};function s(e){return n(()=>({type:"hidden",name:e.name,value:e.modelValue}))}function c(e={}){return(t,a,u)=>{t[a](r("input",{class:"hidden"+(u||""),...e.value}))}}function i(e){return n(()=>e.name||e.for)}export{c as a,i as b,s as c,o as u};

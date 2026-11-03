@@ -1,0 +1,1 @@
+import{d as e}from"./app-CPb3bToC.js";const _=e("data_kb_by_v3",{state:()=>({performance:[{key_type:0,distance:1e3,rt_enable:!1,rt_up:100,rt_down:100,rt_split:!1,safe_area_enable:!1,safe_area_up:100,safe_area_down:100},{key_type:0,distance:1e3,rt_enable:!1,rt_up:100,rt_down:100,rt_split:!1,safe_area_enable:!1,safe_area_up:100,safe_area_down:100}]}),persist:!0});export{_ as d};

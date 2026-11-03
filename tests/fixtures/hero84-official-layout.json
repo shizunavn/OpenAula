@@ -1,0 +1,854 @@
+[
+  [
+    {
+      "id": "Escape",
+      "name": "Esc",
+      "pos": 1,
+      "keyCode": 41,
+      "lightPos": 73,
+      "effectPos": 203,
+      "x": 21,
+      "width": 34
+    },
+    {
+      "id": "F1",
+      "name": "F1",
+      "pos": 2,
+      "keyCode": 58,
+      "lightPos": 9,
+      "effectPos": 11,
+      "x": 61.4,
+      "width": 34
+    },
+    {
+      "id": "F2",
+      "name": "F2",
+      "pos": 3,
+      "keyCode": 59,
+      "lightPos": 15,
+      "effectPos": 29,
+      "x": 101.8,
+      "width": 34
+    },
+    {
+      "id": "F3",
+      "name": "F3",
+      "pos": 4,
+      "keyCode": 60,
+      "lightPos": 21,
+      "effectPos": 47,
+      "x": 142.2,
+      "width": 34
+    },
+    {
+      "id": "F4",
+      "name": "F4",
+      "pos": 5,
+      "keyCode": 61,
+      "lightPos": 27,
+      "effectPos": 65,
+      "x": 182.6,
+      "width": 34
+    },
+    {
+      "id": "F5",
+      "name": "F5",
+      "pos": 6,
+      "keyCode": 62,
+      "lightPos": 33,
+      "effectPos": 83,
+      "x": 223,
+      "width": 34
+    },
+    {
+      "id": "F6",
+      "name": "F6",
+      "pos": 7,
+      "keyCode": 63,
+      "lightPos": 39,
+      "effectPos": 101,
+      "x": 263.4,
+      "width": 34
+    },
+    {
+      "id": "F7",
+      "name": "F7",
+      "pos": 8,
+      "keyCode": 64,
+      "lightPos": 45,
+      "effectPos": 119,
+      "x": 303.8,
+      "width": 34
+    },
+    {
+      "id": "F8",
+      "name": "F8",
+      "pos": 9,
+      "keyCode": 65,
+      "lightPos": 51,
+      "effectPos": 137,
+      "x": 344.2,
+      "width": 34
+    },
+    {
+      "id": "F9",
+      "name": "F9",
+      "pos": 10,
+      "keyCode": 66,
+      "lightPos": 57,
+      "effectPos": 155,
+      "x": 384.6,
+      "width": 34
+    },
+    {
+      "id": "F10",
+      "name": "F10",
+      "pos": 11,
+      "keyCode": 67,
+      "lightPos": 63,
+      "effectPos": 173,
+      "x": 425,
+      "width": 34
+    },
+    {
+      "id": "F11",
+      "name": "F11",
+      "pos": 12,
+      "keyCode": 68,
+      "lightPos": 69,
+      "effectPos": 191,
+      "x": 465.4,
+      "width": 34
+    },
+    {
+      "id": "F12",
+      "name": "F12",
+      "pos": 13,
+      "keyCode": 69,
+      "lightPos": 75,
+      "effectPos": 209,
+      "x": 505.8,
+      "width": 34
+    },
+    {
+      "id": "PrintScreen",
+      "name": "PrtSc",
+      "pos": 95,
+      "keyCode": 70,
+      "lightPos": 81,
+      "effectPos": 227,
+      "x": 546.2,
+      "width": 34
+    },
+    {
+      "id": "Insert",
+      "name": "Insert",
+      "pos": 98,
+      "keyCode": 73,
+      "lightPos": 9,
+      "effectPos": 11,
+      "x": 586.6,
+      "width": 34
+    },
+    {
+      "id": "Delete",
+      "name": "Delete",
+      "pos": 99,
+      "keyCode": 76,
+      "lightPos": 73,
+      "effectPos": 203,
+      "x": 628,
+      "width": 34
+    }
+  ],
+  [
+    {
+      "id": "Backquote",
+      "name": "`~",
+      "pos": 14,
+      "keyCode": 53,
+      "lightPos": 73,
+      "effectPos": 203,
+      "x": 22,
+      "width": 34
+    },
+    {
+      "id": "Digit1",
+      "name": "1",
+      "pos": 15,
+      "keyCode": 30,
+      "lightPos": 15,
+      "effectPos": 29,
+      "x": 62.4,
+      "width": 34
+    },
+    {
+      "id": "Digit2",
+      "name": "2",
+      "pos": 16,
+      "keyCode": 31,
+      "lightPos": 21,
+      "effectPos": 47,
+      "x": 102.8,
+      "width": 34
+    },
+    {
+      "id": "Digit3",
+      "name": "3",
+      "pos": 17,
+      "keyCode": 32,
+      "lightPos": 27,
+      "effectPos": 65,
+      "x": 143.2,
+      "width": 34
+    },
+    {
+      "id": "Digit4",
+      "name": "4",
+      "pos": 18,
+      "keyCode": 33,
+      "lightPos": 33,
+      "effectPos": 83,
+      "x": 183.6,
+      "width": 34
+    },
+    {
+      "id": "Digit5",
+      "name": "5",
+      "pos": 19,
+      "keyCode": 34,
+      "lightPos": 39,
+      "effectPos": 101,
+      "x": 224,
+      "width": 34
+    },
+    {
+      "id": "Digit6",
+      "name": "6",
+      "pos": 20,
+      "keyCode": 35,
+      "lightPos": 45,
+      "effectPos": 119,
+      "x": 264.4,
+      "width": 34
+    },
+    {
+      "id": "Digit7",
+      "name": "7",
+      "pos": 21,
+      "keyCode": 36,
+      "lightPos": 51,
+      "effectPos": 137,
+      "x": 304.8,
+      "width": 34
+    },
+    {
+      "id": "Digit8",
+      "name": "8",
+      "pos": 22,
+      "keyCode": 37,
+      "lightPos": 57,
+      "effectPos": 155,
+      "x": 345.2,
+      "width": 34
+    },
+    {
+      "id": "Digit9",
+      "name": "9",
+      "pos": 23,
+      "keyCode": 38,
+      "lightPos": 63,
+      "effectPos": 173,
+      "x": 385.6,
+      "width": 34
+    },
+    {
+      "id": "Digit0",
+      "name": "0",
+      "pos": 24,
+      "keyCode": 39,
+      "lightPos": 69,
+      "effectPos": 191,
+      "x": 426,
+      "width": 34
+    },
+    {
+      "id": "Minus",
+      "name": "-_",
+      "pos": 25,
+      "keyCode": 45,
+      "lightPos": 75,
+      "effectPos": 209,
+      "x": 466.4,
+      "width": 34
+    },
+    {
+      "id": "Equal",
+      "name": "=+",
+      "pos": 26,
+      "keyCode": 46,
+      "lightPos": 81,
+      "effectPos": 227,
+      "x": 506.8,
+      "width": 34
+    },
+    {
+      "id": "Backspace",
+      "name": "Backspace",
+      "pos": 27,
+      "keyCode": 42,
+      "lightPos": 87,
+      "effectPos": 245,
+      "x": 547.2,
+      "width": 77
+    },
+    {
+      "id": "Home",
+      "name": "Home",
+      "pos": 100,
+      "keyCode": 74,
+      "lightPos": 87,
+      "effectPos": 245,
+      "x": 628,
+      "width": 33
+    }
+  ],
+  [
+    {
+      "id": "Tab",
+      "name": "Tab",
+      "pos": 28,
+      "keyCode": 43,
+      "lightPos": 10,
+      "effectPos": 14,
+      "x": 22,
+      "width": 56
+    },
+    {
+      "id": "KeyQ",
+      "name": "Q",
+      "pos": 29,
+      "keyCode": 20,
+      "lightPos": 16,
+      "effectPos": 32,
+      "x": 84.3,
+      "width": 34
+    },
+    {
+      "id": "KeyW",
+      "name": "W",
+      "pos": 30,
+      "keyCode": 26,
+      "lightPos": 22,
+      "effectPos": 50,
+      "x": 124.6,
+      "width": 34
+    },
+    {
+      "id": "KeyE",
+      "name": "E",
+      "pos": 31,
+      "keyCode": 8,
+      "lightPos": 28,
+      "effectPos": 68,
+      "x": 164.9,
+      "width": 34
+    },
+    {
+      "id": "KeyR",
+      "name": "R",
+      "pos": 32,
+      "keyCode": 21,
+      "lightPos": 34,
+      "effectPos": 86,
+      "x": 205.2,
+      "width": 34
+    },
+    {
+      "id": "KeyT",
+      "name": "T",
+      "pos": 33,
+      "keyCode": 23,
+      "lightPos": 40,
+      "effectPos": 104,
+      "x": 245.5,
+      "width": 34
+    },
+    {
+      "id": "KeyY",
+      "name": "Y",
+      "pos": 34,
+      "keyCode": 28,
+      "lightPos": 46,
+      "effectPos": 122,
+      "x": 285.8,
+      "width": 34
+    },
+    {
+      "id": "KeyU",
+      "name": "U",
+      "pos": 35,
+      "keyCode": 24,
+      "lightPos": 52,
+      "effectPos": 140,
+      "x": 326.1,
+      "width": 34
+    },
+    {
+      "id": "KeyI",
+      "name": "I",
+      "pos": 36,
+      "keyCode": 12,
+      "lightPos": 58,
+      "effectPos": 158,
+      "x": 366.4,
+      "width": 34
+    },
+    {
+      "id": "KeyO",
+      "name": "O",
+      "pos": 37,
+      "keyCode": 18,
+      "lightPos": 64,
+      "effectPos": 176,
+      "x": 406.7,
+      "width": 34
+    },
+    {
+      "id": "KeyP",
+      "name": "P",
+      "pos": 38,
+      "keyCode": 19,
+      "lightPos": 70,
+      "effectPos": 194,
+      "x": 447,
+      "width": 34
+    },
+    {
+      "id": "BracketLeft",
+      "name": "[{",
+      "pos": 39,
+      "keyCode": 47,
+      "lightPos": 76,
+      "effectPos": 212,
+      "x": 487.3,
+      "width": 34
+    },
+    {
+      "id": "BracketRight",
+      "name": "]}",
+      "pos": 40,
+      "keyCode": 48,
+      "lightPos": 82,
+      "effectPos": 230,
+      "x": 527.6,
+      "width": 34
+    },
+    {
+      "id": "Backslash",
+      "name": "\\ |",
+      "pos": 41,
+      "keyCode": 49,
+      "lightPos": 88,
+      "effectPos": 248,
+      "x": 568,
+      "width": 56
+    },
+    {
+      "id": "End",
+      "name": "End",
+      "pos": 101,
+      "keyCode": 77,
+      "lightPos": 87,
+      "effectPos": 245,
+      "x": 628,
+      "width": 34
+    }
+  ],
+  [
+    {
+      "id": "CapsLock",
+      "name": "Caps",
+      "pos": 42,
+      "keyCode": 57,
+      "lightPos": 11,
+      "effectPos": 17,
+      "x": 21,
+      "width": 68
+    },
+    {
+      "id": "KeyA",
+      "name": "A",
+      "pos": 43,
+      "keyCode": 4,
+      "lightPos": 17,
+      "effectPos": 35,
+      "x": 95.2,
+      "width": 34
+    },
+    {
+      "id": "KeyS",
+      "name": "S",
+      "pos": 44,
+      "keyCode": 22,
+      "lightPos": 23,
+      "effectPos": 53,
+      "x": 135.4,
+      "width": 34
+    },
+    {
+      "id": "KeyD",
+      "name": "D",
+      "pos": 45,
+      "keyCode": 7,
+      "lightPos": 29,
+      "effectPos": 71,
+      "x": 175.6,
+      "width": 34
+    },
+    {
+      "id": "KeyF",
+      "name": "F",
+      "pos": 46,
+      "keyCode": 9,
+      "lightPos": 35,
+      "effectPos": 89,
+      "x": 215.8,
+      "width": 34
+    },
+    {
+      "id": "KeyG",
+      "name": "G",
+      "pos": 47,
+      "keyCode": 10,
+      "lightPos": 41,
+      "effectPos": 107,
+      "x": 256,
+      "width": 34
+    },
+    {
+      "id": "KeyH",
+      "name": "H",
+      "pos": 48,
+      "keyCode": 11,
+      "lightPos": 47,
+      "effectPos": 125,
+      "x": 296.2,
+      "width": 34
+    },
+    {
+      "id": "KeyJ",
+      "name": "J",
+      "pos": 49,
+      "keyCode": 13,
+      "lightPos": 53,
+      "effectPos": 143,
+      "x": 336.4,
+      "width": 34
+    },
+    {
+      "id": "KeyK",
+      "name": "K",
+      "pos": 50,
+      "keyCode": 14,
+      "lightPos": 59,
+      "effectPos": 161,
+      "x": 376.6,
+      "width": 34
+    },
+    {
+      "id": "KeyL",
+      "name": "L",
+      "pos": 51,
+      "keyCode": 15,
+      "lightPos": 65,
+      "effectPos": 179,
+      "x": 416.8,
+      "width": 34
+    },
+    {
+      "id": "Semicolon",
+      "name": ";:",
+      "pos": 52,
+      "keyCode": 51,
+      "lightPos": 71,
+      "effectPos": 197,
+      "x": 457,
+      "width": 34
+    },
+    {
+      "id": "Quote",
+      "name": "' \"",
+      "pos": 53,
+      "keyCode": 52,
+      "lightPos": 77,
+      "effectPos": 215,
+      "x": 497.2,
+      "width": 34
+    },
+    {
+      "id": "Enter",
+      "name": "Enter",
+      "pos": 54,
+      "keyCode": 40,
+      "lightPos": 89,
+      "effectPos": 251,
+      "x": 537.4,
+      "width": 87
+    },
+    {
+      "id": "PageUp",
+      "name": "PgUp",
+      "pos": 102,
+      "keyCode": 75,
+      "lightPos": 89,
+      "effectPos": 251,
+      "x": 628,
+      "width": 34
+    }
+  ],
+  [
+    {
+      "id": "ShiftLeft",
+      "name": "L_Shift",
+      "pos": 55,
+      "keyCode": 131072,
+      "lightPos": 12,
+      "effectPos": 20,
+      "x": 20,
+      "width": 88
+    },
+    {
+      "id": "KeyZ",
+      "name": "Z",
+      "pos": 56,
+      "keyCode": 29,
+      "lightPos": 18,
+      "effectPos": 38,
+      "x": 114.1,
+      "width": 34
+    },
+    {
+      "id": "KeyX",
+      "name": "X",
+      "pos": 57,
+      "keyCode": 27,
+      "lightPos": 24,
+      "effectPos": 56,
+      "x": 154.2,
+      "width": 34
+    },
+    {
+      "id": "KeyC",
+      "name": "C",
+      "pos": 58,
+      "keyCode": 6,
+      "lightPos": 30,
+      "effectPos": 74,
+      "x": 194.3,
+      "width": 34
+    },
+    {
+      "id": "KeyV",
+      "name": "V",
+      "pos": 59,
+      "keyCode": 25,
+      "lightPos": 36,
+      "effectPos": 92,
+      "x": 234.4,
+      "width": 34
+    },
+    {
+      "id": "KeyB",
+      "name": "B",
+      "pos": 60,
+      "keyCode": 5,
+      "lightPos": 42,
+      "effectPos": 110,
+      "x": 274.5,
+      "width": 34
+    },
+    {
+      "id": "KeyN",
+      "name": "N",
+      "pos": 61,
+      "keyCode": 17,
+      "lightPos": 48,
+      "effectPos": 128,
+      "x": 314.6,
+      "width": 34
+    },
+    {
+      "id": "KeyM",
+      "name": "M",
+      "pos": 62,
+      "keyCode": 16,
+      "lightPos": 54,
+      "effectPos": 146,
+      "x": 354.7,
+      "width": 34
+    },
+    {
+      "id": "Comma",
+      "name": ",<",
+      "pos": 63,
+      "keyCode": 54,
+      "lightPos": 60,
+      "effectPos": 164,
+      "x": 394.8,
+      "width": 34
+    },
+    {
+      "id": "Period",
+      "name": ".>",
+      "pos": 64,
+      "keyCode": 55,
+      "lightPos": 66,
+      "effectPos": 182,
+      "x": 434.9,
+      "width": 34
+    },
+    {
+      "id": "Slash",
+      "name": "/?",
+      "pos": 65,
+      "keyCode": 56,
+      "lightPos": 72,
+      "effectPos": 200,
+      "x": 475,
+      "width": 34
+    },
+    {
+      "id": "ShiftRight",
+      "name": "R_Shift",
+      "pos": 66,
+      "keyCode": 2097152,
+      "lightPos": 90,
+      "effectPos": 254,
+      "x": 515.1,
+      "width": 69
+    },
+    {
+      "id": "ArrowUp",
+      "name": "Up",
+      "pos": 74,
+      "keyCode": 82,
+      "lightPos": 90,
+      "effectPos": 254,
+      "x": 589,
+      "width": 34
+    },
+    {
+      "id": "PageDown",
+      "name": "PgDn",
+      "pos": 103,
+      "keyCode": 78,
+      "lightPos": 90,
+      "effectPos": 254,
+      "x": 628,
+      "width": 34
+    }
+  ],
+  [
+    {
+      "id": "ControlLeft",
+      "name": "L_Ctrl",
+      "pos": 67,
+      "keyCode": 65536,
+      "lightPos": 13,
+      "effectPos": 23,
+      "x": 22,
+      "width": 45
+    },
+    {
+      "id": "MetaLeft",
+      "name": "L_WIN",
+      "pos": 68,
+      "keyCode": 524288,
+      "lightPos": 19,
+      "effectPos": 41,
+      "x": 73,
+      "width": 44
+    },
+    {
+      "id": "AltLeft",
+      "name": "L_Alt",
+      "pos": 69,
+      "keyCode": 262144,
+      "lightPos": 25,
+      "effectPos": 59,
+      "x": 123,
+      "width": 42
+    },
+    {
+      "id": "Space",
+      "name": "Space",
+      "pos": 70,
+      "keyCode": 44,
+      "lightPos": 43,
+      "effectPos": 113,
+      "x": 173,
+      "width": 250
+    },
+    {
+      "id": "AltRight",
+      "name": "R_Alt",
+      "pos": 71,
+      "keyCode": 4194304,
+      "lightPos": 61,
+      "effectPos": 167,
+      "x": 427,
+      "width": 34
+    },
+    {
+      "id": "Fn",
+      "name": "Fn1",
+      "pos": 72,
+      "keyCode": 218103808,
+      "lightPos": 67,
+      "effectPos": 185,
+      "x": 469,
+      "width": 34
+    },
+    {
+      "id": "ArrowLeft",
+      "name": "Left",
+      "pos": 76,
+      "keyCode": 80,
+      "lightPos": 73,
+      "effectPos": 203,
+      "x": 548,
+      "width": 34
+    },
+    {
+      "id": "ArrowDown",
+      "name": "Down",
+      "pos": 75,
+      "keyCode": 81,
+      "lightPos": 73,
+      "effectPos": 203,
+      "x": 588,
+      "width": 34
+    },
+    {
+      "id": "ArrowRight",
+      "name": "Right",
+      "pos": 77,
+      "keyCode": 79,
+      "lightPos": 73,
+      "effectPos": 203,
+      "x": 628,
+      "width": 34
+    },
+    {
+      "id": "ControlRight",
+      "name": "R_Ctrl",
+      "pos": 73,
+      "keyCode": 1048576,
+      "lightPos": 73,
+      "effectPos": 203,
+      "x": 508,
+      "width": 34
+    }
+  ]
+]

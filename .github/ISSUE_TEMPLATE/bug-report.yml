@@ -1,0 +1,49 @@
+name: "Report a bug"
+description: "Something not working? Tell us what happened — no technical knowledge needed."
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Something not working? We'd like to hear about it.**
+        Just tell us what happened in your own words. Only the first box is required;
+        a short report is welcome even if you cannot make the problem happen again.
+        English or Vietnamese is fine. We'll ask follow-up questions if needed.
+
+        **Gặp lỗi? Bạn chỉ cần kể lại bên dưới bằng tiếng Việt hoặc tiếng Anh.**
+        Không cần biết kỹ thuật hay tìm log/phiên bản để gửi báo lỗi.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What went wrong?
+      description: "What were you trying to do, and what happened instead? A sentence or two is enough."
+      placeholder: "Example: I changed the lighting to blue, but the keyboard stayed red after I clicked Save."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: What did you do before it happened? (optional)
+      description: "If you remember, tell us what you clicked or changed. It's okay if it only happened once."
+      placeholder: "Example: I connected my keyboard, opened RGB Settings, picked blue and clicked Save."
+
+  - type: input
+    id: keyboard
+    attributes:
+      label: Which keyboard do you use? (optional)
+      description: "The name on the box is enough. Skip this if you were only trying the demo or installer."
+      placeholder: "Example: AULA HERO68"
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Photo, screenshot or video (optional)
+      description: "You can drag files here if showing the problem is easier than explaining it. Hide personal information before uploading."
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else? (optional)
+      description: "Anything you think might help. If you already have an error message, app version or logs, you can add them here — no need to go looking for them."

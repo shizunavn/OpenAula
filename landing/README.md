@@ -1,0 +1,73 @@
+# OpenHero68 landing page
+
+Standalone static English/Vietnamese site. It uses the real product screenshots,
+logo and bundled Nunito Sans fonts already tracked in this repository. No npm
+installation is needed for its build, checks or local preview.
+
+```sh
+npm run build:landing
+npm run check:landing
+npm run preview:landing
+```
+
+Preview: http://127.0.0.1:4174/. Language selection is browser-local and optional;
+English HTML remains readable without JavaScript. Screenshots can be enlarged
+using a native dialog, or followed as ordinary image links without JavaScript.
+
+## Cloudflare Pages
+
+Use a separate Direct Upload Pages project named `openhero68-site`. Keep the
+configurator at https://open-hero68.pages.dev/.
+
+```sh
+npm run package:landing
+npm run check:landing
+```
+
+Upload `openhero68-landing-pages.zip` (not the configurator ZIP) in the Pages
+dashboard. `index.html` is at the ZIP root. Preview the site before promoting
+to production. This static package does not contain a Worker or region endpoint.
+The separate Landing page GitHub workflow also produces the ZIP and checksum.
+
+The default canonical URL is https://openhero68-site.pages.dev/. If the project
+name changes or a custom domain is added, rebuild with the actual HTTPS origin:
+
+```powershell
+$env:LANDING_SITE_URL = 'https://your-landing-domain.example'
+npm run package:landing
+npm run check:landing
+```
+
+For Git-based Pages builds, use build command `npm run build:landing` and output
+directory `landing-dist`. Set `LANDING_SITE_URL` in Pages build variables when
+changing the public hostname. Direct Upload projects and Git-integrated projects
+are separate choices; the current rollout uses Direct Upload.
+
+The landing page never connects to the keyboard or localhost service. Moving
+only this page to a different hostname does not require service origin changes.
+The download buttons open the latest stable GitHub release page so users can
+read the release notes and choose an installer from its assets.
+
+## Search Console
+
+The homepage includes a Google Search Console verification meta tag and
+`WebSite` structured data naming OpenHero68. Keep the verification tag in future
+deployments to retain ownership verification. The build generates `robots.txt`
+and `sitemap.xml` with the configured canonical origin.
+
+The URL-prefix property is `https://openhero68-site.pages.dev/`. Submit
+`https://openhero68-site.pages.dev/sitemap.xml` in Search Console and use URL
+Inspection on the homepage to request indexing after substantive updates.
+Verification and a sitemap do not guarantee indexing or a search position.
+
+## Real keyboard demos
+
+`media/` contains the maintainer's RGB and Gamepad recordings, encoded as
+1280×720 H.264 at 30 fps with AAC audio and fast-start MP4 metadata. Full clip
+durations are preserved (approximately 34 and 51 seconds). Source phone files
+and their location metadata are not published. Posters are frames from the
+same recordings. Builds copy the already encoded assets; CI does not need FFmpeg.
+
+Videos have native controls, start muted, and use `preload="none"`. They play
+only after interaction; starting one pauses the other. The existing screenshot
+preview remains available separately.
