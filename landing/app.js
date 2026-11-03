@@ -1,9 +1,10 @@
 import {content} from './content.mjs';
 
 const translations = {
-  en: {...content.en, navigationLabel:'Main navigation', projectLinks:'Project links', screenshotLabel:'Product screenshot', appAlt:'OpenHero68 configurator showing the HERO68 keyboard, Quick Settings and configuration sidebar', rgbAlt:'Rhythm Sync settings with a colorful HERO68 keyboard preview and system-audio controls'},
-  vi: {...content.vi, navigationLabel:'Điều hướng chính', projectLinks:'Liên kết dự án', screenshotLabel:'Ảnh giao diện sản phẩm', appAlt:'Giao diện OpenHero68 với bàn phím HERO68, thiết lập nhanh và thanh điều hướng cấu hình', rgbAlt:'Thiết lập Rhythm Sync với bàn phím HERO68 nhiều màu và điều khiển âm thanh hệ thống'}
+  en: {...content.en, navigationLabel:'Main navigation', projectLinks:'Project links', screenshotLabel:'Product screenshot', appAlt:'OpenAula configurator showing the HERO68 keyboard, Quick Settings and configuration sidebar', rgbAlt:'Rhythm Sync settings with a colorful HERO68 keyboard preview and system-audio controls'},
+  vi: {...content.vi, navigationLabel:'Điều hướng chính', projectLinks:'Liên kết dự án', screenshotLabel:'Ảnh giao diện sản phẩm', appAlt:'Giao diện OpenAula với bàn phím HERO68, thiết lập nhanh và thanh điều hướng cấu hình', rgbAlt:'Thiết lập Rhythm Sync với bàn phím HERO68 nhiều màu và điều khiển âm thanh hệ thống'}
 };
+// Pre-rename key, kept so returning visitors keep their language choice.
 const storageKey = 'openhero68.landing.language';
 export function storedLanguage(storage) {
   try {return storage.getItem(storageKey) === 'vi' ? 'vi' : 'en';} catch {return 'en';}

@@ -6,10 +6,10 @@ import {spawn,execFileSync} from 'node:child_process'
 import {mkdir,cp,readFile,writeFile,rm,readdir} from 'node:fs/promises'
 import path from 'node:path'
 import {rolldown} from 'rolldown'
-const workspace=process.cwd(),base=path.resolve('.refactor/setup-smoke'),install=path.join(base,'Cài đặt OpenHero68'),state=path.join(base,'state')
+const workspace=process.cwd(),base=path.resolve('.refactor/setup-smoke'),install=path.join(base,'Cài đặt OpenAula'),state=path.join(base,'state')
 if(!install.startsWith(workspace+path.sep)||!base.startsWith(workspace+path.sep))throw Error('Unsafe smoke test path')
 await mkdir(base,{recursive:true});await mkdir(state,{recursive:true})
-const env={...process.env,OPENHERO68_SETUP_TEST:'1',OPENHERO68_TEST_STATE:state,OPENHERO68_TEST_DRIVER:'missing'}
+const env={...process.env,OPENAULA_SETUP_TEST:'1',OPENAULA_TEST_STATE:state,OPENAULA_TEST_DRIVER:'missing'}
 const compiler=process.env.HERO68_ISCC??path.resolve('.refactor/setup-tools/inno/ISCC.exe')
 const driver=path.resolve('.refactor/setup-tools/ViGEmBus_1.22.0_x64_x86_arm64.exe')
 const pair=generateKeyPairSync('ed25519'),publicKey=pair.publicKey.export({format:'pem',type:'spki'}).toString()
@@ -42,7 +42,7 @@ async function build(version,{unhealthy=false}={}){
  await writeFile(path.join(distro,'update-worker.cjs'),worker.replace(JSON.stringify(pinned),JSON.stringify(publicKey)))
  const entry=path.join(base,'fixture-'+version+'.mjs')
  await writeFile(entry,`import {createServer} from 'node:http';import {readFileSync,writeFileSync} from 'node:fs';import path from 'node:path';import {createSetupUpdater} from ${JSON.stringify(path.resolve('service/setupUpdater.ts').replaceAll('\\','/'))};
- const state=process.env.OPENHERO68_TEST_STATE,version=${JSON.stringify(version)},operationIndex=process.argv.indexOf('--update-operation');
+ const state=process.env.OPENAULA_TEST_STATE,version=${JSON.stringify(version)},operationIndex=process.argv.indexOf('--update-operation');
  const updater=createSetupUpdater({version,stateDir:state,directory:__dirname,publicKey:${JSON.stringify(publicKey)},fetch:async url=>{
  const network=JSON.parse(readFileSync(path.join(state,'network.json'),'utf8'));
  if(url.endsWith('/latest'))return Response.json(network.release);
@@ -60,15 +60,15 @@ async function build(version,{unhealthy=false}={}){
  const b=await rolldown({input:entry,external:/^node:/});try{await b.write({format:'cjs',file:path.join(distro,'service.cjs')})}finally{await b.close()}
  const output=await run(compiler,[`/DAppVersion=${version}`,`/DDistribution=${distro}`,`/DReleaseDirectory=${release}`,`/DDriverInstaller=${driver}`,'/DTestBuild=1',path.resolve('service/installer/OpenHero68.iss')])
  await writeFile(path.join(base,'build-'+version+'.log'),output)
- const setup=path.join(release,'OpenHero68-Setup-Windows-x64.exe'),bytes=await readFile(setup)
+ const setup=path.join(release,'OpenAula-Setup-Windows-x64.exe'),bytes=await readFile(setup)
  const payload={schemaVersion:1,version,apiVersion:6,platform:'windows-x64',asset:path.basename(setup),size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')}
  const manifest=path.join(release,'manifest.json');await writeFile(manifest,JSON.stringify({payload,signature:sign(null,Buffer.from(JSON.stringify(payload)),pair.privateKey).toString('base64')}))
  return {setup,manifest,payload}
 }
 async function update(next,expectedPhase){
  await writeFile(path.join(state,'network.json'),JSON.stringify({setup:next.setup,manifest:next.manifest,release:{tag_name:'v'+next.payload.version,assets:[
- {name:'OpenHero68-update.json',size:(await readFile(next.manifest)).length,browser_download_url:'https://github.com/shizunavn/OpenHero68/releases/download/v'+next.payload.version+'/OpenHero68-update.json'},
- {name:next.payload.asset,size:next.payload.size,browser_download_url:'https://github.com/shizunavn/OpenHero68/releases/download/v'+next.payload.version+'/'+next.payload.asset}
+ {name:'OpenAula-update.json',size:(await readFile(next.manifest)).length,browser_download_url:'https://github.com/shizunavn/OpenAula/releases/download/v'+next.payload.version+'/OpenAula-update.json'},
+ {name:next.payload.asset,size:next.payload.size,browser_download_url:'https://github.com/shizunavn/OpenAula/releases/download/v'+next.payload.version+'/'+next.payload.asset}
  ]}}))
  const first=await(await fetch(endpoint+'/updates/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json()
  const second=await(await fetch(endpoint+'/updates/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json()
@@ -84,7 +84,7 @@ async function update(next,expectedPhase){
  throw Error('Update smoke timed out')
 }
 const desktop=execFileSync('powershell.exe',['-NoProfile','-Command',"[Environment]::GetFolderPath('Desktop')"],{encoding:'utf8',windowsHide:true}).trim()
-const shortcut=path.join(desktop,'OpenHero68 Setup Test.lnk')
+const shortcut=path.join(desktop,'OpenAula Setup Test.lnk')
 let ready=false
 try{
  await stop()
@@ -94,7 +94,7 @@ try{
  assert.equal(JSON.parse(await readFile(path.join(install,'installation.json'))).desktop,true)
  assert.ok((await readFile(shortcut)).length>0)
  await writeFile(path.join(state,'preset.json'),JSON.stringify({saved:'preserved'}))
- await run(path.join(install,'OpenHero68.exe'),[]);await status('0.5.0')
+ await run(path.join(install,'OpenAula.exe'),[]);await status('0.5.0')
  await update(next,'completed');await status('0.5.1')
  assert.equal(JSON.parse(await readFile(path.join(install,'installation.json'))).active,'0.5.1')
  await update(third,'completed');await status('0.5.2.1')
@@ -112,7 +112,7 @@ try{
  await writeFile(path.join(install,'installation.json'),JSON.stringify({...previousRecord,active:'0.5.3'}))
  await writeFile(path.join(install,'active-version.txt'),'0.5.3')
  await writeFile(path.join(install,'update-transaction.json'),JSON.stringify({operationId:completed.operationId,root:install,stateDir:state,previous:previousRecord,target:'0.5.3',apiVersion:6,setup:bad.setup,phase:'restarting',backupReady:true,hadInstallation:true}))
- await run(path.join(install,'OpenHero68.exe'),[]);await status('0.5.2.1')
+ await run(path.join(install,'OpenAula.exe'),[]);await status('0.5.2.1')
  assert.equal(JSON.parse(await readFile(path.join(install,'installation.json'))).active,'0.5.2.1')
  await assert.rejects(readFile(path.join(install,'update-transaction.json')))
  console.log('PASS: interrupted commit recovers using copied runtime and starts the previous app.')
@@ -121,11 +121,11 @@ try{
  await run(path.join(install,'unins000.exe'),['/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',`/LOG=${path.join(base,'uninstall.log')}`]);ready=false
  await assert.rejects(readFile(shortcut));assert.equal(JSON.parse(await readFile(path.join(state,'preset.json'))).saved,'preserved')
  // Install again without a Desktop shortcut.
- env.OPENHERO68_TEST_DRIVER='ready'
+ env.OPENAULA_TEST_DRIVER='ready'
  await run(initial.setup,['/VERYSILENT','/SUPPRESSMSGBOXES','/SP-','/NORESTART',`/DIR=${install}`,'/TASKS=',`/LOG=${path.join(base,'no-shortcut.log')}`,`/TESTREPORT=${path.join(base,'installed-driver.txt')}`]);ready=true
  assert.equal(await readFile(path.join(base,'installed-driver.txt'),'utf8'),'0|0')
  assert.equal(JSON.parse(await readFile(path.join(install,'installation.json'))).desktop,false);await assert.rejects(readFile(shortcut))
- env.OPENHERO68_TEST_DRIVER='error'
+ env.OPENAULA_TEST_DRIVER='error'
  await run(initial.setup,['/VERYSILENT','/SUPPRESSMSGBOXES','/SP-','/NORESTART',`/DIR=${install}`,'/TASKS=',`/LOG=${path.join(base,'broken-driver.log')}`,`/TESTREPORT=${path.join(base,'broken-driver.txt')}`])
  assert.equal(await readFile(path.join(base,'broken-driver.txt'),'utf8'),'2|0')
  console.log('PASS: uninstall preserves data; unchecked shortcut is not created.')

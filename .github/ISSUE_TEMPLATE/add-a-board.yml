@@ -10,7 +10,7 @@ body:
         OpenHero68 currently targets the AULA HERO68. A similar name, USB ID or layout does not confirm compatibility.
         A request does not enable device writes or mean the model is supported.
 
-        [Submission guide: finding IDs, firmware and useful captures](https://github.com/shizunavn/OpenHero68/blob/main/docs/SUBMIT_A_BOARD.md)
+        [Submission guide: finding IDs, firmware and useful captures](https://github.com/shizunavn/OpenAula/blob/main/docs/SUBMIT_A_BOARD.md)
         Please hide serial numbers, account details and personal paths in public attachments.
 
   - type: input

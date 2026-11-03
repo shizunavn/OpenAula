@@ -25,6 +25,7 @@ import {createSetupUpdater} from './setupUpdater'
 import {serviceControlPanel} from './controlPanel'
 import {readUpdateStatus,terminal} from './installState'
 import {BRAND,serviceStateDir} from './brand'
+import {migrateLegacyStateDir} from './migrateState'
 import {defaultRhythm,validateRhythm,restoreRhythm,nativeRhythmCommand,RHYTHM_MODES,RHYTHM_SIDE_VERIFIED,type RhythmConfiguration} from './rhythm'
 import {latestSse} from './latestSse'
 import {profileRequest} from './profileSelection'
@@ -40,8 +41,9 @@ import {TachyonLighting,validTachyonSnapshot,isTachyonLightingWrite} from '../sr
 function option(name:string){const index=process.argv.indexOf(name);if(index>=0&&!process.argv[index+1])throw Error(`Missing ${name} value`);return index>=0?process.argv[index+1]:undefined}
 const port=Number(option('--port')??16868)
 if(!Number.isInteger(port)||port<1024||port>65535)throw Error('Invalid local service port')
-const stateDir=option('--state-dir')?path.resolve(option('--state-dir')!):serviceStateDir()
-const coreVersion=process.env.OPENHERO68_CORE_VERSION??CORE_VERSION
+const stateDir=option('--state-dir')?path.resolve(option('--state-dir')!):(migrateLegacyStateDir(),serviceStateDir())
+// Older launchers export the pre-1.0 variable names.
+const coreVersion=process.env.OPENAULA_CORE_VERSION??process.env.OPENHERO68_CORE_VERSION??CORE_VERSION
 mkdirSync(stateDir,{recursive:true})
 const log=(message:string)=>appendFileSync(path.join(stateDir,'service.log'),`${new Date().toISOString()} ${message}\n`)
 const driverProbe=spawnSync(path.join(__dirname,'update-host.exe'),['--probe-driver'],{windowsHide:true,stdio:'ignore',timeout:3000})

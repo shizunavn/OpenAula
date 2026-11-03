@@ -8,8 +8,8 @@ import {verifySetupFile} from './setupUpdater'
 import type {SetupManifest} from './setupManifest'
 import {BRAND,serviceStateDir} from './brand'
 
-const testMode=!!process.env.OPENHERO68_SETUP_TEST
-const stateDefault=()=>testMode?process.env.OPENHERO68_TEST_STATE!:serviceStateDir(process.env.LOCALAPPDATA!)
+const testMode=!!process.env.OPENAULA_SETUP_TEST
+const stateDefault=()=>testMode?process.env.OPENAULA_TEST_STATE!:serviceStateDir(process.env.LOCALAPPDATA!)
 const endpoint=`http://127.0.0.1:${testMode?17868:16868}`
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
 const uninstallKey='HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\'+(testMode?`${BRAND.dataDir}SetupTest`:BRAND.dataDir)+'_is1'
@@ -57,7 +57,7 @@ async function launch(root:string,version:string,stateDir:string,operationId?:st
   if(!validVersion(version))throw Error('Invalid launch version')
   const exe=path.join(root,'versions',version,BRAND.coreExe)
   const child=spawn(exe,['--state-dir',stateDir,...(operationId?['--update-operation',operationId]:[])],{
-    cwd:path.dirname(exe),windowsHide:true,detached:true,stdio:'ignore',env:{...process.env,OPENHERO68_INSTALLED:'1'}
+    cwd:path.dirname(exe),windowsHide:true,detached:true,stdio:'ignore',env:{...process.env,OPENAULA_INSTALLED:'1'}
   })
   await new Promise<void>((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject)})
   child.unref()

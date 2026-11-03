@@ -6,9 +6,11 @@ import {CORE_VERSION,CORE_API_VERSION,LAUNCHER_VERSION,validVersion,newer,verify
 import {superviseCore} from './coreSupervisor'
 import {installationRoot} from './installState'
 import {serviceStateDir} from './brand'
+import {migrateLegacyStateDir} from './migrateState'
 
 const stateIndex=process.argv.indexOf('--state-dir')
 if(stateIndex>=0&&!process.argv[stateIndex+1])throw Error('Missing --state-dir value')
+if(stateIndex<0)migrateLegacyStateDir()
 const state=stateIndex>=0?path.resolve(process.argv[stateIndex+1]):serviceStateDir()
 const coreDir=path.join(state,'core')
 const activeFile=path.join(coreDir,'active.json'),pendingFile=path.join(coreDir,'pending.json')
@@ -46,7 +48,7 @@ async function healthy(pid:number|undefined,version:string){
 }
 let child:ChildProcess|null=null,quitting=false
 function launch(file:string,version:string){
-  child=spawn(runtime,[file,...process.argv.slice(2)],{cwd:__dirname,stdio:'ignore',windowsHide:true,env:{...process.env,OPENHERO68_CORE_VERSION:version,OPENHERO68_LAUNCHER_VERSION:LAUNCHER_VERSION}})
+  child=spawn(runtime,[file,...process.argv.slice(2)],{cwd:__dirname,stdio:'ignore',windowsHide:true,env:{...process.env,OPENAULA_CORE_VERSION:version,OPENAULA_LAUNCHER_VERSION:LAUNCHER_VERSION,OPENHERO68_CORE_VERSION:version,OPENHERO68_LAUNCHER_VERSION:LAUNCHER_VERSION}})
   return child
 }
 function shutdown(){quitting=true;child?.kill();setTimeout(()=>process.exit(0),1500).unref()}

@@ -90,7 +90,7 @@ test('native output uses emitted key identity: RT re-press and macro Z map to or
 
 test('signed core package rejects tampering and incompatible launcher',()=>{
   const pair=generateKeyPairSync('ed25519'),key=pair.publicKey.export({format:'pem',type:'spki'}).toString(),bytes=Buffer.from('example core')
-  const payload={version:'0.2.1',apiVersion:6,minLauncher:'0.2.0',sha256:createHash('sha256').update(bytes).digest('hex'),size:bytes.length,asset:'OpenHero68-RGB-core.cjs'}
+  const payload={version:'0.2.1',apiVersion:6,minLauncher:'0.2.0',sha256:createHash('sha256').update(bytes).digest('hex'),size:bytes.length,asset:'OpenAula-RGB-core.cjs'}
   const manifest={payload,signature:sign(null,Buffer.from(JSON.stringify(payload)),pair.privateKey).toString('base64')}
   assert.equal(verifyCore(manifest,bytes,key),'0.2.1')
   const newerPayload={...payload,minLauncher:'0.4.0'}

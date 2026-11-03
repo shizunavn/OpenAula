@@ -79,9 +79,9 @@ LRESULT CALLBACK rawWindow(HWND window, UINT message, WPARAM wparam, LPARAM lpar
 }
 DWORD WINAPI rawThread(LPVOID) {
     HINSTANCE module = GetModuleHandleW(nullptr);
-    WNDCLASSW wc{}; wc.hInstance = module; wc.lpfnWndProc = rawWindow; wc.lpszClassName = L"OpenHero68RawKeyboard";
+    WNDCLASSW wc{}; wc.hInstance = module; wc.lpfnWndProc = rawWindow; wc.lpszClassName = L"OpenAulaRawKeyboard";
     RegisterClassW(&wc);
-    HWND window = CreateWindowExW(0, wc.lpszClassName, L"OpenHero68 Input", WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, module, nullptr);
+    HWND window = CreateWindowExW(0, wc.lpszClassName, L"OpenAula Input", WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, module, nullptr);
     if (!window) { emitLine("raw:unavailable"); return 1; }
     RAWINPUTDEVICE input{}; input.usUsagePage = 1; input.usUsage = 6; input.dwFlags = RIDEV_INPUTSINK; input.hwndTarget = window;
     emitLine(RegisterRawInputDevices(&input, 1, sizeof(input)) ? "raw:ready" : "raw:unavailable");
@@ -153,7 +153,7 @@ struct ProcessMetrics {
       if(GetProcessMemoryInfo(GetCurrentProcess(),&memory,sizeof(memory)))rss=memory.WorkingSetSize/1048576.;at=now;
     }
 };
-// Configuration commands used by OpenHero68, plus volatile RGB and passive Hall.
+// Configuration commands used by OpenAula, plus volatile RGB and passive Hall.
 // Firmware update, reset and calibration commands remain excluded.
 bool allowed(const std::array<unsigned char,64>& p) {
     if (!valid(p.data(), p.size())) return false;

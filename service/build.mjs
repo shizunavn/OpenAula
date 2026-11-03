@@ -4,7 +4,7 @@ import {spawnSync,execFileSync} from 'node:child_process'
 import path from 'node:path'
 const root=process.cwd(),version=JSON.parse(await readFile('service/version.json','utf8'))
 // Mirrors service/brand.ts; build.mjs runs before tsc, so it cannot import the TS module.
-const BRAND_NAME='OpenHero68',BRAND_DATA_DIR='OpenHero68',BRAND_WEBSITE='https://open-hero68.pages.dev/'
+const BRAND_NAME='OpenAula',BRAND_SERVICE_EXE='OpenAulaService.exe',BRAND_DATA_DIR='OpenAula',BRAND_WEBSITE='https://open-hero68.pages.dev/'
 const index=process.argv.indexOf('--out-dir'),out=path.resolve(index>=0?process.argv[index+1]:'service/dist')
 await mkdir(out,{recursive:true})
 for(const [input,name] of [['service/main.ts','service.cjs'],['service/bootstrap.ts','bootstrap.cjs'],['service/updateWorker.ts','update-worker.cjs']]){
@@ -23,7 +23,7 @@ if(!vcvars){
 }
 if(!vcvars)throw Error('Install Visual Studio C++ Build Tools or set HERO68_VCVARS')
 const q=s=>'"'+s+'"',vigem=path.join(root,'service/native/vendor/ViGEmClient'),native=path.join(root,'service/native')
-const compile=(name,extra='')=>'cl /nologo /std:c++17 /O2 /EHsc /MT /I '+q(out)+' /I '+q(path.join(vigem,'include'))+' '+q(path.join(native,name+'.cpp'))+' /Fe:'+q(path.join(out,name==='launcher'?'Hero68RgbService.exe':name==='update_host'?'update-host.exe':'hid-bridge.exe'))+' /Fo:'+q(path.join(out,name+'.obj'))+' '+extra
+const compile=(name,extra='')=>'cl /nologo /std:c++17 /O2 /EHsc /MT /I '+q(out)+' /I '+q(path.join(vigem,'include'))+' '+q(path.join(native,name+'.cpp'))+' /Fe:'+q(path.join(out,name==='launcher'?BRAND_SERVICE_EXE:name==='update_host'?'update-host.exe':'hid-bridge.exe'))+' /Fo:'+q(path.join(out,name+'.obj'))+' '+extra
 const commands=[
  'call '+q(vcvars),
  'cl /nologo /std:c++17 /O2 /EHsc /MT /I '+q(path.join(vigem,'include'))+' /c '+q(path.join(vigem,'src/ViGEmClient.cpp'))+' /Fo:'+q(path.join(out,'vigem-client.obj')),

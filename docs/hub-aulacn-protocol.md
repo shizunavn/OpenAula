@@ -210,13 +210,13 @@ Driver cũ trong `public/vendor-tap/vendor/app-CPb3bToC.js:29:1187166` – `29:1
 
 ---
 
-## 3. Bảng Map Lệnh từ `TglCKVxb.js:135` & `index-C8V0TbLC.js` sang OpenHero68
+## 3. Bảng Map Lệnh từ `TglCKVxb.js:135` & `index-C8V0TbLC.js` sang OpenAula
 
 Toàn bộ mã lệnh dưới đây được trích trực tiếp từ enum `g2` (`TglCKVxb.js:135:37218`), `b0` (`135:37835`), và lớp `y2e` (`135:238735` – `135:275600`). Không có tham số nào được suy đoán; những mục không tồn tại trong code được ghi rõ là **`chưa xác định`**.
 
 ### 3.1. Nhóm Thông tin thiết bị, Hệ thống & Profile (`0x02`/`0x82`, `0x04`/`0x84`, `0x10`/`0x90`, `0x11`, `0x1a`/`0x9a`, `0x87`)
 
-| Tính năng OpenHero68 | Lệnh (Write / Read) | `byte[1]` (`param` / `zone`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
+| Tính năng OpenAula | Lệnh (Write / Read) | `byte[1]` (`param` / `zone`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
 |---|---|---|---|---|
 | **Đọc UUID thiết bị** | `—` / `0x82` (`130`) | `0x01` (`1`) | Req: `[0,0,0,0,0,0]` (6B). Resp: 6 byte `u48be` (`UUID` định danh thiết bị) | `readDeviceUUID` (`135:239897`) |
 | **Đọc phiên bản Firmware** | `—` / `0x82` (`130`) | `0x02` (`2`) | Req: `[0]`. Resp: `u16le` tại `data[0..1]` (`major = val >> 8`, `minor = val & 0xff`, format `"vMajor.Minor"`) | `readFirmwareVersion` (`135:240499`) |
@@ -236,7 +236,7 @@ Toàn bộ mã lệnh dưới đây được trích trực tiếp từ enum `g2`
 
 ### 3.2. Nhóm Lighting (Đèn nền, Đèn viền, Custom Per-Key RGB, Stream RGB)
 
-| Tính năng OpenHero68 | Lệnh (Write / Read) | `byte[1]` (`param` / `zone`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
+| Tính năng OpenAula | Lệnh (Write / Read) | `byte[1]` (`param` / `zone`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
 |---|---|---|---|---|
 | **Đọc / Ghi chế độ đèn theo vùng** | `0x04` (`4`) / `0x84` (`132`) | `zone`: `1`=Main, `6`=Side, `7`=Logo, `9`=Screen, `15`=AllSync | **7 byte**: `[effect, (colorIndex & 0x0f) \| ((direction & 0x0f) << 4), R, G, B, brightness, speed]` (`effect`: `0`=Off, `1..18`=Preset, `19`=Custom; `colorIndex`: `7`=Multicolor, `0`=Single color; `brightness`: `0..20`; `speed`: `0..4`) | `readLighting` (`135:266191`), `writeLighting` (`135:266586`), `FPe` (`135:153629`) |
 | **Đọc / Ghi nhiều vùng đèn cùng lúc** | `0x04` (`4`) / `0x84` (`132`) | `0x10` (`16`) | Mỗi vùng **8 byte**: `[zone, effect, colorDirByte, R, G, B, brightness, speed]` | `readMultiZoneLighting` (`135:266996`), `writeMultiZoneLighting` (`135:267415`) |
@@ -247,7 +247,7 @@ Toàn bộ mã lệnh dưới đây được trích trực tiếp từ enum `g2`
 
 ### 3.3. Nhóm Actuation, Rapid Trigger, Deadzone, Switch & Hiệu chuẩn (Calibration)
 
-| Tính năng OpenHero68 | Lệnh (Write / Read) | `byte[1]` (`param`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
+| Tính năng OpenAula | Lệnh (Write / Read) | `byte[1]` (`param`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
 |---|---|---|---|---|
 | **Đọc / Ghi điểm nhận phím (Actuation Distance)** | `0x13` (`19`) / `0x93` (`147`) | Write: `layer` (`0`)<br>Read: `0x00` | Read (`0x93`): gửi `u16be` `keyId` (2B/phím).<br>Write (`0x13`) & Resp (`0x93`): mỗi phím **5 byte** `[keyId_hi, keyId_lo, dist_hi, dist_lo, isGlobal]` (căn chỉnh `11` phím = `55` byte/gói). Giá trị thực `mm = rawDist / distancePrecision` | `readTriggers` (`135:250211`), `writeTriggers` (`135:251329`), `buildWriteKeyDistanceCommand` (`135:139543`) |
 | **Đọc / Ghi Rapid Trigger (RT)** | `0x19` (`25`) / `0x99` (`153`) | Write: `layer` (`0`)<br>Read: `0x00` | Read (`0x99`): gửi `u16be` `keyId` (2B/phím).<br>Write (`0x19`) & Resp (`0x99`): mỗi phím **8 byte** `[keyId_hi, keyId_lo, rtMode, up_hi, up_lo, down_hi, down_lo, isGlobal]` (căn chỉnh `7` phím = `56` byte/gói). `rtMode`: `0`=Off, `1`=Normal RT, `2`=Continuous RT (`fullRt`) | `readTriggers` (`135:250211`), `writeTriggers` (`135:251329`), `buildWriteRtCommand` (`135:140219`) |
@@ -258,7 +258,7 @@ Toàn bộ mã lệnh dưới đây được trích trực tiếp từ enum `g2`
 
 ### 3.4. Nhóm Key Remap, Special Keys, Ma trận phím & Macro (`0x03`/`0x83`, `0x11`, `0x22`/`0xa2`, `0xa5`, `0x05`/`0x85`, `0x27`/`0xa7`)
 
-| Tính năng OpenHero68 | Lệnh (Write / Read) | `byte[1]` (`param`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
+| Tính năng OpenAula | Lệnh (Write / Read) | `byte[1]` (`param`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
 |---|---|---|---|---|
 | **Đọc tọa độ ma trận phím vật lý (`KeyMatrixPositions`)** | `—` / `0xa5` (`165`) | `0x00` (`0`) | Req: `[0]`. Resp: mảng byte, mỗi byte cho biết vị trí `[row = b >> 4, col = b & 0x0f]` của phím thứ `i + 1` (nếu `b === 0xff` là phím trống) | `readKeyMatrixPositions` (`135:246941`), `parseKeyMatrixResponse` (`135:90665`) |
 | **Đọc / Ghi Key Remap (`KeyFunctions`)** | `0x03` (`3`) / `0x83` (`131`) | `encodeLayerAndSystem(layer, system)` | Read (`0x83`): gửi `u16be` `keyId` (2B/phím).<br>Write (`0x03`) & Resp (`0x83`): mỗi phím **6 byte** `[keyId_hi, keyId_lo, code_b3, code_b2, code_b1, code_b0]` (căn chỉnh `9` phím = `54` byte/gói).<br>Nếu gán Macro: `code_b3 = 0x03`, `code_b2 = triggerMode` (`2`=Hold/Button, `1`=Toggle/Circle, `4`=Repeat N lần), `code_b1 = repeatCount`, `code_b0 = macroIndex` | `readKeyFunctions` (`135:247272`), `writeKeyFunctions` (`135:247829`), `buildKeyUpdateCommands` (`135:84505`) |
@@ -290,7 +290,7 @@ Trong `buildAdvancedKeyCommands` (`TglCKVxb.js:135:86665`) và `bPe` (`135:10582
 
 Tất cả các thiết lập Performance dùng cặp lệnh **`0x04` (Write) / `0x84` (Read)** với mã `param` (`byte[1]`) trong enum `b0` (`TglCKVxb.js:135:37835`):
 
-| Tính năng OpenHero68 | Lệnh (Write / Read) | `byte[1]` (`param`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
+| Tính năng OpenAula | Lệnh (Write / Read) | `byte[1]` (`param`) | Cấu trúc Payload (`byte[6..]`) & Giải mã | Vị trí trong `TglCKVxb.js` |
 |---|---|---|---|---|
 | **Đồng bộ thời gian hệ thống (`SystemTime`)** | `0x04` / `—` | `0x0e` (`14`) | **7 byte**: `[year_hi, year_lo, month, day, hour, minute, second]` | `syncSystemTime` (`135:265645`), `buildSyncTimeCommand` (`135:160475`) |
 | **Chế độ Hệ điều hành (`SystemType` — Win/Mac)** | `0x04` / `0x84` | `0x11` (`17`) | 1 byte: `0` = Windows, `1` = macOS | `readSystemType` (`135:258525`), `writeSystemType` (`135:258827`) |

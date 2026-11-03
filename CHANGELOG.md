@@ -6,9 +6,10 @@ their original validation scope; they are not claims of new hardware testing.
 ## 1.0.0 — OpenAula
 
 - The app and the Windows service now ship one version number; 0.9.59 (UI) and 0.6.1 (service) were the last independent pair.
-- Rename the product to OpenAula now that it covers the AULA line rather than one board. Installed copies keep their folders, settings, service, autostart entry and update feed unchanged, so 0.9.59 upgrades in place.
-- Move the product name into `src/brand.ts` and `service/brand.ts`. Display name and technical identifiers are separated so a later rename is one edit plus one migration, not a repo-wide search.
-- 624 JavaScript tests pass; web and service TypeScript builds pass. HERO84 remains unvalidated on a physical board.
+- Rename the product and its technical identifiers to OpenAula: repository, install folder, launcher, service executable, uninstall entry, autostart value and release asset names.
+- Upgrading from 0.9.59 keeps your settings: setup removes the old OpenHero68 install first, carries the auto-start choice across, and moves `%LOCALAPPDATA%\OpenHero68\rgb-service` to the new folder on first start. The pre-1.0 `OPENHERO68_*` environment variables are still honoured.
+- Move the product name into `src/brand.ts` and `service/brand.ts` so the legacy names sit in one place next to the current ones.
+- 624 JavaScript tests pass; web and service TypeScript builds pass. HERO84 remains unvalidated on a physical board, and the 0.9.59 upgrade path was checked by the installer smoke test only.
 
 ## Service 0.6.1 / UI 0.9.59 — HERO84 key table verified against the official driver
 

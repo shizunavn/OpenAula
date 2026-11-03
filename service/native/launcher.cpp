@@ -15,30 +15,37 @@ HANDLE child;
 NOTIFYICONDATAW tray{};
 std::wstring launchCommand;
 constexpr wchar_t RunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-constexpr wchar_t RunName[] = L"OpenHero68RgbService";
+constexpr wchar_t RunName[] = OPENAULA_RUN_NAME;
 UINT taskbarCreated;
 std::atomic<bool> checkingUpdates{false};
 std::atomic<bool> exiting{false};
 void open(const wchar_t* url) { ShellExecuteW(nullptr, L"open", url, nullptr, nullptr, SW_SHOWNORMAL); }
 std::wstring autoStartCommand() {
     wchar_t value[32768]; DWORD size = sizeof(value);
-    if (RegGetValueW(HKEY_CURRENT_USER, RunKey, RunName, RRF_RT_REG_SZ, nullptr, value, &size) != ERROR_SUCCESS) return L"";
+    if (RegGetValueW(HKEY_CURRENT_USER, RunKey, RunName, RRF_RT_REG_SZ, nullptr, value, &size) != ERROR_SUCCESS) {
+        // A pre-1.0 install stored its autostart under the old value name.
+        size = sizeof(value);
+        if (RegGetValueW(HKEY_CURRENT_USER, RunKey, OPENAULA_LEGACY_RUN_NAME, RRF_RT_REG_SZ, nullptr, value, &size) != ERROR_SUCCESS) return L"";
+    }
     return value;
 }
 bool autoStart() { return autoStartCommand() == launchCommand; }
 void toggleAutoStart(HWND window) {
     HKEY key; LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, RunKey, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr);
     if (result == ERROR_SUCCESS) {
-        if (autoStart()) result = RegDeleteValueW(key, RunName);
+        if (autoStart()) {
+            result = RegDeleteValueW(key, RunName);
+            RegDeleteValueW(key, OPENAULA_LEGACY_RUN_NAME);
+        }
         else result = RegSetValueExW(key, RunName, 0, REG_SZ, reinterpret_cast<const BYTE*>(launchCommand.c_str()), DWORD((launchCommand.size()+1)*sizeof(wchar_t)));
         RegCloseKey(key);
     }
-    if (result != ERROR_SUCCESS) MessageBoxW(window, L"Could not change auto-start for your Windows account.", L"OpenHero68 RGB", MB_ICONERROR);
+    if (result != ERROR_SUCCESS) MessageBoxW(window, L"Could not change auto-start for your Windows account.", OPENAULA_LABEL, MB_ICONERROR);
 }
 struct HttpResult { DWORD status = 0; std::string body; };
 HttpResult post(const wchar_t* endpoint, int receiveTimeout = 1500) {
     HttpResult result;
-    HINTERNET session = WinHttpOpen(L"OpenHero68 RGB/" HERO68_VERSION_W, WINHTTP_ACCESS_TYPE_NO_PROXY, nullptr, nullptr, 0);
+    HINTERNET session = WinHttpOpen(OPENAULA_LABEL L"/" HERO68_VERSION_W, WINHTTP_ACCESS_TYPE_NO_PROXY, nullptr, nullptr, 0);
     if (!session) return result;
     WinHttpSetTimeouts(session, 500, 500, 1000, receiveTimeout);
     HINTERNET connection = WinHttpConnect(session, L"127.0.0.1", servicePort(), 0);
@@ -82,12 +89,12 @@ UpdateReply parseUpdateReply(const HttpResult& result) {
 }
 void notify(const wchar_t* message) {
     NOTIFYICONDATAW notice = tray; notice.uFlags = NIF_INFO;
-    wcscpy_s(notice.szInfoTitle, L"OpenHero68 RGB");
+    wcscpy_s(notice.szInfoTitle, OPENAULA_LABEL);
     wcscpy_s(notice.szInfo, message); notice.dwInfoFlags = NIIF_INFO;
     Shell_NotifyIconW(NIM_MODIFY, &notice);
 }
 void checkUpdates() {
-    if (checkingUpdates.exchange(true)) { MessageBoxW(nullptr, L"An update check is already running.", L"OpenHero68 RGB", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND); return; }
+    if (checkingUpdates.exchange(true)) { MessageBoxW(nullptr, L"An update check is already running.", OPENAULA_LABEL, MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND); return; }
     std::thread([] {
         // Service waits for the GitHub check before replying, so the result is the real outcome.
         const UpdateReply reply = parseUpdateReply(post(L"/updates/tray-check", 190000));
@@ -98,7 +105,7 @@ void checkUpdates() {
             else if (reply.kind == "core") notify((L"Core update " + reply.version + L" downloaded. The service is restarting.").c_str());
             else if (reply.kind == "package") {
                 const std::wstring message = L"Windows update " + reply.version + L" downloaded and verified to:\n" + reply.file + L"\n\nQuit the tray app, extract the ZIP over its folder, then restart it. Open the download folder?";
-                if (MessageBoxW(nullptr, message.c_str(), L"OpenHero68 RGB", MB_YESNO | MB_ICONINFORMATION | MB_SETFOREGROUND) == IDYES) {
+                if (MessageBoxW(nullptr, message.c_str(), OPENAULA_LABEL, MB_YESNO | MB_ICONINFORMATION | MB_SETFOREGROUND) == IDYES) {
                     const size_t slash = reply.file.find_last_of(L"\\/");
                     if (slash != std::wstring::npos) { const std::wstring folder = reply.file.substr(0, slash); open(folder.c_str()); }
                 }
@@ -110,7 +117,7 @@ void checkUpdates() {
 void addTray() { Shell_NotifyIconW(NIM_ADD, &tray); tray.uVersion = NOTIFYICON_VERSION_4; Shell_NotifyIconW(NIM_SETVERSION, &tray); }
 void menu(HWND window) {
     HMENU popup = CreatePopupMenu();
-    AppendMenuW(popup, MF_STRING | MF_DISABLED, 0, L"OpenHero68 Background Service");
+    AppendMenuW(popup, MF_STRING | MF_DISABLED, 0, OPENAULA_LABEL L" Background Service");
     AppendMenuW(popup, MF_STRING | MF_DISABLED, 0, L"Launcher: " HERO68_VERSION_W);
     AppendMenuW(popup, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(popup, MF_STRING, 1, L"Open web app");
@@ -133,15 +140,15 @@ void menu(HWND window) {
     case 1: open(L"https://open-hero68.pages.dev/"); break;
     case 2: open(L"http://127.0.0.1:16868/"); break;
     case 3: case 4:
-        if (!command(selected == 3 ? L"/start" : L"/stop")) MessageBoxW(window, L"The RGB command failed. Open the control panel for details; Start requires a saved preset.", L"OpenHero68 RGB", MB_ICONWARNING);
+        if (!command(selected == 3 ? L"/start" : L"/stop")) MessageBoxW(window, L"The RGB command failed. Open the control panel for details; Start requires a saved preset.", OPENAULA_LABEL, MB_ICONWARNING);
         break;
     case 5: checkUpdates(); break;
     case 9: case 10:
-        if(!command(selected==9?L"/gamepad/start":L"/gamepad/stop"))MessageBoxW(window,L"Gamepad command failed. Open the control panel for driver and connection details.",L"OpenHero68 Gamepad",MB_ICONWARNING);
+        if(!command(selected==9?L"/gamepad/start":L"/gamepad/stop"))MessageBoxW(window,L"Gamepad command failed. Open the control panel for driver and connection details.",OPENAULA_LABEL L" Gamepad",MB_ICONWARNING);
         break;
     case 6: {
         wchar_t local[32768]; DWORD count = GetEnvironmentVariableW(L"LOCALAPPDATA", local, 32768);
-        if (count && count < 32768) open((std::wstring(local) + L"\\OpenHero68\\rgb-service").c_str());
+        if (count && count < 32768) open((std::wstring(local) + L"\\" OPENAULA_DATA_DIR L"\\rgb-service").c_str());
         break;
     }
     case 7: toggleAutoStart(window); break;
@@ -174,7 +181,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR arguments, int) {
     std::wstring installRoot=dir;
     for(int i=0;i<2;++i){auto slash=installRoot.find_last_of(L"\\/");if(slash!=std::wstring::npos)installRoot.resize(slash);}
     if(GetFileAttributesW((installRoot+L"\\installation.json").c_str())!=INVALID_FILE_ATTRIBUTES)
-        launchCommand=L"\""+installRoot+L"\\OpenHero68.exe\"";
+        launchCommand=L"\""+installRoot+L"\\" OPENAULA_LAUNCHER L"\"";
     else if (*arguments) launchCommand += L" " + std::wstring(arguments);
     std::wstring runtime = dir + L"\\runtime.exe";
     std::wstring command = L"\"" + runtime + L"\" \"" + dir + L"\\bootstrap.cjs\" " + arguments;
@@ -183,23 +190,25 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR arguments, int) {
     limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
     if (!job || !SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits))) { if (job) CloseHandle(job); CloseHandle(mutex); return 1; }
     STARTUPINFOW startup{}; startup.cb = sizeof(startup); PROCESS_INFORMATION process{};
+    SetEnvironmentVariableW(L"OPENAULA_LAUNCHER_VERSION", HERO68_VERSION_W);
+    // Older cores still read the pre-1.0 variable name.
     SetEnvironmentVariableW(L"OPENHERO68_LAUNCHER_VERSION", HERO68_VERSION_W);
     if (!CreateProcessW(runtime.c_str(), command.data(), nullptr, nullptr, FALSE,
         CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, dir.c_str(), &startup, &process)) {
-        MessageBoxW(nullptr, L"Cannot start bundled RGB runtime. Keep the service folder together.", L"OpenHero68 RGB", MB_ICONERROR);
+        MessageBoxW(nullptr, L"Cannot start bundled RGB runtime. Keep the service folder together.", OPENAULA_LABEL, MB_ICONERROR);
         CloseHandle(job); CloseHandle(mutex); return 1;
     }
     if (!AssignProcessToJobObject(job, process.hProcess)) { TerminateProcess(process.hProcess, 1); CloseHandle(process.hThread); CloseHandle(process.hProcess); CloseHandle(job); CloseHandle(mutex); return 1; }
     ResumeThread(process.hThread); CloseHandle(process.hThread);
     child = process.hProcess;
     taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
-    WNDCLASSW wc{}; wc.lpfnWndProc = windowProc; wc.hInstance = instance; wc.lpszClassName = L"OpenHero68RgbTray";
+    WNDCLASSW wc{}; wc.lpfnWndProc = windowProc; wc.hInstance = instance; wc.lpszClassName = L"OpenAulaRgbTray";
     RegisterClassW(&wc);
-    HWND window = CreateWindowExW(0, wc.lpszClassName, L"OpenHero68 RGB Tray", WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, instance, nullptr);
+    HWND window = CreateWindowExW(0, wc.lpszClassName, OPENAULA_LABEL L" Tray", WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, instance, nullptr);
     if (window) {
         tray.cbSize = sizeof(tray); tray.hWnd = window; tray.uID = 1;
         tray.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP; tray.uCallbackMessage = WM_APP + 1;
-        tray.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(1)); wcscpy_s(tray.szTip, L"OpenHero68 RGB Launcher " HERO68_VERSION_W);
+        tray.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(1)); wcscpy_s(tray.szTip, OPENAULA_LABEL L" Launcher " HERO68_VERSION_W);
         addTray(); SetTimer(window, 1, 500, nullptr);
         MSG message; while (GetMessageW(&message, nullptr, 0, 0) > 0) { TranslateMessage(&message); DispatchMessageW(&message); }
     }

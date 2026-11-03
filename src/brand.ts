@@ -12,6 +12,6 @@ export const BRAND = {
   storagePrefix: 'openhero68',
   /** `schema` field of exported JSON files (profiles, macros). */
   exportSchemaPrefix: 'openhero68',
-  docsUrl: 'https://github.com/shizunavn/OpenHero68/blob/main/docs/README.md',
-  issuesUrl: 'https://github.com/shizunavn/OpenHero68/issues',
+  docsUrl: 'https://github.com/shizunavn/OpenAula/blob/main/docs/README.md',
+  issuesUrl: 'https://github.com/shizunavn/OpenAula/issues',
 } as const

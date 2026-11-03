@@ -5,7 +5,7 @@ import {BRAND} from './brand'
 
 export const BUNDLED_LAUNCHER_VERSION=releaseVersion.version
 // The native launcher keeps its identity when a newer JS core is installed.
-export const LAUNCHER_VERSION=validVersion(process.env.OPENHERO68_LAUNCHER_VERSION??'')?process.env.OPENHERO68_LAUNCHER_VERSION!:BUNDLED_LAUNCHER_VERSION
+export const LAUNCHER_VERSION=validVersion(process.env.OPENAULA_LAUNCHER_VERSION??'')?process.env.OPENAULA_LAUNCHER_VERSION!:validVersion(process.env.OPENHERO68_LAUNCHER_VERSION??'')?process.env.OPENHERO68_LAUNCHER_VERSION!:BUNDLED_LAUNCHER_VERSION
 export const CORE_VERSION=releaseVersion.version
 export const CORE_API_VERSION=releaseVersion.apiVersion
 export type CoreManifest={payload:{version:string;apiVersion:number;minLauncher:string;sha256:string;size:number;asset:string};signature:string}

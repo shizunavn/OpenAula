@@ -174,7 +174,7 @@ Configuration schema is defined in `src/keyboard/gamepad.ts`: `version:1`,
 `square`, `angleEnabled` and `angle`. Curves have 2–16 points, strict ascending
 x, nondecreasing y and fixed `[0,0]`/`[1,1]` endpoints. Bounds and duplicate
 physical keys are rejected before mutation. Service persistence uses atomic
-file replacement at `%LOCALAPPDATA%\OpenHero68\rgb-service\gamepad.json`.
+file replacement at `%LOCALAPPDATA%\OpenAula\rgb-service\gamepad.json`.
 
 ## Validation and packaging
 

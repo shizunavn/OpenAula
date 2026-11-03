@@ -11,9 +11,9 @@ BEGIN
  BEGIN
   BLOCK "040904b0"
   BEGIN
-   VALUE "FileDescription", "OpenHero68 RGB Background Service\0"
+   VALUE "FileDescription", "OpenAula RGB Background Service\0"
    VALUE "FileVersion", HERO68_VERSION_TEXT
-   VALUE "ProductName", "OpenHero68 RGB Service\0"
+   VALUE "ProductName", "OpenAula RGB Service\0"
    VALUE "ProductVersion", HERO68_VERSION_TEXT
   END
  END

@@ -22,7 +22,7 @@ inside `.refactor/setup-tools`. It never installs the driver. The bundled Node
 runtime is the build process's executable; CI pins its exact version from
 `service/version.json`. Changing the toolchain requires updating the pins.
 
-Output: `service/releases/OpenHero68-Setup-Windows-x64.exe`.
+Output: `service/releases/OpenAula-Setup-Windows-x64.exe`.
 
 ## Release
 
@@ -33,11 +33,11 @@ Output: `service/releases/OpenHero68-Setup-Windows-x64.exe`.
 3. Push the committed source and tag `vX.Y.Z`. The Windows workflow validates
    the tag, tests, builds and runs the isolated setup smoke suite.
 4. The separate release job signs the tested EXE and verifies it again. It uploads
-   EXE, `OpenHero68-update.json` and `SHA256SUMS.txt` into a draft, verifies uploaded
+   EXE, `OpenAula-update.json` and `SHA256SUMS.txt` into a draft, verifies uploaded
    content and publishes it as latest. It refuses to modify a public release.
 
 PR jobs never receive signing secrets. Local signing may use
-`%LOCALAPPDATA%/OpenHero68/release-signing-key.pem`; run `npm run sign:setup`
+`%LOCALAPPDATA%/OpenAula/release-signing-key.pem`; run `npm run sign:setup`
 and `npm run verify:setup`. The signing tool refuses an unknown key. Do not
 publish a locally built setup as an update without its signed manifest.
 
@@ -47,9 +47,9 @@ separate from Windows publisher signing.
 
 ## Installation and update state
 
-Programs live at `%LOCALAPPDATA%/Programs/OpenHero68`, with a stable
-`OpenHero68.exe` starter and `versions/X.Y.Z` payload directories. Configuration
-and logs stay at `%LOCALAPPDATA%/OpenHero68/rgb-service`. `installation.json`
+Programs live at `%LOCALAPPDATA%/Programs/OpenAula`, with a stable
+`OpenAula.exe` starter and `versions/X.Y.Z` payload directories. Configuration
+and logs stay at `%LOCALAPPDATA%/OpenAula/rgb-service`. `installation.json`
 records active/previous versions and shortcut/Auto-start choices.
 
 The worker stages downloads under `rgb-service/updates/<operationId>` and runs

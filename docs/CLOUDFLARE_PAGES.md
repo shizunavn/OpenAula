@@ -1,4 +1,4 @@
-# Triển khai OpenHero68 trên Cloudflare (Workers + Static Assets)
+# Triển khai OpenAula trên Cloudflare (Workers + Static Assets)
 
 Dự án triển khai dưới dạng **Cloudflare Worker kèm static assets**, không dùng các file đặc thù của Cloudflare Pages.
 Lỗi `Pages _routes.json is not supported` xuất hiện khi `_routes.json` / `_worker.js` / `functions/` (chỉ dành cho Pages) bị đưa vào bản triển khai Workers.

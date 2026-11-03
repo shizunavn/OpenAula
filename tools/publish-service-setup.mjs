@@ -2,7 +2,7 @@ import {execFileSync} from 'node:child_process'
 import {readFile} from 'node:fs/promises'
 import {createHash} from 'node:crypto'
 import path from 'node:path'
-const version=JSON.parse(await readFile('service/version.json','utf8')).version,tag='v'+version,repo='shizunavn/OpenHero68',folder=path.resolve('service/releases')
+const version=JSON.parse(await readFile('service/version.json','utf8')).version,tag='v'+version,repo='shizunavn/OpenAula',folder=path.resolve('service/releases')
 const token=process.env.GH_TOKEN??process.env.GITHUB_TOKEN
 if(!token)throw Error('GitHub token is required')
 if(process.env.GITHUB_REPOSITORY&&process.env.GITHUB_REPOSITORY!==repo)throw Error('Unexpected publication repository')
@@ -22,8 +22,8 @@ async function api(url,init={}){
 const base='https://api.github.com/repos/'+repo
 let release=await api(base+'/releases/tags/'+tag,{allow404:true})
 if(release&&!release.draft)throw Error('Release is already public; published assets are immutable')
-if(!release)release=await api(base+'/releases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag_name:tag,target_commitish:commit,name:'OpenHero68 '+tag,body,draft:true,prerelease:false})})
-for(const name of ['OpenHero68-Setup-Windows-x64.exe','OpenHero68-update.json','SHA256SUMS.txt']){
+if(!release)release=await api(base+'/releases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag_name:tag,target_commitish:commit,name:'OpenAula '+tag,body,draft:true,prerelease:false})})
+for(const name of ['OpenAula-Setup-Windows-x64.exe','OpenAula-update.json','SHA256SUMS.txt']){
  const bytes=await readFile(path.join(folder,name)),digest='sha256:'+createHash('sha256').update(bytes).digest('hex')
  let asset=release.assets.find(a=>a.name===name)
  if(asset&&(asset.size!==bytes.length||asset.digest!==digest))throw Error('Existing draft asset differs: '+name)

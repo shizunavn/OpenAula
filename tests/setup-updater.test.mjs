@@ -11,7 +11,7 @@ const {inspectSetupManifest,verifySetup}=await bundle('service/setupManifest.ts'
 const {executeTransaction}=await bundle('service/installTransaction.ts')
 const {readInstall,readUpdateStatus,saveUpdateStatus,commitInstall}=await bundle('service/installState.ts')
 const keys=generateKeyPairSync('ed25519'),key=keys.publicKey.export({format:'pem',type:'spki'}).toString()
-const bytes=Buffer.from('MZ verified setup fixture'),asset='OpenHero68-Setup-Windows-x64.exe'
+const bytes=Buffer.from('MZ verified setup fixture'),asset='OpenAula-Setup-Windows-x64.exe'
 function signed(version='0.5.1',mutate=()=>{}){
   const payload={schemaVersion:1,version,apiVersion:6,platform:'windows-x64',asset,size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};mutate(payload)
   return {payload,signature:sign(null,Buffer.from(JSON.stringify(payload)),keys.privateKey).toString('base64')}
@@ -30,8 +30,8 @@ test('setup manifest verifies signature, size, platform and digest',()=>{
   assert.throws(()=>verifySetup(signed(),Buffer.from('corrupt'),key),/checksum/)
 })
 function network(manifest,{badUrl=false,corrupt=false,status=200,prerelease=false,releaseVersion=manifest.payload.version}={}){
-  const calls=[],version=manifest.payload.version,manifestBytes=Buffer.from(JSON.stringify(manifest)),names=['OpenHero68-update.json',asset]
-  const release={tag_name:'v'+releaseVersion,prerelease,assets:names.map((name,i)=>({name,size:i?bytes.length:manifestBytes.length,browser_download_url:(badUrl?'https://evil.test/':'https://github.com/shizunavn/OpenHero68/releases/download/v'+version+'/')+name}))}
+  const calls=[],version=manifest.payload.version,manifestBytes=Buffer.from(JSON.stringify(manifest)),names=['OpenAula-update.json',asset]
+  const release={tag_name:'v'+releaseVersion,prerelease,assets:names.map((name,i)=>({name,size:i?bytes.length:manifestBytes.length,browser_download_url:(badUrl?'https://evil.test/':'https://github.com/shizunavn/OpenAula/releases/download/v'+version+'/')+name}))}
   const fetch=async url=>{calls.push(url);if(url.endsWith('/latest'))return Response.json(release,{status});return new Response(url.endsWith('.json')?manifestBytes:corrupt?Buffer.from('invalid'):bytes)}
   return {fetch,calls}
 }

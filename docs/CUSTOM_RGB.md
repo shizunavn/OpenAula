@@ -46,7 +46,7 @@ A Windows job object makes the helper processes end with the launcher.
 The control panel is http://127.0.0.1:16868/ (Onboard, Exit service, import,
 and Check for updates).
 Configuration and local transport logs are in
-`%LOCALAPPDATA%/OpenHero68/rgb-service`. A saved enabled preset resumes when
+`%LOCALAPPDATA%/OpenAula/rgb-service`. A saved enabled preset resumes when
 the executable is restarted after an unexpected exit; graceful Exit disables
 playback. It reconnects after device I/O failures. Only one launcher runs.
 The HTTP server binds only loopback, validates Host and allowed Origin, and

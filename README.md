@@ -1,24 +1,26 @@
-# OpenHero68
+# OpenAula
 
-An open-source, browser-based configurator for the **AULA HERO68** Hall-effect keyboard, plus an optional **Windows tray service** that keeps custom RGB, Rhythm Sync and analog Xbox gamepad output running after the browser is closed.
+An open-source, browser-based configurator for **AULA HERO68 / HERO84** Hall-effect keyboards, plus an optional **Windows tray service** that keeps custom RGB, Rhythm Sync and analog Xbox gamepad output running after the browser is closed.
 
-[**Website**](https://openhero68-site.pages.dev/) · [**Open the web app**](https://open-hero68.pages.dev/) · [**Download the Windows service**](https://github.com/shizunavn/OpenHero68/releases/latest) · [Release notes](https://github.com/shizunavn/OpenHero68/releases/latest)
+Formerly OpenHero68; the rename reflects support for the wider AULA line. Existing installs upgrade in place and keep their settings.
 
-**Found a problem? [Report a bug](https://github.com/shizunavn/OpenHero68/issues/new?template=bug-report.yml)** — web app, keyboard features, Windows service or installer.
+[**Website**](https://openhero68-site.pages.dev/) · [**Open the web app**](https://open-hero68.pages.dev/) · [**Download the Windows service**](https://github.com/shizunavn/OpenAula/releases/latest) · [Release notes](https://github.com/shizunavn/OpenAula/releases/latest)
+
+**Found a problem? [Report a bug](https://github.com/shizunavn/OpenAula/issues/new?template=bug-report.yml)** — web app, keyboard features, Windows service or installer.
 
 > [!IMPORTANT]
 > **Own a HERO84 or another Hall-effect keyboard? Help bring support to your model.**
 >
-> **[Request keyboard support →](https://github.com/shizunavn/OpenHero68/issues/new?template=add-a-board.yml)** · [Submission guide](docs/SUBMIT_A_BOARD.md)
+> **[Request keyboard support →](https://github.com/shizunavn/OpenAula/issues/new?template=add-a-board.yml)** · [Submission guide](docs/SUBMIT_A_BOARD.md)
 >
 > No coding needed. Share your exact model, firmware version, USB IDs and a layout photo; write **Unknown** if you need help. Protocol captures are optional. Owners who can test on real hardware are especially welcome.
 >
 > **Currently verified: AULA HERO68.** HERO84 and other models still need protocol and hardware validation. The Windows service has HERO84 code paths (84-key RGB frames, Hall stream, Rhythm), but they have not been tested on a real HERO84.
 
-![Openhero68 Main Page](docs/images/Open-hero68.png)
-![OpenHero68 RGB Settings page](docs/images/RGB-Setting-Page.png)
+![OpenAula Main Page](docs/images/Open-hero68.png)
+![OpenAula RGB Settings page](docs/images/RGB-Setting-Page.png)
 
-> **Unofficial project.** OpenHero68 is a community effort based on reverse engineering. It is not affiliated with or endorsed by AULA or the makers of Wootility.
+> **Unofficial project.** OpenAula is a community effort based on reverse engineering. It is not affiliated with or endorsed by AULA or the makers of Wootility.
 
 ## Contents
 
@@ -84,8 +86,8 @@ Open the HTTPS URL printed by Vite. WebHID requires a secure context, so Vite cr
 
 ## RGB tray service (Windows)
 
-1. Download and run the Windows x64 setup EXE from [Releases](https://github.com/shizunavn/OpenHero68/releases/latest). Choose Desktop shortcut (on by default) and optional Auto-start (off by default). The optional Gamepad driver task appears only when the driver is not installed.
-2. Open OpenHero68 from Start Menu or the Desktop shortcut. An **H** icon appears in the system tray.
+1. Download and run the Windows x64 setup EXE from [Releases](https://github.com/shizunavn/OpenAula/releases/latest). Choose Desktop shortcut (on by default) and optional Auto-start (off by default). The optional Gamepad driver task appears only when the driver is not installed.
+2. Open OpenAula from Start Menu or the Desktop shortcut. An **H** icon appears in the system tray.
 3. Open the web app and choose **Allow** if the browser asks for access to apps and services on this device.
 4. Go to **RGB Settings → Custom Effects** or **Rhythm Sync**, pick a preset and click **Start Custom** or **Start Rhythm Sync**. Running edits sync automatically; returning to the editor joins existing playback.
 5. Close the browser if you like — playback continues. Right-click the tray icon for controls.
@@ -97,7 +99,7 @@ Gamepad starts disabled whenever the service starts. Once enabled, it keeps runn
 | | |
 | --- | --- |
 | Control panel | <http://127.0.0.1:16868/> |
-| Presets and logs | `%LOCALAPPDATA%\OpenHero68\rgb-service` |
+| Presets and logs | `%LOCALAPPDATA%\OpenAula\rgb-service` |
 | Auto-start | Optional, per Windows account, off by default. Uses the installed stable launcher. |
 | Allowed origins | The deployed web app and `localhost:5173`. For another host, start the service with `--allow-origin https://your-host:port`. |
 
@@ -164,7 +166,7 @@ npm run prepare:setup
 npm run build:setup
 ```
 
-The launcher and HID bridge are compiled with MSVC. The TypeScript RGB engine and the Node runtime are bundled into `service/dist/`. Packaging writes `OpenHero68-Setup-Windows-x64.exe` to `service/releases/`. `service/version.json` controls the service version, API and pinned toolchain. MSVC is discovered using vswhere; `HERO68_VCVARS` remains an override.
+The launcher and HID bridge are compiled with MSVC. The TypeScript RGB engine and the Node runtime are bundled into `service/dist/`. Packaging writes `OpenAula-Setup-Windows-x64.exe` to `service/releases/`. `service/version.json` controls the service version, API and pinned toolchain. MSVC is discovered using vswhere; `HERO68_VCVARS` remains an override.
 
 Run `npm run test:setup` for isolated installer/update/rollback smoke tests. See [Setup and release operations](docs/SETUP_UPDATES.md) for release signing and GitHub Actions.
 
@@ -211,7 +213,7 @@ docs/                Reverse-engineering notes, feature docs, release notes
 ## Contributing
 
 Want another keyboard model or hardware revision supported? Use the
-[keyboard support form](https://github.com/shizunavn/OpenHero68/issues/new?template=add-a-board.yml)
+[keyboard support form](https://github.com/shizunavn/OpenAula/issues/new?template=add-a-board.yml)
 and [submission guide](docs/SUBMIT_A_BOARD.md). Include the exact model, installed
 firmware, USB IDs for each connection and layout. Protocol captures are optional;
 you can submit basic details first and volunteer for hardware testing later.
@@ -223,7 +225,7 @@ npm run build
 npm test
 ```
 
-Found a problem? Use the [bug report form](https://github.com/shizunavn/OpenHero68/issues/new?template=bug-report.yml)
+Found a problem? Use the [bug report form](https://github.com/shizunavn/OpenAula/issues/new?template=bug-report.yml)
 and tell us what happened in your own words. **Only the problem description is required.**
 English and Vietnamese reports are welcome; screenshots, steps and technical details are optional.
 You do not need to find logs or version numbers to report a bug. We can ask follow-up questions if needed.

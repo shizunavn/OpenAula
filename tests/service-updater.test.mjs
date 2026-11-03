@@ -16,10 +16,10 @@ const prefix='https://github.com/shizunavn/OpenHero68-RGB-Service/releases/downl
 
 function fixture({version='0.2.3',minLauncher='0.2.3',apiVersion=6,coreVersion='0.2.3',launcherVersion='0.2.3',mutate=()=>{}}={}){
   const core=Buffer.from('verified core '+version),zip=Buffer.from('verified Windows package '+version)
-  const payload={version,apiVersion,minLauncher,sha256:digest(core).slice(7),size:core.length,asset:'OpenHero68-RGB-core.cjs'}
+  const payload={version,apiVersion,minLauncher,sha256:digest(core).slice(7),size:core.length,asset:'OpenAula-RGB-core.cjs'}
   const signed={payload,signature:sign(null,Buffer.from(JSON.stringify(payload)),pair.privateKey).toString('base64')}
   const manifest=Buffer.from(JSON.stringify(signed))
-  const values=new Map([['OpenHero68-RGB-core.json',manifest],['OpenHero68-RGB-core.cjs',core],['OpenHero68-RGB-Windows-x64.zip',zip]])
+  const values=new Map([['OpenAula-RGB-core.json',manifest],['OpenAula-RGB-core.cjs',core],['OpenAula-RGB-Windows-x64.zip',zip]])
   const release={tag_name:'v'+version,assets:[...values].map(([name,bytes])=>({name,size:bytes.length,digest:digest(bytes),browser_download_url:prefix+version+'/'+name}))}
   mutate({release,signed,values})
   const calls=[]
@@ -62,13 +62,15 @@ test('compatible core staging reuses the signed manifest and does not download t
 })
 
 test('renamed GitHub repository supports signed core and full Windows package downloads',async()=>{
-  const rename=({release})=>{for(const asset of release.assets)asset.browser_download_url=asset.browser_download_url.replace('OpenHero68-RGB-Service/','OpenHero68/')}
+  // GitHub rewrites asset URLs to the current repository name after a rename;
+  // the allowlist has to accept both spellings.
+  const rename=({release})=>{for(const asset of release.assets)asset.browser_download_url=asset.browser_download_url.replace('OpenHero68-RGB-Service/','OpenAula/')}
   await withUpdater({version:'0.3.1',coreVersion:'0.3.0',launcherVersion:'0.3.0',minLauncher:'0.3.0',mutate:rename},async(updater,f)=>{
     const release=await updater.latestCore()
     assert.equal(release.requiresFullPackage,false)
     assert.equal(await updater.stageCoreUpdate(release),'0.3.1')
-    assert.equal(f.calls[0],'https://api.github.com/repos/shizunavn/OpenHero68/releases/latest')
-    assert.ok(f.calls.slice(1).every(url=>url.startsWith('https://github.com/shizunavn/OpenHero68/releases/download/')))
+    assert.equal(f.calls[0],'https://api.github.com/repos/shizunavn/OpenAula/releases/latest')
+    assert.ok(f.calls.slice(1).every(url=>url.startsWith('https://github.com/shizunavn/OpenAula/releases/download/')))
   })
   await withUpdater({version:'0.3.1',coreVersion:'0.2.3',launcherVersion:'0.2.3',minLauncher:'0.3.0',mutate:rename},async(updater,f)=>{
     const release=await updater.latestCore()
@@ -79,12 +81,12 @@ test('renamed GitHub repository supports signed core and full Windows package do
 
 test('update source allowlist rejects lookalike hosts, owners and repository names before fetch',async()=>{
   for(const url of [
-    'https://github.com.evil.test/shizunavn/OpenHero68/releases/download/v0.3.1/core.json',
+    'https://github.com.evil.test/shizunavn/OpenAula/releases/download/v0.3.1/core.json',
     'https://github.com/other/OpenHero68/releases/download/v0.3.1/core.json',
-    'https://github.com/shizunavn/OpenHero68-fake/releases/download/v0.3.1/core.json',
+    'https://github.com/shizunavn/OpenAula-fake/releases/download/v0.3.1/core.json',
     'https://github.com/shizunavn/OpenHero68-RGB-Service-fake/releases/download/v0.3.1/core.json',
-    'http://github.com/shizunavn/OpenHero68/releases/download/v0.3.1/core.json',
-    'https://github.com/shizunavn/OpenHero68/raw/main/core.json',
+    'http://github.com/shizunavn/OpenAula/releases/download/v0.3.1/core.json',
+    'https://github.com/shizunavn/OpenAula/raw/main/core.json',
   ])await withUpdater({mutate:({release})=>release.assets[0].browser_download_url=url},async(updater,f)=>{
     await assert.rejects(updater.latestCore(),/Unexpected update source/)
     assert.equal(f.calls.length,1)
@@ -114,7 +116,7 @@ test('concurrent checks share requests; a failed check can be retried',async()=>
 
 test('tampered manifest, release mismatch and malformed assets fail before installation',async()=>{
   for(const mutate of [
-    ({values,signed})=>values.set('OpenHero68-RGB-core.json',Buffer.from(JSON.stringify({...signed,signature:'AAAA'}))),
+    ({values,signed})=>values.set('OpenAula-RGB-core.json',Buffer.from(JSON.stringify({...signed,signature:'AAAA'}))),
     ({release})=>release.tag_name='v0.2.4',
     ({release})=>release.assets[0].size=9000,
     ({release})=>release.assets[0].browser_download_url='https://example.com/core.json'
@@ -122,11 +124,11 @@ test('tampered manifest, release mismatch and malformed assets fail before insta
 })
 
 test('corrupt ZIP or core never creates an installed or pending update',async()=>{
-  await withUpdater({launcherVersion:'0.2.1',mutate:({values})=>values.set('OpenHero68-RGB-Windows-x64.zip',Buffer.from('corrupt'))},async(updater,_,state)=>{
+  await withUpdater({launcherVersion:'0.2.1',mutate:({values})=>values.set('OpenAula-RGB-Windows-x64.zip',Buffer.from('corrupt'))},async(updater,_,state)=>{
     await assert.rejects(updater.downloadFullPackage(await updater.latestCore()),/checksum/)
-    await assert.rejects(readFile(path.join(state,'downloads/OpenHero68-RGB-Windows-x64-v0.2.3.zip')),/ENOENT/)
+    await assert.rejects(readFile(path.join(state,'downloads/OpenAula-RGB-Windows-x64-v0.2.3.zip')),/ENOENT/)
   })
-  await withUpdater({version:'0.2.4',mutate:({values})=>values.set('OpenHero68-RGB-core.cjs',Buffer.from('corrupt'))},async(updater,_,state)=>{
+  await withUpdater({version:'0.2.4',mutate:({values})=>values.set('OpenAula-RGB-core.cjs',Buffer.from('corrupt'))},async(updater,_,state)=>{
     await assert.rejects(updater.stageCoreUpdate(),/checksum/)
     await assert.rejects(readFile(path.join(state,'core/pending.json')),/ENOENT/)
   })

@@ -1,6 +1,6 @@
-export const serviceControlPanel=`<!doctype html><html lang="en"><meta charset="utf-8"><title>OpenHero68</title>
+export const serviceControlPanel=`<!doctype html><html lang="en"><meta charset="utf-8"><title>OpenAula</title>
 <style>body{font:16px system-ui;background:#171a1b;color:#eee;max-width:740px;margin:60px auto;padding:20px}button,input{padding:12px;margin:8px}pre{white-space:pre-wrap}button{cursor:pointer}</style>
-<h1>OpenHero68</h1><input id="file" type="file" accept=".json">
+<h1>OpenAula</h1><input id="file" type="file" accept=".json">
 <button onclick="start()">Start saved RGB</button><button onclick="post('/mode',{mode:'onboard'})">Onboard RGB</button>
 <button id="apply" onclick="apply()">Update app / Cập nhật</button><button onclick="post('/shutdown')">Exit app</button>
 <p id="update" role="status"></p><progress id="progress" hidden></progress><pre id="status"></pre>

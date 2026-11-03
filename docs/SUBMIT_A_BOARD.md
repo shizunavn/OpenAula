@@ -1,11 +1,11 @@
 # Request support for a keyboard
 
-Use the [keyboard support form](https://github.com/shizunavn/OpenHero68/issues/new?template=add-a-board.yml)
+Use the [keyboard support form](https://github.com/shizunavn/OpenAula/issues/new?template=add-a-board.yml)
 to request a new model, hardware revision or connection mode. You do not need to
 reverse-engineer the keyboard first. Complete the basic fields and write
 **Unknown** where the form allows it; captures are optional.
 
-OpenHero68 currently targets the AULA HERO68. HERO84 and other models need their
+OpenAula currently targets the AULA HERO68. HERO84 and other models need their
 own evidence and physical testing. Similar release dates, names, key counts or
 USB IDs are useful clues, but do not establish protocol compatibility.
 
@@ -34,7 +34,7 @@ USB IDs are useful clues, but do not establish protocol compatibility.
 6. **Layout:** attach a clear top-down photo or product layout link, key count,
    ANSI/ISO/JIS if known, and any knob, extra keys or side LEDs. A photo of the
    model label helps identify revisions; hide serial numbers and barcodes first.
-7. **Environment and goals:** give OS/browser versions, OpenHero68 versions if
+7. **Environment and goals:** give OS/browser versions, OpenAula versions if
    already tested, desired features, and whether you can test on this exact board.
 
 ## Firmware packages (optional)
@@ -62,7 +62,7 @@ explicitly rather than presenting them as official firmware.
 
 Only collect what you are comfortable collecting. There is no required helper
 script or coding step. On an unsupported model, capture the **official app's**
-normal operations rather than sending OpenHero68's HERO68 commands to it.
+normal operations rather than sending OpenAula's HERO68 commands to it.
 
 ### HID identity and descriptors
 

@@ -1,7 +1,7 @@
 # HERO 84 HE web driver, captured through the bundle
 
 How a HERO 84 HE (or any other keyboard the AULA web driver supports but
-OpenHero68 does not) gets its packets recorded, without USBPcap or Wireshark and
+OpenAula does not) gets its packets recorded, without USBPcap or Wireshark and
 without asking the person holding the keyboard to do anything technical.
 
 ## What is shipped
@@ -61,7 +61,7 @@ one setting at a time, saved each time, so packets can be matched to actions.
 
 `at` is milliseconds since the log was started; `hex` is the report as the
 keyboard received or sent it. Frames are the vendor transport's own framing, so
-read them the way `chunk`/bundle decodes them, not as OpenHero68 reports.
+read them the way `chunk`/bundle decodes them, not as OpenAula reports.
 
 ## Bundle table (for reference)
 
@@ -74,7 +74,7 @@ HERO 68 HE wireless (pid 4272), 2.4G Wireless 8K Receiver (0x3554/0xFB35),
 HERO 99 HE, HERO 100 (2.4G), HERO 84 HE JIS   — 0x372E / 0x103E, report id 9
 ```
 
-The uuid each entry carries is what OpenHero68's detection compares against; a
+The uuid each entry carries is what OpenAula's detection compares against; a
 new model must be added to `src/keyboard/devices.ts` only after its packets are
 verified, not just because the bundle lists it.
 
