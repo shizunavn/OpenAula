@@ -12,8 +12,9 @@ const REDIRECT_DELAY_MS = 8000
  * saved bookmarks do not break, but it is no longer the canonical copy: show a
  * notice with a manual link, then move the visitor on its own.
  *
- * The countdown is only armed when the tab is visible, so someone who has the
- * old page open in the background is not thrown to a new origin unprompted.
+ * The deadline is wall-clock, not a tick count: a background tab has its timers
+ * throttled to about once a minute, and a hidden tab must still move on when the
+ * visitor returns instead of freezing at whatever number it reached.
  */
 export default function LegacyHostBanner() {
   const { tr } = useI18n()
@@ -23,17 +24,25 @@ export default function LegacyHostBanner() {
 
   useEffect(() => {
     if (!legacy) return
-    let remaining = REDIRECT_DELAY_MS / 1000
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') return
-      remaining -= 1
-      setSeconds(remaining)
-      if (remaining <= 0) {
-        window.clearInterval(timer)
-        window.location.replace(target)
-      }
-    }, 1000)
-    return () => window.clearInterval(timer)
+    const deadline = Date.now() + REDIRECT_DELAY_MS
+    const go = () => {
+      window.clearInterval(timer)
+      window.location.replace(target)
+    }
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+      setSeconds(left)
+      if (left === 0) go()
+    }
+    const timer = window.setInterval(tick, 250)
+    // Timers are throttled while hidden, so the tab may wake up past the
+    // deadline; catch up as soon as the visitor can actually see the page.
+    const onVisible = () => { if (document.visibilityState === 'visible') tick() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [legacy, target])
 
   if (!legacy) return null
