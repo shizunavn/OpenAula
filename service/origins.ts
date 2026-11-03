@@ -1,5 +1,8 @@
 export function serviceOrigins(port: number, allowedOrigins = process.env.HERO68_ALLOWED_ORIGINS ?? '') {
   const origins = new Set([
+    'https://open-aula.pages.dev',
+    // The pre-rename host keeps working so an old bookmark can still drive the
+    // service while its visitor follows the move notice.
     'https://open-hero68.pages.dev',
     'http://localhost:5173', 'https://localhost:5173',
     'http://127.0.0.1:5173', 'https://127.0.0.1:5173',

@@ -11,11 +11,11 @@ class Permission extends EventTarget {
 }
 function pendingFetch(_,options){return new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true}))}
 
-test('public Pages origin is allowed exactly, while other sites and non-loopback hosts stay blocked',()=>{
+test('public Pages origins are allowed exactly, while other sites and non-loopback hosts stay blocked',()=>{
   const origins=serviceOrigins(16868,'')
-  assert.equal(isAllowedServiceRequest('127.0.0.1:16868','https://open-hero68.pages.dev',origins,16868),true)
+  for(const origin of ['https://open-aula.pages.dev','https://open-hero68.pages.dev'])assert.equal(isAllowedServiceRequest('127.0.0.1:16868',origin,origins,16868),true)
   assert.equal(isAllowedServiceRequest('localhost:16868',undefined,origins,16868),true)
-  for(const origin of ['http://open-hero68.pages.dev','https://other.pages.dev','https://preview.open-hero68.pages.dev','https://open-hero68.pages.dev.evil.test','null'])assert.equal(isAllowedServiceRequest('127.0.0.1:16868',origin,origins,16868),false)
+  for(const origin of ['http://open-aula.pages.dev','http://open-hero68.pages.dev','https://other.pages.dev','https://preview.open-aula.pages.dev','https://preview.open-hero68.pages.dev','https://open-aula.pages.dev.evil.test','https://open-hero68.pages.dev.evil.test','null'])assert.equal(isAllowedServiceRequest('127.0.0.1:16868',origin,origins,16868),false)
   for(const host of ['evil.test:16868','192.168.1.10:16868','127.0.0.1:1234',undefined])assert.equal(isAllowedServiceRequest(host,'https://open-hero68.pages.dev',origins,16868),false)
 })
 

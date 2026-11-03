@@ -16,7 +16,7 @@
     "preview": "vite preview",
     "cf:dev": "npm run build && npx wrangler@4 dev",
     "cf:deploy": "npm run build && npx wrangler@4 deploy",
-    "pages:deploy": "npm run build && npx wrangler@4 pages deploy dist --project-name open-hero68 --branch main",
+    "pages:deploy": "npm run build && npx wrangler@4 pages deploy dist --project-name open-aula --branch main",
     "test:profile-remap": "node --test tests/profile-remap.test.mjs",
     "prepare:setup": "node tools/prepare-setup-tools.mjs",
     "build:setup": "npm run build:service && node tools/package-service-setup.mjs",

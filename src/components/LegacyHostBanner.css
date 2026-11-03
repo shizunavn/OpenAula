@@ -1,0 +1,52 @@
+.legacy-host-banner {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  font-size: 13px;
+  color: #1b1a12;
+  background: linear-gradient(90deg, #f5d76e, #f7e9a0);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 35%);
+}
+
+.legacy-host-text {
+  font-weight: 600;
+}
+
+.legacy-host-link {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 12px;
+  font-weight: 700;
+  color: inherit;
+  background: #1b1a12;
+  border-radius: 999px;
+  color: #f7e9a0;
+  text-decoration: none;
+}
+
+.legacy-host-link:hover {
+  background: #33301f;
+}
+
+.legacy-host-countdown {
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .legacy-host-banner {
+    animation: legacy-host-slide-in 220ms ease-out;
+  }
+
+  @keyframes legacy-host-slide-in {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+  }
+}

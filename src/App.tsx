@@ -82,6 +82,7 @@ import { RgbPage } from './pages/RgbPage'
 import BackgroundServicePage from './pages/BackgroundServicePage'
 import DiagnosticsPage from './pages/DiagnosticsPage'
 import LocalServicePermissionGuide from './components/LocalServicePermissionGuide'
+import LegacyHostBanner from './components/LegacyHostBanner'
 import { ActuationPage } from './pages/ActuationPage'
 import { RapidPage } from './pages/RapidPage'
 import { TachyonContext } from './app/TachyonContext'
@@ -1145,6 +1146,7 @@ function App() {
       className={`app-shell ${compactSidebar ? 'is-sidebar-compact' : ''}`}
     >
       <LocalServicePermissionGuide />
+      <LegacyHostBanner />
       <aside className="rail">
         <div className="brand-mark"><img src={logo} alt={BRAND.displayName} /></div>
         <div className="rail-stack">
