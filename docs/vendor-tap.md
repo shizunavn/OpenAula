@@ -15,8 +15,10 @@ packets it exchanges with the keyboard:
 | `public/vendor-tap/index.html` | Volunteer-facing page, Vietnamese |
 | `public/vendor-tap/capture.js` | Opens the vendor app in an iframe, start/save buttons, counter |
 | `public/vendor-tap/app.html` | Hosts the vendor app; calls `loadTappedApp('CPb3bToC')` |
-| `public/vendor-tap/tap.js` | Fetches the bundle, patches two call sites, runs the patched module |
-| `public/vendor-tap/vendor/*` | Verbatim copy of `https://hero.aulastar.com` (bundle + CSS) |
+| `public/vendor-tap/tap.js` | Fetches the bundle, patches two call sites, hands the text to the loader |
+| `public/vendor-tap/loader.js` | Imports the patched bundle plus each chunk as blob modules whose relative specifiers point at `vendor/` |
+| `public/vendor-tap/module-worker.js` | Fetches the chunk texts for the loader (the page evaluates them) |
+| `public/vendor-tap/vendor/*` | Verbatim copy of `https://hero.aulastar.com` (bundle, CSS, all 77 reachable chunks) |
 | `tools/copy-vendor-tap.mjs` | Re-copies `vendor/*` from `E:/hero84-re/webdriver` |
 | `tests/vendor-tap.test.mjs` | Pins the two patch sites to the copy in `vendor/`, plus page/tap contracts |
 
@@ -28,6 +30,13 @@ live in the main bundle (not in a lazy chunk):
 
 Both are routed through `window.__OH_TAP.__ohTap`, which logs 64-byte hex and
 returns the payload unchanged, so the vendor app behaves exactly as before.
+
+The patched text cannot be imported from a blob URL directly (relative
+`./chunk-*.js` specifiers do not resolve there), so `loader.js` imports it as a
+blob module with every relative specifier rewritten to the absolute URL under
+`vendor/`; the vendor code still runs in the page realm, the worker only
+fetches chunk texts. The bundle is a lazy-loading graph, so the copy is
+complete when you run `node tools/copy-vendor-tap.mjs` after a vendor rebuild.
 
 ## Volunteer checklist (what the page says)
 

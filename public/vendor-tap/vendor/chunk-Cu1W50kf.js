@@ -1,0 +1,1 @@
+import{d as o,u as t}from"./app-CPb3bToC.js";const l=o("model_kb_by_v3_light_edge",{state:()=>({mode:0,color:{r:255,g:0,b:0},mix_color:!0,speed:0,bright:0}),actions:{async fetch(){try{return await(await t().controller).fetch_light_edge(this)}catch{return!1}},async sync(){try{return await(await t().controller).sync_light_edge(this)}catch{return!1}}},persist:!0});export{l as m};
