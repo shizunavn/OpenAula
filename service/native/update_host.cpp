@@ -37,7 +37,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     }
     if(argc>1 && std::wstring(argv[1])==L"--probe-driver") {
         if(setupTestMode()){
-            wchar_t fixture[32];GetEnvironmentVariableW(L"OPENHERO68_TEST_DRIVER",fixture,32);
+            wchar_t fixture[32];GetEnvironmentVariableW(L"OPENAULA_TEST_DRIVER",fixture,32);
             return std::wstring(fixture)==L"ready"?0:std::wstring(fixture)==L"error"?2:1;
         }
         HKEY key; bool installed=RegOpenKeyExW(HKEY_LOCAL_MACHINE,L"SYSTEM\\CurrentControlSet\\Services\\ViGEmBus",0,KEY_READ,&key)==ERROR_SUCCESS;
