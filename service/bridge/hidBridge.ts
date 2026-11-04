@@ -29,6 +29,10 @@ export class NativeBridge {
   // Downloaded cores live in the state folder; the supervisor retains the
   // installed app folder as cwd, where its compatible native helper resides.
   private readonly process: ReturnType<typeof spawn>;
+  // stdio is declared as 'pipe' above, so these streams exist at runtime.
+  private readonly stdout: NodeJS.ReadableStream;
+  private readonly stdin: NodeJS.WritableStream;
+  private readonly stderr: NodeJS.ReadableStream;
   private readonly ctx: ServiceContext;
   private readonly binaryDir: string;
   private readonly handlers: NativeBridgeHandlers;
@@ -59,8 +63,11 @@ export class NativeBridge {
         windowsHide: true,
       },
     );
+    this.stdout = this.process.stdout!;
+    this.stdin = this.process.stdin!;
+    this.stderr = this.process.stderr!;
     createInterface({
-      input: this.process.stdout,
+      input: this.stdout,
     }).on('line', line => {
       if (line.startsWith('gamepad-input:')) {
         try {
@@ -199,7 +206,7 @@ export class NativeBridge {
       }
     });
 
-    this.process.stderr.on('data', data => this.ctx.log(`bridge: ${data}`));
+    this.stderr.on('data', data => this.ctx.log(`bridge: ${data}`));
     this.process.on('error', e => this.fail(e));
     this.process.on('exit', () => this.fail(Error('Native HID bridge exited')));
   }
@@ -258,7 +265,7 @@ export class NativeBridge {
         reject,
         timer,
       };
-      this.process.stdin.write(value + '\n', e => {
+      this.stdin.write(value + '\n', e => {
         if (e) {
           this.fail(e);
         }
@@ -364,6 +371,6 @@ export class NativeBridge {
   }
 
   end() {
-    this.process.stdin.end();
+    this.stdin.end();
   }
 }
