@@ -745,7 +745,7 @@ export default function GamepadPage({
         }]))} />
         </div>
         {error && <p className="gp-error" role="alert">
-            {error}
+            {t(error)}
           </p>}
         <div className="gp-status">
           <span className={status?.enabled ? "on" : ""}>

@@ -1,4 +1,5 @@
 import type { GamepadConfiguration, GamepadReport } from "../keyboard/gamepad";
+import { GAMEPAD_TOGGLE_SERVICE_VERSION } from "../keyboard/gamepad";
 import { fetchLocalService } from "./localServiceAccess";
 import { hero68DeviceManager } from "./hero68/webhid";
 import { hero68HallStream } from "./hero68/hallStream";
@@ -82,9 +83,16 @@ async function request(path: string, value?: unknown): Promise<GamepadStatus> {
   }, path === "/gamepad/start" || path === "/gamepad/toggle" ? 30000 : 5000);
   const v = await r.json();
   if (!r.ok) {
-    throw Error(v.error ?? "Gamepad service unavailable");
+    // A service older than the app answers 404 "Unknown endpoint"; name the
+    // update instead of surfacing the bare routing error.
+    throw new GamepadServiceError(path === "/gamepad/toggle" && r.status === 404 ? `Update the background app to ${GAMEPAD_TOGGLE_SERVICE_VERSION} or later to use the Gamepad toggle shortcut.` : v.error ?? "Gamepad service unavailable", r.status);
   }
   return v;
+}
+export class GamepadServiceError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
 }
 /** Stop and drain WebHID before giving the service ownership of the USB channel. */
 export async function useSharedHallService() {

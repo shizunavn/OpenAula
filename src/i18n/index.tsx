@@ -736,6 +736,7 @@ const VI: Record<string, string> = {
   "Blooming Passion": "Hoa nở",
   "Flowers of light bloom from changing centers.": "Những bông sáng nở ra từ các tâm thay đổi.",
   "Update the background app to use this rhythm mode.": "Cập nhật app nền để dùng chế độ nhịp này.",
+  "Update the background app to 1.1.0 or later to use the Gamepad toggle shortcut.": "Cập nhật ứng dụng nền Windows lên 1.1.0 trở lên để dùng phím tắt bật/tắt Gamepad.",
   "Dynamic Spectrum": "Phổ động",
   "Frequency detail, from bass to treble.": "Hiển thị chi tiết tần số từ bass đến treble.",
   "Off": "Tắt",

@@ -12,6 +12,8 @@ export type GamepadBinding = {
 };
 export const GAMEPAD_TOGGLE_MODIFIERS = (["ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft"] as const);
 export const isToggleModifier = (keyId: string) => (GAMEPAD_TOGGLE_MODIFIERS as readonly string[]).includes(keyId);
+/** Minimum background-service version that understands POST /gamepad/toggle. */
+export const GAMEPAD_TOGGLE_SERVICE_VERSION = "1.1.0";
 export function normalizeToggleKeybind(keys: readonly string[]): string[] {
   if (!Array.isArray(keys) || keys.length > 4) {
     throw Error("Invalid gamepad toggle keybind");
