@@ -1,7 +1,11 @@
 #define NOMINMAX
 #include <windows.h>
-#include <hidpi.h>
+// hidpi.h uses USAGE without including its definition; hidsdi.h pulls
+// hidusage.h first. functiondiscoverykeys_devpkey.h, reached through
+// setupapi.h, only defines its keys against DEFINE_PROPERTYKEY from mmdeviceapi.h.
+#include <mmdeviceapi.h>
 #include <hidsdi.h>
+#include <hidpi.h>
 #include <psapi.h>
 #include <setupapi.h>
 #pragma comment(lib, "psapi.lib")
