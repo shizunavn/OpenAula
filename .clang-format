@@ -8,3 +8,6 @@ AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: Never
 PointerAlignment: Left
 NamespaceIndentation: None
+# Windows SDK headers fail unless they are included in dependency order
+# (hidsdi.h before hidpi.h, mmdeviceapi.h before functiondiscoverykeys_devpkey.h).
+SortIncludes: Never

@@ -3,10 +3,10 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <mmdeviceapi.h>
 #include <audioclient.h>
 #include <avrt.h>
 #include <functiondiscoverykeys_devpkey.h>
-#include <mmdeviceapi.h>
 #include <wrl/client.h>
 #include "rhythm_core.h"
 #include <atomic>
