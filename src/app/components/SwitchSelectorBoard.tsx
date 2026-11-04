@@ -1,6 +1,10 @@
+import type { CSSProperties } from 'react'
 import { heroLayout } from '../../keyboard/layout'
 import type { HeroDeviceModelId } from '../../keyboard/devices'
 import { SwitchStemMenuIcon } from './SwitchStemMenuIcon'
+
+// React's CSSProperties has no index signature for custom properties.
+const keyUnits = (units: number) => ({ '--key-units': units }) as CSSProperties
 
 function SwitchSelectorBoard({
   model,
@@ -24,7 +28,7 @@ function SwitchSelectorBoard({
                 key={key.id}
                 type="button"
                 className={`switch-board-key ${selectedKeys.has(key.id) ? 'is-selected' : ''}`}
-                style={{ ['--key-units' as any]: key.width ?? 1 }}
+                style={keyUnits(key.width ?? 1)}
                 onClick={() => onToggleKey(key.id)}
                 aria-label={key.label}
               >

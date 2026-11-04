@@ -117,10 +117,8 @@ function ActiveRgbSettingsPage({
   useEffect(() => {
     try {
       sessionStorage.setItem(`${BRAND.storagePrefix}:rgb-tab`, tab);
-    } catch (ignoredError) {
-      /* Ignored non-fatal error. */
-      void ignoredError;
-    }
+    } catch {
+}
   }, [tab]);
   useEffect(() => {
     onTabChange?.(tab);

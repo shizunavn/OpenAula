@@ -19,9 +19,8 @@ export async function profileRequest(packet: Uint8Array, request: (packet: Uint8
         if (active.command === 0x90 && active.zone === 0 && active.checksumValid && active.data[0] === packet[7]) {
           return decodeReport(packet);
         }
-      } catch (ignoredError) {
-        void ignoredError;
-      } /* Retry the same idempotent slot; do not retry other writes. */
+      } catch {
+} /* Retry the same idempotent slot; do not retry other writes. */
       if (attempt >= 2) {
         throw error;
       }

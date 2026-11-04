@@ -40,7 +40,6 @@ export function migrateLegacyStateDir(localAppData = process.env.LOCALAPPDATA ??
       recursive: true,
       force: true
     });
-  } catch (ignoredError) {
-    void ignoredError;
-  } // The copy already succeeded; a locked old folder is harmless.
+  } catch {
+} // The copy already succeeded; a locked old folder is harmless.
 }

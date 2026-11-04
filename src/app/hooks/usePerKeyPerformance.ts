@@ -9,6 +9,15 @@ export type UsePerKeyPerformanceOptions = {
   modelKeyIds: readonly string[];
   selectedKeys: Set<string>;
 };
+/**
+ * Manages per-key Actuation Point, Rapid Trigger, Split Sensitivity, Dead Zone, and Switch Profile state.
+ *
+ * Multi-key selection rules:
+ * - A parameter reports `mixed = true` (`selectionHasMixedValues`) when two or more selected keys
+ *   hold different values for that parameter.
+ * - Dependent sliders (Rapid Trigger Sensitivity, Split Press/Release, and Top/Bottom Dead Zone)
+ *   are enabled only when all selected keys share an explicit common `ON` state (`!mixed && enabled`).
+ */
 export function usePerKeyPerformance({
   persistedState,
   modelKeyIds,

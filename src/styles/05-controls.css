@@ -248,3 +248,52 @@
 @media (max-width: 1120px) {
   .selector-page-grid { grid-template-columns: 1fr; }
 }
+
+.sidebar-item:focus,
+.secondary-button:focus,
+.ghost-button:focus,
+.apply-button:focus {
+  outline: none;
+}
+
+.sidebar-item:focus-visible,
+.secondary-button:focus-visible,
+.ghost-button:focus-visible,
+.apply-button:focus-visible {
+  outline: 1px solid rgba(255,212,92,.88);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px rgba(255,212,92,.14);
+}
+
+/* Mixed is a real label, independent of the browser's numeric placeholder. */
+.value-pill-input,
+.meter-value-input {
+  position: relative;
+}
+.mixed-value-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0;
+  color: #dce2e6;
+}
+.value-pill-input:focus-within .mixed-value-label,
+.meter-value-input:focus-within .mixed-value-label {
+  visibility: hidden;
+}
+.range-wrap.has-mixed-label .value-pill,
+.vertical-meter.has-mixed-label .meter-value {
+  min-width: 68px;
+  flex-shrink: 0;
+}
+.range-wrap.has-mixed-label .value-pill-input input,
+.vertical-meter.has-mixed-label .meter-value-input input {
+  width: 52px;
+  font-size: 13px;
+  letter-spacing: 0;
+}

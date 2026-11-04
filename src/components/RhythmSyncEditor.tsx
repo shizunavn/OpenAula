@@ -186,10 +186,8 @@ export default function RhythmSyncEditor({
   useEffect(() => {
     try {
       localStorage.setItem(draftKey, JSON.stringify(config));
-    } catch (ignoredError) {
-      /* Ignored non-fatal error. */
-      void ignoredError;
-    }
+    } catch {
+}
   }, [config]);
   useEffect(() => {
     let cancelled = false;

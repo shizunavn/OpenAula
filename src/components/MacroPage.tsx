@@ -45,6 +45,15 @@ const mouseButtonToMacroKey: Record<number, string> = {
   3: 'MouseKey3',
   4: 'MouseKey4'
 };
+/**
+ * Macro Editor and Onboard Library Manager (CMD 0x05 protocol).
+ *
+ * Each macro stores an ordered sequence of key/mouse down-up events with per-event millisecond delays
+ * (up to MACRO_EVENT_LIMIT events per macro and MACRO_LIBRARY_LIMIT macros total).
+ * Saving writes both to browser LocalStorage and, when HERO68/HERO84 is connected, directly to the
+ * keyboard's onboard macro memory. Key assignment and playback mode (Once, Repeat N, Hold, Toggle)
+ * are configured per key in Key Remap -> Macros.
+ */
 export default function MacroPage() {
   const {
     tr
@@ -89,9 +98,8 @@ export default function MacroPage() {
       }
       validateMacro(draft, false);
       localStorage.setItem(MACRO_DRAFT_KEY, JSON.stringify(draft));
-    } catch (ignoredError) {
-      void ignoredError;
-    } /* Keep the last valid draft while an input is incomplete. */
+    } catch {
+} /* Keep the last valid draft while an input is incomplete. */
   }, [draft]);
   useEffect(() => () => {
     if (previewTimer.current) {

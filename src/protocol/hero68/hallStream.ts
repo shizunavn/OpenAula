@@ -1,15 +1,27 @@
 import { useSyncExternalStore } from 'react';
-import { calibrationDistanceExit, calibrationDistanceStart, calibrationDistanceSync, readAutoCalibration, writeAutoCalibration } from './commands';
+import {
+  calibrationDistanceExit,
+  calibrationDistanceStart,
+  calibrationDistanceSync,
+  readAutoCalibration,
+  writeAutoCalibration,
+} from './commands';
 import { decodeDistanceCalibrationLive } from './codec';
-import { HERO68_KEY_POSITIONS, HERO84_KEY_POSITIONS, keyIdToPos, posToKeyId } from './keyPositions';
+import {
+  HERO68_KEY_POSITIONS,
+  HERO84_KEY_POSITIONS,
+  keyIdToPos,
+  posToKeyId,
+} from './keyPositions';
 import { hero68DeviceManager } from './webhid';
 import { rgbService, type RgbServiceHallRecord } from '../rgbService';
 import { HERO68_DISTANCE_UNIT_MM } from './precision';
 import { runHallPolling } from './hallPolling';
 
 /** The usable HERO68/HERO84 key travel tops out around 3.4 mm. Clamp the UI to 3.40 mm so full travel visually reaches 100%. */
-export const HERO68_HALL_VISUAL_MAX_MM = (3.4 as const);
+export const HERO68_HALL_VISUAL_MAX_MM = 3.4 as const;
 export type HallStreamSource = 'direct-poll' | 'mode-poll';
+
 export type HallStreamSample = {
   keyId: string;
   pos: number;
@@ -21,6 +33,7 @@ export type HallStreamSample = {
   releaseInferred: boolean;
   timestampMs: number;
 };
+
 export type HallStreamState = {
   active: boolean;
   starting: boolean;
@@ -33,6 +46,16 @@ export type HallStreamState = {
   samples: Readonly<Record<string, HallStreamSample>>;
   keyTelemetryHz: Readonly<Record<string, number>>;
 };
+
+/**
+ * Coordinates real-time Hall travel telemetry across two transport modes:
+ * 1. Direct WebHID polling (`direct-poll` / `mode-poll`): issues `0x98/0x01` batches
+ *    directly over the browser WebHID handle when the local service is not holding
+ *    the device.
+ * 2. Shared Background Service SSE (`rgbService.hallStream` when `viaService` is true):
+ *    subscribes to `/hall/stream?keys=...` so Web UI visual feedback can coexist
+ *    with active Custom RGB or Gamepad output without fighting over the USB handle.
+ */
 class Hero68HallStream {
   #state: HallStreamState = {
     active: false,
@@ -44,7 +67,7 @@ class Hero68HallStream {
     frameCount: 0,
     telemetryHz: null,
     samples: {},
-    keyTelemetryHz: {}
+    keyTelemetryHz: {},
   };
   #listeners = new Set<() => void>();
   #unsubscribeReport: (() => void) | null = null;
@@ -62,22 +85,26 @@ class Hero68HallStream {
   #pollGeneration = 0;
   #pollPromise: Promise<void> | null = null;
   #notifyTimer: ReturnType<typeof setTimeout> | null = null;
+
   getSnapshot = (): HallStreamState => this.#state;
+
   subscribe = (listener: () => void): (() => void) => {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   };
+
   #setState(next: Partial<HallStreamState>) {
     this.#state = {
       ...this.#state,
-      ...next
+      ...next,
     };
     this.#listeners.forEach(listener => listener());
   }
+
   #publishSamples(next: Partial<HallStreamState>) {
     this.#state = {
       ...this.#state,
-      ...next
+      ...next,
     };
     if (this.#notifyTimer !== null) {
       return;
@@ -87,6 +114,7 @@ class Hero68HallStream {
       this.#listeners.forEach(listener => listener());
     }, 32);
   }
+
   #cleanupListeners() {
     if (this.#notifyTimer !== null) {
       clearTimeout(this.#notifyTimer);
@@ -112,6 +140,7 @@ class Hero68HallStream {
     this.#hostPressedKeys.clear();
     this.#sampleExpiryTimers.clear();
   }
+
   #installHostKeyFallback() {
     if (typeof window === 'undefined') {
       return;
@@ -132,7 +161,7 @@ class Hero68HallStream {
       }
       this.#hostPressedKeys.delete(event.code);
       const sample = this.#state.samples[event.code];
-      if (!sample || !sample.pressed && sample.visualDistanceMm === 0) {
+      if (!sample || (!sample.pressed && sample.visualDistanceMm === 0)) {
         return;
       }
       const released: HallStreamSample = {
@@ -140,19 +169,20 @@ class Hero68HallStream {
         visualDistanceMm: 0,
         pressed: false,
         releaseInferred: true,
-        timestampMs: performance.now()
+        timestampMs: performance.now(),
       };
       this.#setState({
         samples: {
           ...this.#state.samples,
-          [event.code]: released
-        }
+          [event.code]: released,
+        },
       });
       this.#scheduleSampleExpiry(event.code, 450);
     };
     window.addEventListener('keydown', this.#keydownHandler, true);
     window.addEventListener('keyup', this.#keyupHandler, true);
   }
+
   #recordFrameTime(now: number): number | null {
     this.#frameTimes.push(now);
     if (this.#frameTimes.length > 24) {
@@ -173,9 +203,11 @@ class Hero68HallStream {
     }
     intervals.sort((a, b) => a - b);
     const mid = Math.floor(intervals.length / 2);
-    const median = intervals.length % 2 ? intervals[mid] : (intervals[mid - 1] + intervals[mid]) / 2;
+    const median =
+      intervals.length % 2 ? intervals[mid] : (intervals[mid - 1] + intervals[mid]) / 2;
     return median > 0 ? 1000 / median : null;
   }
+
   #recordKeyFrameTime(keyId: string, now: number): number | null {
     const times = this.#keyFrameTimes.get(keyId) ?? [];
     times.push(now);
@@ -190,8 +222,9 @@ class Hero68HallStream {
       return null;
     }
     const elapsed = times[times.length - 1] - times[0];
-    return elapsed > 0 ? (times.length - 1) * 1000 / elapsed : null;
+    return elapsed > 0 ? ((times.length - 1) * 1000) / elapsed : null;
   }
+
   #scheduleSampleExpiry(keyId: string, delayMs = 900) {
     if (typeof window === 'undefined') {
       return;
@@ -203,19 +236,20 @@ class Hero68HallStream {
     const timer = window.setTimeout(() => {
       this.#sampleExpiryTimers.delete(keyId);
       const sample = this.#state.samples[keyId];
-      if (!sample || sample.pressed || !sample.releaseInferred && sample.visualDistanceMm > 0) {
+      if (!sample || sample.pressed || (!sample.releaseInferred && sample.visualDistanceMm > 0)) {
         return;
       }
       const next = {
-        ...this.#state.samples
+        ...this.#state.samples,
       };
       delete next[keyId];
       this.#setState({
-        samples: next
+        samples: next,
       });
     }, delayMs);
     this.#sampleExpiryTimers.set(keyId, timer);
   }
+
   #cancelSampleExpiry(keyId: string) {
     if (typeof window === 'undefined') {
       return;
@@ -227,22 +261,25 @@ class Hero68HallStream {
     window.clearTimeout(previous);
     this.#sampleExpiryTimers.delete(keyId);
   }
-  #ingestRecords(records: readonly {
-    keyId: number;
-    distanceUnits: number;
-    adc: number;
-    pressed: boolean;
-  }[]) {
+
+  #ingestRecords(
+    records: readonly {
+      keyId: number;
+      distanceUnits: number;
+      adc: number;
+      pressed: boolean;
+    }[],
+  ) {
     if (records.length === 0) {
       return;
     }
     const timestampMs = performance.now();
     const telemetryHz = this.#recordFrameTime(timestampMs);
     const next = {
-      ...this.#state.samples
+      ...this.#state.samples,
     };
     const keyTelemetryHz = {
-      ...this.#state.keyTelemetryHz
+      ...this.#state.keyTelemetryHz,
     };
     let added = 0;
     for (const record of records) {
@@ -256,7 +293,10 @@ class Hero68HallStream {
         keyTelemetryHz[keyId] = keyHz;
       }
       const distanceMm = record.distanceUnits * HERO68_DISTANCE_UNIT_MM;
-      const moved = !previous || previous.distanceUnits !== record.distanceUnits || previous.pressed !== record.pressed;
+      const moved =
+        !previous ||
+        previous.distanceUnits !== record.distanceUnits ||
+        previous.pressed !== record.pressed;
       const hallAtRest = !record.pressed && distanceMm <= 0.08;
       next[keyId] = {
         keyId,
@@ -267,7 +307,7 @@ class Hero68HallStream {
         rawAdc: record.adc,
         pressed: record.pressed,
         releaseInferred: false,
-        timestampMs: moved ? timestampMs : previous.timestampMs
+        timestampMs: moved ? timestampMs : previous.timestampMs,
       };
       if (record.pressed || !hallAtRest) {
         this.#cancelSampleExpiry(keyId);
@@ -282,10 +322,11 @@ class Hero68HallStream {
         sampleCount: this.#state.sampleCount + added,
         frameCount: this.#state.frameCount + 1,
         telemetryHz,
-        keyTelemetryHz
+        keyTelemetryHz,
       });
     }
   }
+
   #installDistanceReportHandler() {
     this.#unsubscribeReport = hero68DeviceManager.onReport(report => {
       if (report.command !== 0x98 || report.zone !== 1) {
@@ -294,14 +335,19 @@ class Hero68HallStream {
       this.#ingestRecords(decodeDistanceCalibrationLive(report.data));
     });
   }
+
   #installDeviceWatcher() {
     this.#unsubscribeDevice = hero68DeviceManager.subscribe(() => {
       const snapshot = hero68DeviceManager.getSnapshot();
-      if (snapshot.state === 'connected' || !this.#state.active && !this.#state.starting) {
+      if (snapshot.state === 'connected' || (!this.#state.active && !this.#state.starting)) {
         return;
       }
       ++this.#pollGeneration;
       this.#cleanupListeners();
+      const disconnectMessage =
+        snapshot.state === 'disconnected'
+          ? `HERO68 USB interface disconnected during Hall Stream (${this.#stage}).`
+          : snapshot.error;
       this.#setState({
         active: false,
         starting: false,
@@ -309,11 +355,15 @@ class Hero68HallStream {
         samples: this.#zeroVisualSamples(),
         telemetryHz: null,
         keyTelemetryHz: {},
-        error: snapshot.state === 'disconnected' ? `HERO68 USB interface disconnected during Hall Stream (${this.#stage}).` : snapshot.error
+        error: disconnectMessage,
       });
     });
   }
-  #reportMatchesBatch(report: import('./types').DecodedReport, positions: readonly number[]): boolean {
+
+  #reportMatchesBatch(
+    report: import('./types').DecodedReport,
+    positions: readonly number[],
+  ): boolean {
     if (report.command !== 0x98 || report.zone !== 1) {
       return false;
     }
@@ -322,18 +372,26 @@ class Hero68HallStream {
     }
     for (let index = 0; index < positions.length; index += 1) {
       const offset = index * 6;
-      const pos = report.data[offset] << 8 | report.data[offset + 1];
+      const pos = (report.data[offset] << 8) | report.data[offset + 1];
       if (pos !== positions[index]) {
         return false;
       }
     }
     return true;
   }
+
   async #runFirmwarePolling(generation: number, positions: readonly number[]): Promise<void> {
+    const requestBatch = (batch: readonly number[]) => {
+      const packet = calibrationDistanceSync(batch);
+      return hero68DeviceManager.request(packet, 0x98, 1, 650, report =>
+        this.#reportMatchesBatch(report, batch),
+      );
+    };
+
     await runHallPolling({
       positions,
       isActive: () => generation === this.#pollGeneration && hero68DeviceManager.connected,
-      requestBatch: batch => hero68DeviceManager.request(calibrationDistanceSync(batch), 0x98, 1, 650, report => this.#reportMatchesBatch(report, batch)),
+      requestBatch,
       delay: milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
       recover: () => hero68DeviceManager.recoverControlChannel(),
       onRecovering: recovering => {
@@ -347,17 +405,22 @@ class Hero68HallStream {
             recovering,
             samples: this.#zeroVisualSamples(),
             telemetryHz: null,
-            keyTelemetryHz: {}
+            keyTelemetryHz: {},
           });
         } else {
           this.#setState({
-            recovering
+            recovering,
           });
         }
-      }
+      },
     });
   }
-  async start(preferredKeyIds: Iterable<string> = [], source: HallStreamSource = 'direct-poll', modelKeyIds?: readonly string[]): Promise<void> {
+
+  async start(
+    preferredKeyIds: Iterable<string> = [],
+    source: HallStreamSource = 'direct-poll',
+    modelKeyIds?: readonly string[],
+  ): Promise<void> {
     if (this.#state.active || this.#state.starting) {
       return;
     }
@@ -370,11 +433,12 @@ class Hero68HallStream {
     if (!hero68DeviceManager.connected) {
       throw new Error('Connect HERO68 before starting Hall Stream');
     }
-    preferredKeyIds = Array.from(preferredKeyIds);
-    this.#requestedKeyIds = [...preferredKeyIds];
+
+    const requestedIds = Array.from(preferredKeyIds);
+    this.#requestedKeyIds = [...requestedIds];
     const preferredPositions: number[] = [];
     const seenPositions = new Set<number>();
-    for (const keyId of preferredKeyIds) {
+    for (const keyId of requestedIds) {
       const pos = HERO84_KEY_POSITIONS[keyId];
       if (pos === undefined || seenPositions.has(pos)) {
         continue;
@@ -382,8 +446,21 @@ class Hero68HallStream {
       seenPositions.add(pos);
       preferredPositions.push(pos);
     }
-    const defaultPositionMap = modelKeyIds ? Object.fromEntries(modelKeyIds.filter(id => HERO84_KEY_POSITIONS[id] !== undefined).map(id => [id, HERO84_KEY_POSITIONS[id]])) : hero68DeviceManager.getSnapshot().detectedModel === 'hero84' ? HERO84_KEY_POSITIONS : HERO68_KEY_POSITIONS;
-    const pollingPositions = preferredPositions.length > 0 ? preferredPositions : Object.values(defaultPositionMap);
+
+    let defaultPositionMap: Readonly<Record<string, number>>;
+    if (modelKeyIds) {
+      const entries = modelKeyIds
+        .filter(id => HERO84_KEY_POSITIONS[id] !== undefined)
+        .map(id => [id, HERO84_KEY_POSITIONS[id]] as const);
+      defaultPositionMap = Object.fromEntries(entries);
+    } else if (hero68DeviceManager.getSnapshot().detectedModel === 'hero84') {
+      defaultPositionMap = HERO84_KEY_POSITIONS;
+    } else {
+      defaultPositionMap = HERO68_KEY_POSITIONS;
+    }
+
+    const pollingPositions =
+      preferredPositions.length > 0 ? preferredPositions : Object.values(defaultPositionMap);
     const viaService = hero68DeviceManager.viaService;
     if (viaService) {
       const status = await rgbService.status();
@@ -394,10 +471,12 @@ class Hero68HallStream {
         throw Error('Service Hall stream uses direct polling only.');
       }
     }
+
     if (this.#restoreAutoCalibration) {
       this.#stage = 'restore-auto-calibration-after-reconnect';
       await this.#restoreAutoCalibrationIfNeeded();
     }
+
     this.#stage = 'prepare';
     this.#cleanupListeners();
     this.#frameTimes = [];
@@ -411,17 +490,23 @@ class Hero68HallStream {
       sampleCount: 0,
       frameCount: 0,
       telemetryHz: null,
-      keyTelemetryHz: {}
+      keyTelemetryHz: {},
     });
     this.#installHostKeyFallback();
     this.#installDeviceWatcher();
     if (!viaService) {
       this.#installDistanceReportHandler();
     }
+
     try {
       if (source !== 'direct-poll' && !viaService) {
         this.#stage = 'read-auto-calibration';
-        const autoCalibration = await hero68DeviceManager.request(readAutoCalibration(), 0x84, 25, 1000);
+        const autoCalibration = await hero68DeviceManager.request(
+          readAutoCalibration(),
+          0x84,
+          25,
+          1000,
+        );
         this.#restoreAutoCalibration = (autoCalibration.data[0] ?? 0) !== 0;
         if (this.#restoreAutoCalibration) {
           this.#stage = 'disable-auto-calibration';
@@ -430,20 +515,28 @@ class Hero68HallStream {
         this.#stage = 'start-0x98-await-ack';
         await hero68DeviceManager.request(calibrationDistanceStart(), 0x98, 0, 1000);
       }
+
       this.#stage = `${source}-streaming`;
       this.#setState({
         active: true,
         starting: false,
-        error: null
+        error: null,
       });
+
       if (viaService) {
-        const ids = preferredPositions.length ? Array.from(preferredKeyIds).filter(id => HERO84_KEY_POSITIONS[id] !== undefined) : Object.keys(defaultPositionMap);
-        this.#unsubscribeReport = rgbService.hallStream(ids, (records: RgbServiceHallRecord[]) => this.#ingestRecords(records.map(record => ({
-          keyId: record.pos,
-          distanceUnits: record.distanceUnits,
-          adc: record.adc,
-          pressed: record.pressed
-        }))), () => {
+        const streamKeyIds = preferredPositions.length
+          ? requestedIds.filter(id => HERO84_KEY_POSITIONS[id] !== undefined)
+          : Object.keys(defaultPositionMap);
+        const onServiceRecords = (records: RgbServiceHallRecord[]) => {
+          const normalized = records.map(record => ({
+            keyId: record.pos,
+            distanceUnits: record.distanceUnits,
+            adc: record.adc,
+            pressed: record.pressed,
+          }));
+          this.#ingestRecords(normalized);
+        };
+        this.#unsubscribeReport = rgbService.hallStream(streamKeyIds, onServiceRecords, () => {
           this.#cleanupListeners();
           this.#setState({
             active: false,
@@ -452,70 +545,77 @@ class Hero68HallStream {
             samples: this.#zeroVisualSamples(),
             error: 'Service Hall stream disconnected',
             telemetryHz: null,
-            keyTelemetryHz: {}
+            keyTelemetryHz: {},
           });
         });
       } else if (source === 'direct-poll' || source === 'mode-poll') {
         const generation = ++this.#pollGeneration;
-        this.#pollPromise = this.#runFirmwarePolling(generation, pollingPositions).catch(async error => {
-          if (generation !== this.#pollGeneration) {
-            return;
-          }
-          const message = error instanceof Error ? error.message : String(error);
-          this.#cleanupListeners();
-          this.#setState({
-            active: false,
-            starting: false,
-            recovering: false,
-            error: `Hall polling stopped: ${message}. Close other keyboard apps or tabs, reconnect HERO68, then start again.`,
-            samples: this.#zeroVisualSamples(),
-            telemetryHz: null,
-            keyTelemetryHz: {}
-          });
-          if (hero68DeviceManager.connected && source !== 'direct-poll') {
-            try {
-              await hero68DeviceManager.request(calibrationDistanceExit(), 0x98, 2, 1000);
-            } catch (ignoredError) {
-              void ignoredError;
-            } /* best effort */
-          }
+        this.#pollPromise = this.#runFirmwarePolling(generation, pollingPositions).catch(
+          async error => {
+            if (generation !== this.#pollGeneration) {
+              return;
+            }
+            const message = error instanceof Error ? error.message : String(error);
+            this.#cleanupListeners();
+            this.#setState({
+              active: false,
+              starting: false,
+              recovering: false,
+              error: `Hall polling stopped: ${message}. Close other keyboard apps or tabs, reconnect HERO68, then start again.`,
+              samples: this.#zeroVisualSamples(),
+              telemetryHz: null,
+              keyTelemetryHz: {},
+            });
+            if (hero68DeviceManager.connected && source !== 'direct-poll') {
+              try {
+                await hero68DeviceManager.request(calibrationDistanceExit(), 0x98, 2, 1000);
+              } catch {
+                /* best effort */
+              }
+            }
 
-          try {
-            await this.#restoreAutoCalibrationIfNeeded();
-          } catch (ignoredError) {
-            void ignoredError;
-          } /* retry on the next start */
-        });
+            try {
+              await this.#restoreAutoCalibrationIfNeeded();
+            } catch {
+              /* retry on the next start */
+            }
+          },
+        );
       }
     } catch (error) {
       if (hero68DeviceManager.connected) {
         if (source !== 'direct-poll') {
           try {
             await hero68DeviceManager.request(calibrationDistanceExit(), 0x98, 2, 1000);
-          } catch (ignoredError) {
-            void ignoredError;
-          } /* best effort */
+          } catch {
+            /* best effort */
+          }
         }
 
         try {
           await this.#restoreAutoCalibrationIfNeeded();
-        } catch (ignoredError) {
-          void ignoredError;
-        } /* best effort */
+        } catch {
+          /* best effort */
+        }
       }
 
       this.#cleanupListeners();
       const snapshot = hero68DeviceManager.getSnapshot();
-      const message = snapshot.state === 'disconnected' ? `HERO68 USB interface disconnected during Hall Stream (${this.#stage}).` : error instanceof Error ? error.message : String(error);
+      const errorText = error instanceof Error ? error.message : String(error);
+      const message =
+        snapshot.state === 'disconnected'
+          ? `HERO68 USB interface disconnected during Hall Stream (${this.#stage}).`
+          : errorText;
       this.#setState({
         active: false,
         starting: false,
         recovering: false,
-        error: message
+        error: message,
       });
       throw new Error(message);
     }
   }
+
   async #restoreAutoCalibrationIfNeeded(): Promise<void> {
     if (!this.#restoreAutoCalibration || !hero68DeviceManager.connected) {
       return;
@@ -524,19 +624,26 @@ class Hero68HallStream {
     await hero68DeviceManager.request(writeAutoCalibration(true), 0x04, 25, 1000);
     this.#restoreAutoCalibration = false;
   }
+
   #zeroVisualSamples(): Record<string, HallStreamSample> {
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    return Object.fromEntries(Object.entries(this.#state.samples).map(([keyId, sample]) => [keyId, {
-      ...sample,
-      distanceMm: 0,
-      visualDistanceMm: 0,
-      distanceUnits: 0,
-      rawAdc: 0,
-      pressed: false,
-      releaseInferred: false,
-      timestampMs: now
-    }]));
+    return Object.fromEntries(
+      Object.entries(this.#state.samples).map(([keyId, sample]) => [
+        keyId,
+        {
+          ...sample,
+          distanceMm: 0,
+          visualDistanceMm: 0,
+          distanceUnits: 0,
+          rawAdc: 0,
+          pressed: false,
+          releaseInferred: false,
+          timestampMs: now,
+        },
+      ]),
+    );
   }
+
   async stop(): Promise<void> {
     if (!this.#state.active && !this.#state.starting) {
       return;
@@ -544,7 +651,7 @@ class Hero68HallStream {
     this.#setState({
       samples: this.#zeroVisualSamples(),
       keyTelemetryHz: {},
-      telemetryHz: null
+      telemetryHz: null,
     });
     ++this.#pollGeneration;
     const pollPromise = this.#pollPromise;
@@ -552,13 +659,17 @@ class Hero68HallStream {
     if (pollPromise) {
       try {
         await pollPromise;
-      } catch (ignoredError) {
-        void ignoredError;
-      } /* polling errors are surfaced in state */
+      } catch {
+        /* polling errors are surfaced in state */
+      }
     }
 
     try {
-      if (hero68DeviceManager.connected && this.#state.source !== 'direct-poll' && !hero68DeviceManager.viaService) {
+      if (
+        hero68DeviceManager.connected &&
+        this.#state.source !== 'direct-poll' &&
+        !hero68DeviceManager.viaService
+      ) {
         this.#stage = 'exit-0x98-await-ack';
         await hero68DeviceManager.request(calibrationDistanceExit(), 0x98, 2, 1000);
       }
@@ -573,15 +684,22 @@ class Hero68HallStream {
           recovering: false,
           samples: this.#zeroVisualSamples(),
           keyTelemetryHz: {},
-          telemetryHz: null
+          telemetryHz: null,
         });
         this.#stage = 'idle';
       }
     }
   }
 }
+
 export const hero68HallStream = new Hero68HallStream();
+
 export function useHero68HallStream(): HallStreamState {
-  return useSyncExternalStore(hero68HallStream.subscribe, hero68HallStream.getSnapshot, hero68HallStream.getSnapshot);
+  return useSyncExternalStore(
+    hero68HallStream.subscribe,
+    hero68HallStream.getSnapshot,
+    hero68HallStream.getSnapshot,
+  );
 }
+
 export type Hero68HallStreamState = HallStreamState;

@@ -251,9 +251,8 @@ export const rgbService = {
     stream.onmessage = event => {
       try {
         onFrame(JSON.parse(event.data));
-      } catch (ignoredError) {
-        void ignoredError;
-      } /* Ignore malformed frames. */
+      } catch {
+} /* Ignore malformed frames. */
     };
     stream.onerror = () => onError?.();
     return () => stream.close();
@@ -266,9 +265,8 @@ export const rgbService = {
         if (Array.isArray(data.records)) {
           onRecords(data.records);
         }
-      } catch (ignoredError) {
-        void ignoredError;
-      } /* Ignore malformed Hall frames. */
+      } catch {
+} /* Ignore malformed Hall frames. */
     };
     stream.onerror = onError;
     return () => stream.close();

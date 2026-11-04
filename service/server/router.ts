@@ -18,6 +18,10 @@ import { RHYTHM_MODES, RHYTHM_SIDE_VERIFIED } from '../rhythm';
 import type { createSetupUpdater } from '../setupUpdater';
 import { CORE_API_VERSION, LAUNCHER_VERSION } from '../updatePackage';
 
+export type DeviceRequestsInput = {
+  requests?: unknown;
+} & Record<string, unknown>;
+
 export type ServiceRouterDeps = {
   ctx: ServiceContext;
   bridge: NativeBridge;
@@ -128,7 +132,14 @@ export function createServiceServer({
     };
   }
 
-  async function handleDeviceRequests(url: string, input: any) {
+  /**
+   * Serializes `/device/request` and `/device/batch` HID transactions through
+   * `exclusive()`. Pauses native Gamepad and Rhythm streaming while executing
+   * direct HID configuration commands, and temporarily restores firmware key
+   * mappings before any remap/advanced/macro write (`mutatesRemaps`) so
+   * gamepad key suppression never leaks into user remap readbacks or saves.
+   */
+  async function handleDeviceRequests(url: string, input: DeviceRequestsInput) {
     const batch = url === '/device/batch';
     const requests: ReturnType<typeof validateDeviceRequest>[] = batch
       ? Array.isArray(input.requests) && input.requests.length > 0 && input.requests.length <= 128
@@ -232,9 +243,7 @@ export function createServiceServer({
         return collectedReplies;
       } catch (e) {
         if (run) {
-          await gamepadController.stopGamepad().catch(ignoredError => {
-            void ignoredError;
-          });
+          await gamepadController.stopGamepad().catch(() => {});
         }
         throw e;
       } finally {
@@ -249,6 +258,8 @@ export function createServiceServer({
     return batch ? { hexes: replies } : { hex: replies[0] };
   }
 
+  // Enforce loopback Host + strict Origin allowlist (`origins.ts`) before
+  // exposing any local service endpoint or Private Network Access headers.
   const server = createServer(async (req, res) => {
     const origin = req.headers.origin;
     res.setHeader('Cache-Control', 'no-store');
@@ -380,7 +391,7 @@ export function createServiceServer({
         }
         body += chunk;
       }
-      const input = JSON.parse(body || '{}');
+      const input = JSON.parse(body || '{}') as Record<string, unknown>;
 
       if (
         ctx.updating &&
@@ -431,11 +442,12 @@ export function createServiceServer({
         if (typeof input.enabled !== 'boolean') {
           throw Error('Expected Tachyon enabled boolean');
         }
+        const tachyonEnabled = input.enabled;
         await exclusive(async () => {
-          if (input.enabled) {
+          if (tachyonEnabled) {
             await gamepadController.stopGamepad();
           }
-          await rgbController.setTachyon(input.enabled);
+          await rgbController.setTachyon(tachyonEnabled);
           await hallController.syncHall();
         });
         json(200, status());

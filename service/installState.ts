@@ -31,6 +31,16 @@ export type UpdateTransaction = {
   hadInstallation: boolean;
 };
 export const terminal = (phase: UpdatePhase) => ['idle', 'completed', 'failed'].includes(phase);
+
+function isRetryableFsError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err.code === 'EPERM' || err.code === 'EBUSY' || err.code === 'EACCES')
+  );
+}
+
 export function writeAtomic(file: string, value: string) {
   mkdirSync(path.dirname(file), {
     recursive: true
@@ -47,8 +57,8 @@ export function writeAtomic(file: string, value: string) {
     try {
       renameSync(tmp, file);
       return;
-    } catch (error: any) {
-      if ((error?.code === 'EPERM' || error?.code === 'EBUSY' || error?.code === 'EACCES') && i < 14) {
+    } catch (error: unknown) {
+      if (isRetryableFsError(error) && i < 14) {
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
         continue;
       }
@@ -58,9 +68,8 @@ export function writeAtomic(file: string, value: string) {
           force: true
         });
         return;
-      } catch (ignoredError) {
-        /* Ignored non-fatal error. */
-        void ignoredError;
+      } catch {
+        // Rethrow original rename error below if fallback direct write also fails.
       }
       throw error;
     }

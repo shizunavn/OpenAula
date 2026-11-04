@@ -33,9 +33,8 @@ export function useServiceUpdate(supported: boolean) {
             setWaiting(false);
           }
         }
-      } catch (ignoredError) {
-        void ignoredError;
-      } /* The app can be offline while its independent worker installs/restarts it. */
+      } catch {
+} /* The app can be offline while its independent worker installs/restarts it. */
     };
 
     void poll();

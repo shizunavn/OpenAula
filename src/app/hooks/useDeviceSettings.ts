@@ -135,9 +135,7 @@ export function useDeviceSettings({
       }
       if (rgbStreamActive) {
         if (!hero68DeviceManager.viaService) {
-          await hero68DeviceManager.send(liveIdle()).catch(ignoredError => {
-            void ignoredError;
-          });
+          await hero68DeviceManager.send(liveIdle()).catch(() => {});
         }
         setRgbStreamActive(false);
       }
@@ -204,9 +202,7 @@ export function useDeviceSettings({
         setTachyon(true);
         if (rgbStreamActive) {
           if (!hero68DeviceManager.viaService) {
-            await hero68DeviceManager.send(liveIdle()).catch(ignoredError => {
-              void ignoredError;
-            });
+            await hero68DeviceManager.send(liveIdle()).catch(() => {});
           }
           setRgbStreamActive(false);
         }

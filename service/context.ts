@@ -72,20 +72,16 @@ export function createServiceContext(options: ServiceContextOptions) {
     if (['onboard', 'custom', 'rhythm'].includes(saved.previousMode)) {
       initialTachyonPreviousMode = saved.previousMode;
     }
-  } catch (ignoredError) {
-    /* Ignored non-fatal error. */
-    void ignoredError;
-  }
+  } catch {
+}
 
   let initialRhythmConfig: RhythmConfiguration = defaultRhythm();
   try {
     initialRhythmConfig = restoreRhythm(
       JSON.parse(readFileSync(path.join(stateDir, 'rhythm-preset.json'), 'utf8')),
     );
-  } catch (ignoredError) {
-    /* Ignored non-fatal error. */
-    void ignoredError;
-  }
+  } catch {
+}
 
   let initialProfile: RgbProfile | null = null;
   let initialSavedMode: 'onboard' | 'custom' | 'rhythm' = 'onboard';
@@ -102,10 +98,8 @@ export function createServiceContext(options: ServiceContextOptions) {
         : saved.mode === 'custom' || (saved.mode === undefined && saved.enabled === true)
           ? 'custom'
           : 'onboard';
-  } catch (ignoredError) {
-    /* Ignored non-fatal error. */
-    void ignoredError;
-  }
+  } catch {
+}
 
   if (initialTachyon) {
     if (initialTachyonPreviousMode === 'onboard' && ['custom', 'rhythm'].includes(initialSavedMode)) {
@@ -130,10 +124,8 @@ export function createServiceContext(options: ServiceContextOptions) {
     if ([0, 1, 2].includes(v.slot)) {
       initialGamepadSlot = v.slot;
     }
-  } catch (ignoredError) {
-    /* Ignored non-fatal error. */
-    void ignoredError;
-  }
+  } catch {
+}
 
   const eventLoopDelay = monitorEventLoopDelay({
     resolution: 5,
@@ -321,10 +313,9 @@ export function createServiceContext(options: ServiceContextOptions) {
             JSON.stringify(old),
           );
         }
-      } catch (ignoredError) {
+      } catch {
         /* No previous valid preset. */
-        void ignoredError;
-      }
+}
       writeFileSync(
         file + '.tmp',
         JSON.stringify({

@@ -15,9 +15,7 @@ export function createDeviceLock(maxPending = 32): DeviceLock {
     const next = tail.then(work).finally(() => {
       pendingRequests--;
     });
-    tail = next.catch(ignoredError => {
-      void ignoredError;
-    });
+    tail = next.catch(() => {});
     return next;
   }
 

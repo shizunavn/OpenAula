@@ -60,9 +60,8 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
         setBackup(profile);
         try {
           localStorage.setItem(key, JSON.stringify(profile));
-        } catch (ignoredError) {
-          void ignoredError;
-        } /* Keep recovery in memory. */
+        } catch {
+} /* Keep recovery in memory. */
       },
       write: (profile, id, revision) => rgbService.update(profile, id, revision),
       status: publishRgbServiceStatus,

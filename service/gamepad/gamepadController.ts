@@ -10,12 +10,19 @@ import {
 } from '../../src/keyboard/gamepad';
 import type { GamepadStatus } from '../../src/protocol/gamepadService';
 import { selectProfile } from '../../src/protocol/hero68/commands';
-import type { NativeBridge } from '../bridge/hidBridge';
+import type { NativeBridge, NativeGamepadInputPayload } from '../bridge/hidBridge';
 import type { ServiceContext } from '../context';
 import { digitalSettingsCommand } from '../gamepadDigital';
 import { GamepadFirmware } from '../gamepadFirmware';
 import { hookConfiguration } from '../gamepadKeyboard';
 import { latestSse } from '../latestSse';
+
+export type GamepadRequestInput = {
+  slot?: unknown;
+  configuration?: unknown;
+  expectedEnabled?: unknown;
+  source?: unknown;
+};
 
 export type GamepadControllerDeps = {
   ctx: ServiceContext;
@@ -138,7 +145,7 @@ export function createGamepadController({
       });
   }
 
-  function publishGamepadInput(value: { enabled: boolean; report: unknown; sequence: number }) {
+  function publishGamepadInput(value: NativeGamepadInputPayload) {
     if (!ctx.gamepadInputClients.size) {
       return;
     }
@@ -332,9 +339,7 @@ export function createGamepadController({
         ctx.gamepadState = JSON.parse(state.slice(14));
         await syncHall();
       } catch (e) {
-        await stopGamepad().catch(ignoredError => {
-          void ignoredError;
-        });
+        await stopGamepad().catch(() => {});
         ctx.gamepadState = {
           ...ctx.gamepadState,
           error: e instanceof Error ? e.message : String(e),
@@ -356,12 +361,13 @@ export function createGamepadController({
       });
   }
 
-  async function handleGamepadRequest(url: string, input: any) {
+  async function handleGamepadRequest(url: string, input: GamepadRequestInput) {
     const bridge = getBridge();
-    const slot = input.slot ?? ctx.gamepadSlot;
-    if (!Number.isInteger(slot) || slot < 0 || slot > 2) {
+    const rawSlot = input.slot ?? ctx.gamepadSlot;
+    if (typeof rawSlot !== 'number' || !Number.isInteger(rawSlot) || rawSlot < 0 || rawSlot > 2) {
       throw Error('Expected profile 0-2');
     }
+    const slot = rawSlot as 0 | 1 | 2;
     const config =
       input.configuration === undefined
         ? ctx.gamepadConfigurations[slot]
@@ -372,7 +378,7 @@ export function createGamepadController({
       ctx.firmwareRecoveryTimer = undefined;
       if (url === '/gamepad/toggle') {
         const now = performance.now();
-        if (input.expectedEnabled !== undefined && ctx.gamepadState.enabled === input.expectedEnabled) {
+        if (typeof input.expectedEnabled === 'boolean' && ctx.gamepadState.enabled === input.expectedEnabled) {
           return;
         }
         if (input.source === 'hotkey' && now - ctx.lastHotkeyToggleAt < 350) {
@@ -447,9 +453,7 @@ export function createGamepadController({
           }
           ctx.gamepadState = JSON.parse(state.slice(14));
         } catch (e) {
-          await stopGamepad().catch(ignoredError => {
-            void ignoredError;
-          });
+          await stopGamepad().catch(() => {});
           publishGamepad();
           throw e;
         } finally {
@@ -478,7 +482,7 @@ export function createGamepadController({
             if (!ctx.connected) {
               await connect();
             }
-            await bridge.request(selectProfile(slot as 0 | 1 | 2));
+            await bridge.request(selectProfile(slot));
           }
           await configureNativeGamepad(config, run);
           ctx.gamepadSlot = slot;
@@ -511,9 +515,7 @@ export function createGamepadController({
         await syncHall();
       } catch (e) {
         if (active) {
-          await stopGamepad().catch(ignoredError => {
-            void ignoredError;
-          });
+          await stopGamepad().catch(() => {});
         }
         publishGamepad();
         throw e;

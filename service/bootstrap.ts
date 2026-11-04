@@ -101,10 +101,8 @@ async function healthy(pid: number | undefined, version: string) {
       if (response.apiVersion === CORE_API_VERSION && response.pid === pid && response.coreVersion === version) {
         return true;
       }
-    } catch (ignoredError) {
-      /* Ignored non-fatal error. */
-      void ignoredError;
-    }
+    } catch {
+}
     await new Promise(resolve => setTimeout(resolve, 200));
   }
   return false;

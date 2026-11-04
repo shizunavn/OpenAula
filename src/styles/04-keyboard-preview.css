@@ -545,3 +545,107 @@
 .recommend-marker::before { top: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #79e1e4; }
 .recommend-marker::after { top: 6px; width: 2px; height: 7px; background: #79e1e4; border-radius: 99px; }
 .range-wrap.is-disabled { opacity: .42; }
+
+/* Custom yellow focus-visible treatment for keyboard preview keys */
+.hero-key:focus-visible {
+  outline: none;
+}
+.hero-key:not(.is-selected):focus-visible {
+  z-index: 6;
+  border-color: rgba(255,212,92,.88);
+  box-shadow: 0 0 0 1px rgba(255,212,92,.28);
+}
+.hero-key.is-selected:focus-visible {
+  z-index: 7;
+  border-color: rgba(255,212,92,.96);
+  box-shadow: none;
+}
+.actuation-page .hero-key.is-selected.is-actuation-overlay:focus-visible {
+  border-color: rgba(172,184,255,.96);
+  box-shadow: none;
+}
+.advanced-keys-page .hero-key:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.advanced-keys-page .hero-key:not(.is-selected):focus-visible {
+  border-color: #ffd65a;
+}
+.hero-key.has-advanced-binding.has-split-rapid .hero-key-rapid-overlay {
+  position: static;
+  display: flex;
+  inset: auto;
+}
+.hero-key.has-advanced-binding.has-split-rapid .hero-key-rapid-overlay span {
+  position: static;
+  font-size: .893em;
+  line-height: 1;
+  inset: auto;
+}
+
+/* Keep remap keys readable without shrinking the whole keyboard. */
+.remap-page .hero-key-label {
+  padding-inline: .08em;
+  font-size: .96em;
+  font-weight: 500;
+}
+
+.hero-key-tooltip {
+  position: fixed;
+  z-index: 10000;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 24px));
+  padding: 8px 10px 7px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 7px;
+  background: #181b1c;
+  box-shadow: 0 7px 20px rgba(0,0,0,.34);
+  color: #eef1f2;
+  pointer-events: none;
+  transform: translateX(-50%);
+  font-family: "Nunito Sans", sans-serif;
+  line-height: 1.2;
+}
+.hero-key-tooltip.is-above { transform: translate(-50%, -100%); }
+.hero-key-tooltip.is-below { transform: translateX(-50%); }
+.hero-key-tooltip strong {
+  display: block;
+  max-width: 240px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+.hero-key-tooltip span {
+  display: block;
+  margin-top: 3px;
+  color: #929b9f;
+  font-size: 10px;
+  font-weight: 500;
+}
+.hero-key-tooltip code {
+  display: block;
+  margin-top: 5px;
+  color: #d7bd68;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9px;
+  font-weight: 500;
+}
+.hero-key-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  background: #181b1c;
+  border: solid rgba(255,255,255,.10);
+  transform: translateX(-50%) rotate(45deg);
+}
+.hero-key-tooltip.is-above::after {
+  bottom: -4px;
+  border-width: 0 1px 1px 0;
+}
+.hero-key-tooltip.is-below::after {
+  top: -4px;
+  border-width: 1px 0 0 1px;
+}

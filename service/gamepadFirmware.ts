@@ -196,9 +196,7 @@ export class GamepadFirmware {
       this.error = '';
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
-      await this.restore().catch(ignoredError => {
-        void ignoredError;
-      });
+      await this.restore().catch(() => {});
       throw e;
     }
   }

@@ -174,17 +174,13 @@ function actions(tx: UpdateTransaction, folder: string, host: string): Transacti
       }
       try {
         reg(['export', uninstallKey, path.join(snapshot, 'uninstall.reg'), '/y']);
-      } catch (ignoredError) {
-        /* Ignored non-fatal error. */
-        void ignoredError;
-      }
+      } catch {
+}
       let startup: string | null = null;
       try {
         startup = reg(['query', runKey, '/v', runName]).match(/REG_SZ\s+([^\r\n]+)/)?.[1] ?? null;
-      } catch (ignoredError) {
-        /* Ignored non-fatal error. */
-        void ignoredError;
-      }
+      } catch {
+}
       writeJson(path.join(snapshot, 'startup.json'), {
         startup
       });
@@ -215,10 +211,8 @@ function actions(tx: UpdateTransaction, folder: string, host: string): Transacti
           if (r.ok && s.coreVersion === tx.target && s.launcherVersion === tx.target && s.apiVersion === tx.apiVersion && s.updateOperation === tx.operationId && s.pid > 0 && s.supportsFullUpdate) {
             return true;
           }
-        } catch (ignoredError) {
-          /* Ignored non-fatal error. */
-          void ignoredError;
-        }
+        } catch {
+}
         await delay(200);
       }
       return false;
@@ -264,10 +258,8 @@ function actions(tx: UpdateTransaction, folder: string, host: string): Transacti
       } else {
         try {
           reg(['delete', runKey, '/v', runName, '/f']);
-        } catch (ignoredError) {
-          /* Ignored non-fatal error. */
-          void ignoredError;
-        }
+        } catch {
+}
       }
     },
     phase: (phase, error) => saveUpdateStatus(tx.stateDir, {
@@ -290,20 +282,16 @@ function acquire(root: string) {
     } catch {
       unlinkSync(file);
     }
-  } catch (ignoredError) {
-    /* Ignored non-fatal error. */
-    void ignoredError;
-  }
+  } catch {
+}
   writeFileSync(file, String(process.pid), {
     flag: 'wx'
   });
   return () => {
     try {
       unlinkSync(file);
-    } catch (ignoredError) {
-      /* Ignored non-fatal error. */
-      void ignoredError;
-    }
+    } catch {
+}
   };
 }
 async function recover(root: string) {
@@ -399,9 +387,8 @@ async function main() {
               });
             }
           }
-        } catch (ignoredError) {
-          void ignoredError;
-        } /* Locked old caches can be cleaned after the next successful update. */
+        } catch {
+} /* Locked old caches can be cleaned after the next successful update. */
       }
     } finally {
       unlock();
@@ -451,10 +438,8 @@ async function main() {
     let previous: InstallRecord | undefined;
     try {
       previous = readInstall(root);
-    } catch (ignoredError) {
-      /* Ignored non-fatal error. */
-      void ignoredError;
-    }
+    } catch {
+}
     commitInstall(root, {
       schemaVersion: 1,
       active: version,
@@ -479,10 +464,8 @@ void main().catch(error => {
         error: String(error)
       });
     }
-  } catch (ignoredError) {
-    /* Ignored non-fatal error. */
-    void ignoredError;
-  }
+  } catch {
+}
   try {
     if (process.argv[2] === '--launch') {
       const root = path.resolve(process.argv[3]);
@@ -493,10 +476,8 @@ void main().catch(error => {
         error: 'Recovery failed: ' + String(error)
       });
     }
-  } catch (ignoredError) {
-    /* Ignored non-fatal error. */
-    void ignoredError;
-  }
+  } catch {
+}
   process.stderr.write(String(error));
   process.exitCode = 1;
 });

@@ -93,7 +93,6 @@ export function saveOpenHeroState(state: PersistedOpenHeroState) {
   }
   try {
     window.localStorage.setItem(OPENHERO68_STATE_KEY, JSON.stringify(state));
-  } catch (ignoredError) {
-    void ignoredError;
-  } // Storage can be unavailable in private / restricted browser contexts.
+  } catch {
+} // Storage can be unavailable in private / restricted browser contexts.
 }

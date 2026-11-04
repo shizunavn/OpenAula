@@ -4,7 +4,7 @@ import { performance } from 'node:perf_hooks';
 import { needsRgbAnalogHall, rgbHallKeys } from '../../src/keyboard/customRgb';
 import { isAnalogAction } from '../../src/keyboard/gamepad';
 import { heroLayout } from '../../src/keyboard/layout';
-import type { NativeBridge } from '../bridge/hidBridge';
+import type { NativeBridge, NativeHallSnapshotPayload } from '../bridge/hidBridge';
 import type { HallRecord, ServiceContext } from '../context';
 
 export type HallControllerDeps = {
@@ -16,6 +16,17 @@ export type HallControllerDeps = {
   onGamepadToggleInput: (keyId: string, pressed: boolean) => void;
 };
 
+/**
+ * Coordinates shared Hall sensor polling across multiple concurrent consumers:
+ * - `rgb`: reactive custom RGB effects requiring analog key travel (100 Hz)
+ * - `gamepad:analog`: bound analog stick/trigger keys (50/100/200 Hz)
+ * - `gamepad:digital`: bound digital button keys evaluated by native AP/RT (200 Hz)
+ * - `web:<uuid>`: browser SSE subscribers (`/hall/stream`) for live UI travel bars (100 Hz)
+ *
+ * `HallBroker` merges overlapping key demands by taking the maximum requested
+ * polling frequency per physical key position before sending `hall-config:` to
+ * the native bridge.
+ */
 export function createHallController({
   ctx,
   getBridge,
@@ -28,6 +39,11 @@ export function createHallController({
     return !ctx.tachyon && ctx.mode === 'custom' && needsRgbAnalogHall(ctx.profile?.custom);
   }
 
+  /**
+   * Recomputes merged per-key Hall polling demands across RGB, Gamepad, and Web
+   * SSE consumers, pushes updated `hall-config:` commands to the native scheduler,
+   * and evicts stale samples for unsubscribed keys.
+   */
   async function syncHall() {
     ctx.hallBroker.update({
       id: 'rgb',
@@ -103,7 +119,10 @@ export function createHallController({
           subscription.pending.set(record.keyId, record);
         }
       }
-      if (!subscription.pending.size || now - subscription.lastSent < (subscription.keys.size > 10 ? 32 : 0)) {
+      if (
+        !subscription.pending.size ||
+        now - subscription.lastSent < (subscription.keys.size > 10 ? 32 : 0)
+      ) {
         continue;
       }
       client.write(
@@ -116,12 +135,13 @@ export function createHallController({
     }
   }
 
-  function onHallSnapshot(value: {
-    publishedMs?: number;
-    requests: number;
-    timeouts: number;
-    records: Omit<HallRecord, 'keyId'>[];
-  }) {
+  /**
+   * Ingests `hall-snapshot:` records from the native bridge. When firmware key
+   * suppression (`fwActive`) is muting HID key reports for mapped gamepad keys,
+   * forwards synthetic key edges derived from Hall travel to RGB reactive effects
+   * and the gamepad hotkey toggle tracker.
+   */
+  function onHallSnapshot(value: NativeHallSnapshotPayload) {
     const records: HallRecord[] = [];
     const currentConfig = ctx.gamepadConfigurations[ctx.gamepadSlot];
     const fwActive = isFirmwareActive();
@@ -155,9 +175,15 @@ export function createHallController({
   }
 
   function subscribeHallStream(req: IncomingMessage, res: ServerResponse) {
-    const ids = new URL(req.url ?? '', `http://127.0.0.1:${ctx.port}`).searchParams.get('keys')?.split(',') ?? [];
+    const ids =
+      new URL(req.url ?? '', `http://127.0.0.1:${ctx.port}`).searchParams.get('keys')?.split(',') ??
+      [];
     const hallKeyIds = heroLayout(ctx.deviceModel ?? 'hero84').keyIds;
-    if (ids.length < 1 || ids.length > hallKeyIds.length || ids.some(id => !hallKeyIds.includes(id))) {
+    if (
+      ids.length < 1 ||
+      ids.length > hallKeyIds.length ||
+      ids.some(id => !hallKeyIds.includes(id))
+    ) {
       throw Error(`Expected 1-${hallKeyIds.length} valid Hall keys`);
     }
     const keys = new Set(ids);

@@ -8,8 +8,10 @@ async function importSource(input) {
   await bundle.close()
   return import('data:text/javascript;base64,' + Buffer.from(output[0].code).toString('base64'))
 }
-const [{ createTranslator }, { translateHallError }] = await Promise.all([
-  importSource('src/i18n/index.tsx'), importSource('src/i18n/deviceErrors.ts'),
+const [{ createTranslator }, { translateHallError }, { VI, VI_MODULES }] = await Promise.all([
+  importSource('src/i18n/index.tsx'),
+  importSource('src/i18n/deviceErrors.ts'),
+  importSource('src/i18n/locales/vi/index.ts'),
 ])
 const timeout = 'HERO68 read timed out (command=0x98, zone=0x01)'
 const fatal = `Hall polling stopped: ${timeout}. Close other keyboard apps or tabs, reconnect HERO68, then start again.`
@@ -32,4 +34,21 @@ test('Legacy timeout and USB disconnect diagnostics also translate', () => {
   const tr = createTranslator('vi')
   assert.match(translateHallError(`Firmware multi-key polling stopped: ${timeout}`, tr), /^Đã dừng đọc dữ liệu nhiều phím từ firmware:/)
   assert.equal(translateHallError('HERO68 USB interface disconnected during Hall Stream (polling).', tr), 'Kết nối USB của HERO68 bị ngắt khi đang chạy luồng Hall (polling).')
+})
+
+test('Vietnamese locale modules contain no duplicate keys across domain files', () => {
+  const seen = new Map()
+  let totalCount = 0
+  for (const [moduleName, entries] of VI_MODULES) {
+    for (const key of Object.keys(entries)) {
+      assert.equal(
+        seen.has(key),
+        false,
+        `Duplicate Vietnamese translation key "${key}" found in ${moduleName} and ${seen.get(key)}`,
+      )
+      seen.set(key, moduleName)
+      totalCount++
+    }
+  }
+  assert.equal(Object.keys(VI).length, totalCount)
 })

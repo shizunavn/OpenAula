@@ -6,12 +6,28 @@ import { detectHeroDeviceModelFromUuid, heroDeviceModel } from '../../src/keyboa
 import { HERO68_KEY_IDS } from '../../src/keyboard/hero68Layout';
 import { HERO84_COLOR_SOURCES } from '../../src/keyboard/hero84Layout';
 import { buildReport } from '../../src/protocol/hero68/codec';
-import type { NativeBridge } from '../bridge/hidBridge';
+import type {
+  NativeBridge,
+  NativeCustomFramePayload,
+  NativeRhythmFramePayload,
+} from '../bridge/hidBridge';
 import type { ServiceContext } from '../context';
 import type { NativeFrameTotals } from '../frameTelemetry';
 import { latestSse } from '../latestSse';
 import { nativeRhythmCommand, validateRhythm } from '../rhythm';
 import { normalizeProfile } from './profileNormalizer';
+
+export type RhythmRequestInput = {
+  sessionId?: unknown;
+  configuration?: unknown;
+} & Record<string, unknown>;
+
+export type RgbModeRequestInput = {
+  mode?: unknown;
+  sessionId?: unknown;
+  expectedRevision?: unknown;
+  profile?: unknown;
+} & Record<string, unknown>;
 
 export type RgbControllerDeps = {
   ctx: ServiceContext;
@@ -166,6 +182,11 @@ export function createRgbController({
     await syncHall();
   }
 
+  /**
+   * Advances the custom RGB simulation clock (~0.5ms firmware tick resolution),
+   * feeds fresh analog Hall travel samples into reactive effects, and queues
+   * the quantized 64-byte HID packets to the native bridge scheduler.
+   */
   async function tick() {
     if (ctx.mode !== 'custom' || !ctx.profile || !ctx.engine || ctx.closing) {
       return;
@@ -242,15 +263,7 @@ export function createRgbController({
       });
   }
 
-  function onCustomFrame(
-    value: NativeFrameTotals & {
-      submission: number;
-      frameMs: number;
-      gapMs: number;
-      droppedFrames: number;
-      reusedFrames: number;
-    },
-  ) {
+  function onCustomFrame(value: NativeCustomFramePayload) {
     if (ctx.mode !== 'custom') {
       return;
     }
@@ -311,25 +324,7 @@ export function createRgbController({
     return keys;
   }
 
-  function onNativeFrame(
-    value: NativeFrameTotals & {
-      colors: string[];
-      frameMs: number;
-      gapMs: number;
-      droppedFrames: number;
-      audioLevel: number;
-      audioState: string;
-      audioError: string;
-      audioEndpoint: string;
-      sampleRate: number;
-      audioToWriteMs: number;
-      captureToWriteMs: number;
-      audioTimestampInvalid: boolean;
-      renderMs: number;
-      encodeMs: number;
-      writeMs: number;
-    },
-  ) {
+  function onNativeFrame(value: NativeRhythmFramePayload) {
     if (ctx.mode !== 'rhythm' || value.colors?.length !== 68) {
       return;
     }
@@ -407,6 +402,11 @@ export function createRgbController({
     ctx.inputTransitions++;
   }
 
+  /**
+   * Toggles Tachyon Mode (low-latency scan priority) by suspending active RGB
+   * streams, snapshot-zeroing both physical LED zones, and restoring the prior
+   * lighting mode when disabled.
+   */
   async function setTachyon(enabled: boolean) {
     const bridge = getBridge();
     if (enabled) {
@@ -542,7 +542,11 @@ export function createRgbController({
     }
   }
 
-  async function handleRhythmRequest(url: string, input: any) {
+  /**
+   * Starts or live-updates native WASAPI Rhythm Sync, enforcing sessionId locks
+   * on live edits so stale browser tabs cannot overwrite active audio settings.
+   */
+  async function handleRhythmRequest(url: string, input: RhythmRequestInput) {
     const bridge = getBridge();
     await exclusive(async () => {
       if (ctx.tachyon) {
@@ -601,7 +605,12 @@ export function createRgbController({
     });
   }
 
-  async function handleRgbModeRequest(url: string, input: any) {
+  /**
+   * Handles transitions between onboard and custom RGB modes and applies live
+   * custom presets guarded by `sessionId` and optimistic `expectedRevision`
+   * checks (returning HTTP 409 on concurrent editor conflicts).
+   */
+  async function handleRgbModeRequest(url: string, input: RgbModeRequestInput) {
     const bridge = getBridge();
     await exclusive(async () => {
       if (url === '/stop' || url === '/shutdown' || (url === '/mode' && input.mode === 'onboard')) {
@@ -621,7 +630,11 @@ export function createRgbController({
         throw Error('Custom RGB is not running');
       }
       if (url === '/preset' && input.expectedRevision !== undefined) {
-        if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 0) {
+        if (
+          typeof input.expectedRevision !== 'number' ||
+          !Number.isInteger(input.expectedRevision) ||
+          input.expectedRevision < 0
+        ) {
           throw Error('Invalid custom revision');
         }
         if (input.expectedRevision !== ctx.customRevision) {

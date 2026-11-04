@@ -94,9 +94,7 @@ export class GamepadAutoApply<R extends Result> {
     clearTimeout(this.timer);
     this.command = true;
     this.commands++;
-    const next = this.operation.catch(ignoredError => {
-      void ignoredError;
-    }).then(async () => {
+    const next = this.operation.catch(() => {}).then(async () => {
       await this.flight;
       const value = await operation();
       this.applied = JSON.stringify(value.configuration);
@@ -114,9 +112,7 @@ export class GamepadAutoApply<R extends Result> {
       }
     });
     // Keep the lane reusable when a command fails; return the original failure.
-    void this.operation.catch(ignoredError => {
-      void ignoredError;
-    });
+    void this.operation.catch(() => {});
     return next;
   }
   dispose() {

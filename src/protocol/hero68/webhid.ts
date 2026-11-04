@@ -318,9 +318,8 @@ export class Hero68DeviceManager implements Hero68Transport {
         });
         return fromUuid;
       }
-    } catch (ignoredError) {
-      void ignoredError;
-    } /* Preserve existing model selection if UUID read is unsupported in a mock/fixture. */
+    } catch {
+} /* Preserve existing model selection if UUID read is unsupported in a mock/fixture. */
 
     return null;
   }
@@ -485,9 +484,8 @@ export class Hero68DeviceManager implements Hero68Transport {
             error: null
           });
           return;
-        } catch (ignoredError) {
-          void ignoredError;
-        } // Keep polling until the timeout.
+        } catch {
+} // Keep polling until the timeout.
       }
 
       await new Promise(resolve => window.setTimeout(resolve, 120));
@@ -578,9 +576,7 @@ export class Hero68DeviceManager implements Hero68Transport {
   #queueControlOperation<T>(run: () => Promise<T>): Promise<T> {
     const work = () => !this.#viaService && typeof navigator !== 'undefined' && navigator.locks ? navigator.locks.request('openhero68:hid-control', run) : run();
     const next = this.#requestTail.then(work);
-    this.#requestTail = next.catch(ignoredError => {
-      void ignoredError;
-    });
+    this.#requestTail = next.catch(() => {});
     return next;
   }
   async request(report: Uint8Array, expectedCommand: number, expectedZone?: number, timeoutMs = 800, predicate?: (report: DecodedReport) => boolean): Promise<DecodedReport> {
@@ -603,9 +599,8 @@ export class Hero68DeviceManager implements Hero68Transport {
               if (active.data[0] === report[7] && (!predicate || predicate(verified))) {
                 return verified;
               }
-            } catch (ignoredError) {
-              void ignoredError;
-            } /* Retry only the same profile selection. */
+            } catch {
+} /* Retry only the same profile selection. */
             if (attempt >= 2) {
               throw error;
             }

@@ -5,7 +5,7 @@ export type ProtocolKeyAddress = {
   label: string
   /** Matrix key code from the reference layout (row << 8 | column). */
   matrixKey: number
-  /** Placeholder until RE confirms the wire key index used by HERO68 reports. */
+  /** Hexadecimal representation of matrixKey (0xRRCC) used in protocol lookup tables and diagnostics. */
   matrixHex: string
 }
 

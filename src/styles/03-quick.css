@@ -1,4 +1,3 @@
-/* Quick settings page */
 .page { width: 100%; max-width: calc(var(--content-width) + 88px); margin: 0 auto; padding: 16px var(--page-inline-pad) 42px; }
 .workspace-content { display: contents; }
 .my-profile-page, .remap-page { min-width: 0; }

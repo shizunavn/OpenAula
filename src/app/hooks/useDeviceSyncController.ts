@@ -20,6 +20,14 @@ import { BRAND } from '../../brand';
 import { loadMacroLibrary } from '../../state/macros';
 import { saveOpenHeroState, type PersistedOpenHeroState, type ProfileDraft } from '../../state/persistence';
 import type { SwitchTone } from '../switchAssets';
+/**
+ * Coordinates two-way synchronization between the React UI state, browser LocalStorage drafts,
+ * and the keyboard's 3 onboard profile slots (P1–P3).
+ *
+ * When a keyboard connects or switches slots, onboard settings are hydrated first and merged with
+ * any unsaved local draft keys (`dirtyKeys`). If the USB connection drops mid-operation, local edits
+ * remain preserved in the profile draft so the user can retry saving after reconnecting.
+ */
 export type UseDeviceSyncControllerOptions = {
   deviceConnectionState: Hero68ConnectionState;
   deviceModel: HeroDeviceModelId;
@@ -319,9 +327,7 @@ export function useDeviceSyncController({
         }
         if (rgbStreamActive) {
           if (!hero68DeviceManager.viaService) {
-            await hero68DeviceManager.send(liveIdle()).catch(ignoredError => {
-              void ignoredError;
-            });
+            await hero68DeviceManager.send(liveIdle()).catch(() => {});
           }
           setRgbStreamActive(false);
         }
@@ -383,9 +389,8 @@ export function useDeviceSyncController({
       for (const nameSlot of REMAP_LAYERS) {
         try {
           names[nameSlot] = (await readOnboardProfileName(hero68DeviceManager, nameSlot)) ?? `Onboard Profile ${nameSlot}`;
-        } catch (ignoredError) {
-          void ignoredError;
-        } /* performance/remap reads remain authoritative */
+        } catch {
+} /* performance/remap reads remain authoritative */
       }
 
       setProfileNames(previous => ({

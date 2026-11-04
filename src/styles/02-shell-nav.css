@@ -1,6 +1,5 @@
 /* Reflow the layout at narrow widths while keeping UI text at its CSS size. */
 
-/* Left rail */
 .rail {
   position: relative;
   z-index: 4;
@@ -42,7 +41,6 @@
 .rail-item.is-active { color: var(--brand); background: #292d2f; }
 .rail-label { font-size: 11px; font-weight: 600; }
 
-/* Sidebar */
 .sidebar {
   position: relative;
   z-index: 3;
@@ -283,7 +281,6 @@
   }
 }
 
-/* Workspace header */
 .workspace {
   min-width: 0;
   overflow: auto;
@@ -415,4 +412,32 @@
   color: #929ba2;
   background: #25292c;
   border-color: rgba(255,255,255,.045);
+}
+
+/* Preserve navigation nodes and interpolate the same three grid columns. */
+.app-shell {transition:grid-template-columns 220ms cubic-bezier(.2,0,0,1)}
+.sidebar {overflow-x:hidden;transition:padding 220ms cubic-bezier(.2,0,0,1)}
+.sidebar-title strong,.sidebar-label,.sidebar-section-label,.sidebar-version,.device-copy,.device-card>svg {
+  opacity:1;max-width:320px;max-height:72px;white-space:nowrap;overflow:hidden;
+  transition:opacity 140ms ease,max-width 220ms cubic-bezier(.2,0,0,1),max-height 220ms cubic-bezier(.2,0,0,1),margin 220ms ease;
+}
+.sidebar-item {margin-inline:auto;transition:width 220ms ease,min-height 220ms ease,padding 220ms ease,gap 220ms ease,margin-top 220ms ease,background 140ms ease,color 140ms ease}
+.sidebar-icon {transition:width 220ms ease,min-width 220ms ease,height 220ms ease}
+.sidebar .device-card {overflow:hidden;transition:width 220ms ease,padding 220ms ease,gap 220ms ease,grid-template-columns 220ms ease,background 140ms ease}
+.sidebar .device-thumb {transition:width 220ms ease,height 220ms ease}
+.app-shell.is-sidebar-compact .sidebar-title strong,
+.app-shell.is-sidebar-compact .device-copy,
+.app-shell.is-sidebar-compact .device-card>svg,
+.app-shell.is-sidebar-compact .sidebar-section-label,
+.app-shell.is-sidebar-compact .sidebar-label,
+.app-shell.is-sidebar-compact .sidebar-version {display:block;opacity:0;max-width:0;max-height:0;margin:0;pointer-events:none}
+.app-shell.is-sidebar-compact .sidebar .device-card {grid-template-columns:52px 0px 0px;gap:0}
+.app-shell.is-sidebar-compact .sidebar-item {gap:0}
+.app-shell.is-sidebar-compact .sidebar-title {justify-content:space-between}
+.app-shell.is-sidebar-compact .sidebar-title .icon-button {margin-inline:auto}
+@media(max-width:1100px) and (min-width:761px) {
+  .app-shell.is-sidebar-compact .sidebar-title strong,.app-shell.is-sidebar-compact .device-copy,.app-shell.is-sidebar-compact .device-card>svg,.app-shell.is-sidebar-compact .sidebar-section-label,.app-shell.is-sidebar-compact .sidebar-label,.app-shell.is-sidebar-compact .sidebar-version {display:none}
+}
+@media(prefers-reduced-motion:reduce) {
+  .app-shell,.sidebar,.sidebar-title strong,.sidebar-label,.sidebar-section-label,.sidebar-version,.device-copy,.device-card>svg,.sidebar-item,.sidebar-icon,.sidebar .device-card,.sidebar .device-thumb {transition:none}
 }

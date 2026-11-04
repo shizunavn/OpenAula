@@ -42,10 +42,8 @@ if (!vcvars) {
       windowsHide: true
     }).trim();
     if (vs) vcvars = path.join(vs, 'VC', 'Auxiliary', 'Build', 'vcvars64.bat');
-  } catch (ignoredError) {
-    /* Ignored non-fatal error. */
-    void ignoredError;
-  }
+  } catch {
+}
 }
 if (!vcvars) throw Error('Install Visual Studio C++ Build Tools or set HERO68_VCVARS');
 const q = s => '"' + s + '"',

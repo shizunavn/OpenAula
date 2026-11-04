@@ -27,14 +27,3 @@
 .macro-event-list {
   scrollbar-gutter: stable;
 }
-
-.sidebar {
-  scrollbar-gutter: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.sidebar::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}

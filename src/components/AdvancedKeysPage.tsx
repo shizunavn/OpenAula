@@ -13,6 +13,15 @@ import { REMAP_CATEGORIES, remapLabel } from '../protocol/hero68/remap';
 import { ADVANCED_PRESETS, applyAdvancedPreset, presetConflicts, type AdvancedPreset } from '../protocol/hero68/advancedPresets';
 import { AppSelect } from '../app/components/AppSelect';
 import './AdvancedKeysPage.css';
+/**
+ * Advanced key binding modes supported by HERO68/HERO84 firmware (up to ADVANCED_LIMIT bindings per profile):
+ * - SOCD: Pairs exactly 2 physical keys and resolves simultaneous opposite cardinal directions (Last/Key1/Key2/Neutral).
+ * - DKS (Dynamic Keystroke): Binds 1 physical key to up to 4 actions across 4 travel phases (down shallow, down deep, up deep, up shallow).
+ * - MT (Mod-Tap): Sends a tap action if released within the tap/hold threshold (ms), or holds a secondary modifier action.
+ * - TGL (Toggle): Latches an action on/off on quick tap while preserving normal momentary behavior on hold.
+ * - MPT (Multi-Point Trigger): Triggers up to 3 distinct actions at 3 ascending actuation depths on a single key.
+ * - END (Release Action): Preserves the primary press action and fires an additional keycode upon release.
+ */
 const INFO: Record<AdvancedKind, {
   title: string;
   description: string;

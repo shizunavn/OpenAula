@@ -29,9 +29,8 @@ async function queryPermission(): Promise<PermissionStatus | null> {
       return await navigator.permissions.query({
         name: (name as PermissionName)
       });
-    } catch (ignoredError) {
-      void ignoredError;
-    } /* Try the name used by earlier browsers. */
+    } catch {
+} /* Try the name used by earlier browsers. */
   }
 
   return null;

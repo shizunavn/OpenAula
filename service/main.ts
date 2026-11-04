@@ -196,9 +196,7 @@ async function shutdown(exitCode = 0) {
   for (const client of ctx.hallClients.keys()) {
     client.end();
   }
-  await exclusive(() => bridge.close()).catch(ignoredError => {
-    void ignoredError;
-  });
+  await exclusive(() => bridge.close()).catch(() => {});
   bridge.end();
   server.close(() => process.exit(exitCode));
   setTimeout(() => process.exit(exitCode), 1000).unref();
@@ -224,9 +222,8 @@ server.listen(port, '127.0.0.1', () => {
     if (gamepadController.firmware.pendingRecovery) {
       try {
         await gamepadController.firmware.restore();
-      } catch (ignoredError) {
-        void ignoredError;
-        setImmediate(() => gamepadController.scheduleFirmwareRecovery());
+      } catch {
+setImmediate(() => gamepadController.scheduleFirmwareRecovery());
       }
     }
     if (ctx.mode === 'custom') {

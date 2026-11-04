@@ -2,22 +2,66 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
+import type { GamepadReport } from '../../src/keyboard/gamepad';
 import type { HallKeyMetric } from '../../src/protocol/gamepadService';
 import { decodeReport } from '../../src/protocol/hero68/codec';
-import type { ServiceContext } from '../context';
+import type { HallRecord, ServiceContext } from '../context';
+import type { NativeFrameTotals } from '../frameTelemetry';
 import { decodeHero68Input } from '../keyInput';
 import { profileRequest } from '../profileSelection';
 import { nativeRhythmCommand, type RhythmConfiguration } from '../rhythm';
 
+export type NativeGamepadInputPayload = {
+  enabled: boolean;
+  armed?: boolean;
+  stale?: boolean;
+  xinputVerified?: boolean;
+  report: GamepadReport;
+  sequence: number;
+};
+
+export type NativeHallSnapshotPayload = {
+  publishedMs?: number;
+  requests: number;
+  timeouts: number;
+  records: Omit<HallRecord, 'keyId'>[];
+};
+
+export type NativeCustomFramePayload = NativeFrameTotals & {
+  submission: number;
+  frameMs: number;
+  gapMs: number;
+  droppedFrames: number;
+  reusedFrames: number;
+};
+
+export type NativeRhythmFramePayload = NativeFrameTotals & {
+  colors: string[];
+  frameMs: number;
+  gapMs: number;
+  droppedFrames: number;
+  audioLevel: number;
+  audioState: string;
+  audioError: string;
+  audioEndpoint: string;
+  sampleRate: number;
+  audioToWriteMs: number;
+  captureToWriteMs: number;
+  audioTimestampInvalid: boolean;
+  renderMs: number;
+  encodeMs: number;
+  writeMs: number;
+};
+
 export type NativeBridgeHandlers = {
-  onGamepadInput: (payload: any) => void;
-  onHallSnapshot: (payload: any) => void;
+  onGamepadInput: (payload: NativeGamepadInputPayload) => void;
+  onHallSnapshot: (payload: NativeHallSnapshotPayload) => void;
   onPowerOrHallRecovery: () => void;
   onHallErrorRecovery: () => void;
   onGamepadStatusChanged: () => void;
   onCustomTick: () => void;
-  onCustomFrame: (payload: any) => void;
-  onRhythmFrame: (payload: any) => void;
+  onCustomFrame: (payload: NativeCustomFramePayload) => void;
+  onRhythmFrame: (payload: NativeRhythmFramePayload) => void;
   onRgbKey: (keyId: string, pressed: boolean) => void;
   onGamepadToggleInput: (keyId: string, pressed: boolean) => void;
   publishFrame: (value: unknown) => void;
@@ -71,19 +115,17 @@ export class NativeBridge {
     }).on('line', line => {
       if (line.startsWith('gamepad-input:')) {
         try {
-          this.handlers.onGamepadInput(JSON.parse(line.slice(14)));
-        } catch (ignoredError) {
-          /* Ignored non-fatal error. */
-          void ignoredError;
+          this.handlers.onGamepadInput(JSON.parse(line.slice(14)) as NativeGamepadInputPayload);
+        } catch {
+          // Ignore truncated JSON telemetry line if pipe closes mid-write.
         }
         return;
       }
       if (line.startsWith('hall-snapshot:')) {
         try {
-          this.handlers.onHallSnapshot(JSON.parse(line.slice(14)));
-        } catch (ignoredError) {
-          /* Ignored non-fatal error. */
-          void ignoredError;
+          this.handlers.onHallSnapshot(JSON.parse(line.slice(14)) as NativeHallSnapshotPayload);
+        } catch {
+          // Ignore truncated JSON telemetry line if pipe closes mid-write.
         }
         return;
       }
@@ -97,18 +139,16 @@ export class NativeBridge {
               keyId: this.ctx.keyByPosition.get(k.pos) ?? '',
             })),
           };
-        } catch (ignoredError) {
-          /* Ignored non-fatal error. */
-          void ignoredError;
+        } catch {
+          // Ignore truncated JSON telemetry line if pipe closes mid-write.
         }
         return;
       }
       if (line.startsWith('bridge-stats:')) {
         try {
           this.ctx.bridgeIpc = JSON.parse(line.slice(13));
-        } catch (ignoredError) {
-          /* Ignored non-fatal error. */
-          void ignoredError;
+        } catch {
+          // Ignore truncated JSON telemetry line if pipe closes mid-write.
         }
         return;
       }
@@ -132,9 +172,8 @@ export class NativeBridge {
             this.handlers.onGamepadStatusChanged();
           }
           this.handlers.publishGamepad();
-        } catch (ignoredError) {
-          /* Ignored non-fatal error. */
-          void ignoredError;
+        } catch {
+          // Ignore truncated JSON telemetry line if pipe closes mid-write.
         }
         return;
       }
@@ -144,10 +183,9 @@ export class NativeBridge {
       }
       if (line.startsWith('custom-frame:')) {
         try {
-          this.handlers.onCustomFrame(JSON.parse(line.slice(13)));
-        } catch (ignoredError) {
-          /* Ignored non-fatal error. */
-          void ignoredError;
+          this.handlers.onCustomFrame(JSON.parse(line.slice(13)) as NativeCustomFramePayload);
+        } catch {
+          // Ignore truncated JSON telemetry line if pipe closes mid-write.
         }
         return;
       }
@@ -166,10 +204,9 @@ export class NativeBridge {
       }
       if (line.startsWith('rhythm-frame:')) {
         try {
-          this.handlers.onRhythmFrame(JSON.parse(line.slice(13)));
-        } catch (ignoredError) {
-          /* Ignored non-fatal error. */
-          void ignoredError;
+          this.handlers.onRhythmFrame(JSON.parse(line.slice(13)) as NativeRhythmFramePayload);
+        } catch {
+          // Ignore truncated JSON telemetry line if pipe closes mid-write.
         }
         return;
       }
@@ -329,9 +366,8 @@ export class NativeBridge {
     if (this.ctx.deviceModel) {
       try {
         await this.line('device-model:' + this.ctx.deviceModel);
-      } catch (ignoredError) {
+      } catch {
         /* older native bridge: Rhythm stays 68-key */
-        void ignoredError;
       }
     }
   }

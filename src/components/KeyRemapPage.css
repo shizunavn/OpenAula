@@ -64,3 +64,40 @@
 @media(max-width:900px){.remap-preview-layout{grid-template-columns:1fr}.remap-preview-layers h2{margin-bottom:9px}.remap-preview-layers [role=group]{display:flex;flex-wrap:wrap}.remap-layer-row{min-width:135px}.remap-page .remap-editor{grid-template-columns:1fr}.remap-preset-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.remap-page .remap-functions{max-height:480px}}
 @media(max-width:480px){.remap-preset-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.remap-page .remap-target{flex-wrap:wrap}.remap-page .remap-target .ghost-button{margin-left:auto}}
 @media(prefers-reduced-motion:reduce){.remap-accordion-trigger>svg{transition:none}}
+
+/* Macro actions inside Key Remap */
+.remap-categories button { display: inline-flex; align-items: center; gap: 5px; }
+.remap-macro-section { border-top: 1px solid rgba(255,255,255,.075); padding-top: 16px; }
+.remap-macro-controls { display: grid; grid-template-columns: minmax(0,1fr) 150px; gap: 10px; padding: 10px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,.075); border-radius: 7px; background: #1a1d1e; }
+.remap-macro-mode { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; }
+.remap-macro-mode button { min-width: 0; padding: 8px 6px; border: 1px solid rgba(255,255,255,.09); border-radius: 5px; background: #25292b; color: var(--text-2); cursor: pointer; }
+.remap-macro-mode button strong, .remap-macro-mode button small { display: block; }
+.remap-macro-mode button strong { font-size: 10px; font-weight: 650; }
+.remap-macro-mode button small { margin-top: 3px; color: var(--text-3); font-size: 8px; }
+.remap-macro-mode button:hover { border-color: #676e71; }
+.remap-macro-mode button.is-active { border-color: rgba(255,212,92,.55); background: rgba(255,212,92,.07); color: #ffd45c; }
+.remap-macro-mode button.is-active small { color: rgba(255,212,92,.7); }
+.remap-macro-count { display: grid; grid-template-columns: auto 62px; align-items: center; gap: 5px 8px; color: var(--text-2); font-size: 10px; }
+.remap-macro-count > span { font-weight: 600; }
+.remap-macro-count input { width: 62px; height: 30px; padding: 0 7px; border: 1px solid rgba(255,255,255,.1); border-radius: 5px; outline: 0; background: #25292b; color: var(--text-1); font: inherit; }
+.remap-macro-count input:focus { border-color: rgba(255,212,92,.55); }
+.remap-macro-count.is-disabled { opacity: .4; }
+.remap-macro-count.is-disabled input { cursor: not-allowed; }
+.remap-macro-count small { grid-column: 1 / -1; color: var(--text-3); font-size: 8px; line-height: 1.45; }
+.remap-macro-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(180px,1fr)); gap: 6px; }
+.remap-macro-grid > button { display: flex; align-items: center; min-width: 0; min-height: 54px; gap: 9px; padding: 8px 9px; border: 1px solid rgba(255,255,255,.09); border-radius: 6px; background: #25292b; color: var(--text-2); text-align: left; cursor: pointer; }
+.remap-macro-grid > button:hover:not(:disabled) { border-color: #6d7478; background: #2e3335; }
+.remap-macro-grid > button.is-assigned { border-color: rgba(255,212,92,.3); }
+.remap-macro-grid > button.is-active { border-color: rgba(255,212,92,.62); background: rgba(255,212,92,.07); }
+.remap-macro-grid > button:disabled { opacity: .5; cursor: default; }
+.remap-macro-icon { display: grid; place-items: center; width: 31px; height: 31px; flex: 0 0 31px; border-radius: 5px; background: rgba(255,255,255,.05); color: var(--text-3); }
+.remap-macro-grid > button.is-assigned .remap-macro-icon { color: #ffd45c; background: rgba(255,212,92,.08); }
+.remap-macro-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.remap-macro-copy strong { overflow: hidden; color: var(--text-1); font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.remap-macro-copy small { color: var(--text-3); font-size: 8px; }
+.remap-macro-assign { flex-shrink: 0; color: var(--text-3); font-size: 8px; }
+.remap-macro-grid > button.is-active .remap-macro-assign { color: #ffd45c; }
+@media (max-width: 600px) {
+  .remap-macro-controls { grid-template-columns: 1fr; }
+  .remap-macro-grid { grid-template-columns: 1fr; }
+}

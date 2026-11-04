@@ -110,9 +110,8 @@ export const gamepadService = {
     stream.onmessage = e => {
       try {
         onFrame(JSON.parse(e.data));
-      } catch (ignoredError) {
-        void ignoredError;
-      } /* ignore invalid frame */
+      } catch {
+} /* ignore invalid frame */
     };
 
     stream.onerror = onError;
@@ -154,14 +153,11 @@ export const gamepadService = {
       try {
         const parsed = (JSON.parse(e.data) as GamepadStatus);
         if (parsed.enabled && hero68DeviceManager.connected && !hero68DeviceManager.viaService) {
-          void useSharedHallService().catch(ignoredError => {
-            void ignoredError;
-          });
+          void useSharedHallService().catch(() => {});
         }
         onStatus(parsed);
-      } catch (ignoredError) {
-        void ignoredError;
-      } /* malformed event */
+      } catch {
+} /* malformed event */
     };
 
     stream.onerror = onError;

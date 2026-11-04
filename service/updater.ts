@@ -118,9 +118,8 @@ export function createServiceUpdater(options: UpdateOptions) {
       if (valid(await readFile(file))) {
         return file;
       }
-    } catch (ignoredError) {
-      void ignoredError;
-    } /* Download missing. */
+    } catch {
+} /* Download missing. */
     const bytes = await downloadAsset(asset.browser_download_url, 100_000_000);
     if (!valid(bytes)) {
       throw Error('Windows package checksum mismatch');

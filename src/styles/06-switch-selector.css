@@ -1,5 +1,3 @@
-/* Switch selector redesign */
-
 .switch-page-actions {
   display: flex;
   justify-content: flex-end;
@@ -303,4 +301,15 @@
 
 .workspace-settings .page {
   padding-top: 22px;
+}
+
+.switch-board-key:focus-visible {
+  outline: none;
+}
+.switch-board-key:not(.is-selected):focus-visible {
+  border-color: rgba(255,212,92,.88);
+  box-shadow: 0 0 0 1px rgba(255,212,92,.24), inset 0 1px rgba(255,255,255,.03);
+}
+.switch-board-key.is-selected:focus-visible {
+  box-shadow: 0 0 0 1px rgba(255,212,92,.28) inset, 0 0 0 3px rgba(255,212,92,.12);
 }
