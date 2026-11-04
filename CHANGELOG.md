@@ -3,6 +3,16 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.1.0 — structure, Gamepad toggle, ubuntu test parity
+
+- Split the monolithic layers so each concern has one owner: the Windows service into `service/server/`, `service/rgb/`, `service/gamepad/`, `service/hall/` and `service/bridge/`; the HERO68 protocol into `src/protocol/bytetech/` (old `src/protocol/hero68/*` paths keep re-exporting); the web app into `src/app/hooks/`, `src/app/components/` and `src/pages/`. Behaviour is unchanged apart from the fix below.
+- Gamepad Start/Stop can now be bound to a toggle key (`POST /gamepad/toggle`, `GamepadToggleTracker`); the app sends `expectedEnabled` so a repeated press can never leave the service in the wrong state.
+- The My Profile page shows the board's real key count and name instead of the hard-coded HERO68 68 keys.
+- Per-model layout views are cached per registered board (`heroLayout`), and `keyIdsOf()` is the single place that drops row padding slots.
+- Add `.github/workflows/cloudflare.yml` to build on every push and deploy the Worker (`wrangler deploy`) when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets are set.
+- Version 1.1.0 applies to the app and the Windows service together, matching 1.0.0.
+- Not validated on hardware: the toggle binding and the 1.1.0 setup were not tried on a physical board.
+
 ## 1.0.0 — OpenAula
 
 - The app and the Windows service now ship one version number; 0.9.59 (UI) and 0.6.1 (service) were the last independent pair.
