@@ -79,8 +79,37 @@ test('circle clamps diagonals, square reaches full axes, angle adjustment preser
 })
 test('configuration v1 validates monotonic curves, unique physical keys and bounds before native encoding',()=>{
   const c=gp.defaultGamepad();assert.deepEqual(gp.validateGamepad(JSON.parse(JSON.stringify(c))),c)
+  assert.deepEqual(gp.validateGamepad({...c,toggleKeybind:[]}),c)
+  assert.deepEqual(gp.validateGamepad({...c,toggleKeybind:['KeyG','ShiftLeft','ControlLeft']}).toggleKeybind,['ControlLeft','ShiftLeft','KeyG'])
   gp.validateGamepad({...c,bindings:[{...c.bindings[0],startMm:.1,endMm:.11}]})
-  for(const patch of [{version:2},{rate:1000},{bindings:[...c.bindings,c.bindings[0]]},{curve:[[0,0],[.5,.8],[.7,.5],[1,1]]},{curve:[[0,0],[0,.5],[1,1]]},{bindings:[{...c.bindings[0],endMm:4}]},{angle:61}])assert.throws(()=>gp.validateGamepad({...c,...patch}))
+  for(const patch of [{version:2},{rate:1000},{bindings:[...c.bindings,c.bindings[0]]},{curve:[[0,0],[.5,.8],[.7,.5],[1,1]]},{curve:[[0,0],[0,.5],[1,1]]},{bindings:[{...c.bindings[0],endMm:4}]},{angle:61},{toggleKeybind:['UnknownKey']},{toggleKeybind:['F12','F12']},{toggleKeybind:['ControlLeft','ShiftLeft','AltLeft','KeyA','KeyB']}])assert.throws(()=>gp.validateGamepad({...c,...patch}))
   assert.match(gp.nativeGamepadCommand(configuration([bind('KeyW','LUp')])) ,/^gamepad-config:200;1;0;0;45;0,0\|1,1;30,15,0.1,3.4$/)
   for(const curve of Object.values(gp.CURVE_PRESETS)){gp.validateGamepad({...c,curve});assert.equal(gp.curveValue(curve,-1),0);assert.equal(gp.curveValue(curve,2),1)}
+})
+test('GamepadToggleTracker latches single-key and modifier-chord shortcuts without auto-repeat re-triggers',()=>{
+  const tracker=new gp.GamepadToggleTracker()
+  assert.equal(gp.formatToggleKeybind(['ControlLeft','KeyG'],k=>k==='ControlLeft'?'L-Ctrl':'G'),'L-Ctrl + G')
+  // Single key shortcut ignores presses when an unrelated modifier is held, latches once, and resets on release.
+  assert.equal(tracker.event('ControlLeft',true,['F12']),false)
+  assert.equal(tracker.event('F12',true,['F12']),false)
+  assert.equal(tracker.event('F12',false,['F12']),false)
+  assert.equal(tracker.event('ControlLeft',false,['F12']),false)
+  assert.equal(tracker.event('KeyW',true,['F12']),false)
+  assert.equal(tracker.event('F12',true,['F12']),true)
+  assert.equal(tracker.event('F12',true,['F12']),false,'auto-repeat while held must not toggle again')
+  assert.equal(tracker.event('F12',false,['F12']),false)
+  assert.equal(tracker.event('F12',true,['F12']),true)
+  tracker.reset()
+  // Chord shortcut requires all keys held and no extra modifiers.
+  const chord=['ControlLeft','ShiftLeft','KeyG']
+  assert.equal(tracker.event('ControlLeft',true,chord),false)
+  assert.equal(tracker.event('ShiftLeft',true,chord),false)
+  assert.equal(tracker.event('AltLeft',true,chord),false)
+  assert.equal(tracker.event('KeyG',true,chord),false,'extra modifier blocks chord')
+  assert.equal(tracker.event('KeyG',false,chord),false)
+  assert.equal(tracker.event('AltLeft',false,chord),false)
+  assert.equal(tracker.event('KeyG',true,chord),true)
+  assert.equal(tracker.event('KeyG',true,chord),false)
+  assert.equal(tracker.event('KeyG',false,chord),false)
+  assert.equal(tracker.event('KeyG',true,chord),true,'releasing and re-pressing the main key while holding modifiers triggers again')
 })

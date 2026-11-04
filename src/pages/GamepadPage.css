@@ -676,3 +676,42 @@
     gap: 16px;
   }
 }
+
+.gp-keybind-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0;
+  font-size: 13px;
+}
+.gp-keybind-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gamepad-page .gp-keybind-button {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  min-height: 40px;
+  padding: 9px 12px;
+  background: #171c20;
+  border-color: #465057;
+  font-weight: 600;
+  text-align: left;
+}
+.gamepad-page .gp-keybind-button.is-recording {
+  border-color: #ffd45a;
+  background: #2b271c;
+  color: #ffd45a;
+}
+.gamepad-page .gp-keybind-clear {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+.gp-keybind-hint {
+  color: #96a7b1;
+  font-size: 12px;
+  line-height: 1.45;
+}

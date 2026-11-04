@@ -17,10 +17,11 @@ const post=async(url,input={})=>{const r=await fetch(base+url,{method:'POST',hea
 const read=async()=>JSON.parse(await readFile(path.join(state,'fixture-hid.json'),'utf8'))
 test('service atomically blocks/restores firmware; fast tester streams add no Hall consumers and startup recovers persisted remaps',async t=>{
  await start();t.after(()=>{if(service?.exitCode===null)service.kill()})
- let status=await(await fetch(base+'/gamepad/status')).json();const config={...status.configuration,bindings:status.configuration.bindings.slice(0,2),suppressMappedKeys:true}
+ let status=await(await fetch(base+'/gamepad/status')).json();const config={...status.configuration,bindings:status.configuration.bindings.slice(0,2),suppressMappedKeys:true,toggleKeybind:['ControlLeft','KeyG']}
  // Native cold boot may exceed both the ordinary HID watchdog and a web read.
  await writeFile(path.join(state,'fixture-start-delay.json'),JSON.stringify({delayMs:5200}))
  status=await post('/gamepad/start',{slot:0,configuration:config});assert.ok(status.enabled&&status.keyboardSuppressionActive)
+ assert.deepEqual(status.configuration.toggleKeybind,['ControlLeft','KeyG'])
  await writeFile(path.join(state,'fixture-start-delay.json'),JSON.stringify({delayMs:0}))
  let actual=await read();assert.equal(Object.keys(actual.remaps).length,6);assert.ok(Object.values(actual.remaps).every(v=>v===0))
  const journal=JSON.parse(await readFile(path.join(state,'gamepad-remap-recovery.json'),'utf8'));assert.equal(journal.entries.length,6)
@@ -61,7 +62,19 @@ test('service atomically blocks/restores firmware; fast tester streams add no Ha
  await post('/device/request',{hex:write.toString('hex')});assert.equal((await read()).remaps['0:0:30'],0)
  const updatedJournal=JSON.parse(await readFile(path.join(state,'gamepad-remap-recovery.json'),'utf8'));assert.equal(updatedJournal.entries.find(e=>e.layer===0&&e.pos===30).value,4)
  journal.entries.find(e=>e.layer===0&&e.pos===30).value=4
- await post('/gamepad/stop');actual=await read();for(const e of journal.entries)assert.equal(actual.remaps[`0:${e.layer}:${e.pos}`],e.value)
+ // Verify /gamepad/toggle API and background raw input toggleKeybind
+ status=await post('/gamepad/toggle',{slot:0});assert.equal(status.enabled,false)
+ actual=await read();for(const e of journal.entries)assert.equal(actual.remaps[`0:${e.layer}:${e.pos}`],e.value)
+ status=await post('/gamepad/toggle',{slot:0,expectedEnabled:false});assert.equal(status.enabled,false,'expectedEnabled guard prevents duplicate toggle')
+ // Trigger toggleKeybind (ControlLeft + KeyG -> scans 01d + 022) via native raw input events
+ await writeFile(path.join(state,'fixture-events.json'),JSON.stringify(['key:01d:1','key:022:1','key:022:0','key:01d:0']))
+ for(let i=0;i<30;i++){status=await(await fetch(base+'/gamepad/status')).json();if(status.enabled)break;await new Promise(r=>setTimeout(r,50))}
+ assert.equal(status.enabled,true,'background raw input toggleKeybind starts Gamepad')
+ await new Promise(r=>setTimeout(r,400))
+ await writeFile(path.join(state,'fixture-events.json'),JSON.stringify(['key:01d:1','key:022:1','key:022:0','key:01d:0']))
+ for(let i=0;i<30;i++){status=await(await fetch(base+'/gamepad/status')).json();if(!status.enabled)break;await new Promise(r=>setTimeout(r,50))}
+ assert.equal(status.enabled,false,'background raw input toggleKeybind stops Gamepad')
+ actual=await read();for(const e of journal.entries)assert.equal(actual.remaps[`0:${e.layer}:${e.pos}`],e.value)
  await post('/gamepad/start',{slot:0,configuration:config});service.kill();await new Promise(r=>service.once('exit',r))
  await start();status=await(await fetch(base+'/gamepad/status')).json();assert.equal(status.enabled,false);assert.equal(status.firmwareRecoveryPending,false)
  actual=await read();for(const e of journal.entries)assert.equal(actual.remaps[`0:${e.layer}:${e.pos}`],e.value)

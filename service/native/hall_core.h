@@ -6,7 +6,8 @@
 #include <cstdint>
 namespace hall {
 constexpr size_t Capacity=256;
-inline bool heroPosition(unsigned pos){return pos==1||(pos>=15&&pos<=77)||pos==98||pos==99||pos==102||pos==103;}
+constexpr size_t MaxBoardKeys=84;
+inline bool heroPosition(unsigned pos){return (pos>=1&&pos<=77)||pos==95||(pos>=98&&pos<=103);}
 struct Sample {uint16_t distance=0,adc=0;bool pressed=false;double at=-1;uint64_t sequence=0;};
 inline bool matchesReply(const uint8_t* packet,size_t length,const std::vector<uint16_t>& ids){
   if(length<64||ids.empty()||ids.size()>9||packet[0]!=9||packet[1]!=0x98||packet[2]!=1||packet[6]!=ids.size()*6)return false;

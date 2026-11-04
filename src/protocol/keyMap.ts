@@ -1,16 +1,17 @@
-import { HERO68_LAYOUT } from '../keyboard/hero68Layout'
-import { HERO84_ONLY_KEYS } from '../keyboard/hero84Layout'
+import { getBoards } from '../keyboard/registry'
 
 export type ProtocolKeyAddress = {
   keyId: string
   label: string
+  /** Matrix key code from the reference layout (row << 8 | column). */
   matrixKey: number
+  /** Placeholder until RE confirms the wire key index used by HERO68 reports. */
   matrixHex: string
 }
 
-const ALL_LAYOUT_KEYS = [...HERO68_LAYOUT.flat(), ...HERO84_ONLY_KEYS]
+const ALL_LAYOUT_KEYS = getBoards().flatMap((board) => board.rows.flat().filter((key) => !key.spacer))
 
-export const HERO68_PROTOCOL_KEY_MAP: Readonly<Record<string, ProtocolKeyAddress>> = Object.fromEntries(
+export const HERO68_PROTOCOL_KEY_MAP: Record<string, ProtocolKeyAddress> = Object.fromEntries(
   ALL_LAYOUT_KEYS.map((key) => {
     const matrixKey = key.matrixKey ?? 0
     return [

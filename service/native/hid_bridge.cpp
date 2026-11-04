@@ -50,7 +50,8 @@ bool heroKeyboard(HANDLE handle) {
     std::wstring name(length, L'\0');
     if (GetRawInputDeviceInfoW(handle, RIDI_DEVICENAME, name.data(), &length) == UINT(-1)) return false;
     for (auto& ch : name) ch = std::towupper(ch);
-    return name.find(L"VID_372E") != std::wstring::npos && name.find(L"PID_103E") != std::wstring::npos;
+    return name.find(L"VID_372E") != std::wstring::npos &&
+           (name.find(L"PID_103E") != std::wstring::npos || name.find(L"PID_1000") != std::wstring::npos);
 }
 LRESULT CALLBACK rawWindow(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     if(message==WM_POWERBROADCAST){

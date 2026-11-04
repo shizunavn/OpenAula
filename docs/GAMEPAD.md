@@ -167,6 +167,7 @@ limits. Existing RGB/device APIs retain their shape. POST bodies use JSON.
 | `POST /gamepad/profile` | `{slot}`; neutralize and load that saved gamepad configuration |
 | `POST /gamepad/start` | Optional `{slot, configuration}`; connect, create one Xbox target and subscribe |
 | `POST /gamepad/stop` | Neutralize, remove target and release gamepad consumers |
+| `POST /gamepad/toggle` | Optional `{slot, configuration, source, expectedEnabled}`; toggle Gamepad Start/Stop |
 | `GET /hall/stream?keys=KeyW,KeyA` | Browser subscription, 100 Hz; disconnect unsubscribes |
 
 Configuration schema is defined in `src/keyboard/gamepad.ts`: `version:1`,

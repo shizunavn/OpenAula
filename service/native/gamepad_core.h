@@ -21,7 +21,7 @@ inline Config parse(const std::string& payload){
   if(c.curve.size()<2||c.curve.size()>16||c.curve.front().x!=0||c.curve.front().y!=0||c.curve.back().x!=1||c.curve.back().y!=1)throw std::runtime_error("Invalid curve endpoints");
   std::array<bool,hall::Capacity> seen{};
   for(auto& p:split(f[6],'|')){auto v=split(p,',');if(v.size()!=4)throw std::runtime_error("Invalid binding");double pos=number(v[0]),action=number(v[1]),start=number(v[2]),end=number(v[3]);if(pos<1||pos>=hall::Capacity||pos!=std::floor(pos)||!hall::heroPosition(unsigned(pos))||action<0||action>=25||action!=std::floor(action)||start<0||end>3.4||end-start<.01-1e-9||seen[size_t(pos)])throw std::runtime_error("Invalid binding values");seen[size_t(pos)]=true;c.bindings.push_back({uint16_t(pos),int(action),start,end});}
-  if(c.bindings.size()>68)throw std::runtime_error("Too many bindings");return c;
+  if(c.bindings.size()>hall::MaxBoardKeys)throw std::runtime_error("Too many bindings");return c;
 }
 inline double curve(const Config& c,double value){double x=std::clamp(value,0.,1.);for(size_t i=1;i<c.curve.size();i++){auto a=c.curve[i-1],b=c.curve[i];if(x<=b.x)return a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x);}return 1;}
 inline Report map(const Config& c,const std::array<hall::Sample,hall::Capacity>& samples,double now,bool& stale,bool& resting){

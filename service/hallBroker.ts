@@ -1,4 +1,4 @@
-import { HERO84_KEY_POSITIONS } from "../src/protocol/hero68/keyPositions";
+import { allRegisteredKeyPositions } from "../src/keyboard/registry";
 export type HallSubscription = {
   id: string;
   keys: readonly string[];
@@ -11,20 +11,24 @@ export class HallBroker {
     this.update(subscription);
     return () => this.unsubscribe(subscription.id);
   }
-  update({ id, keys, hz }: HallSubscription) {
-    if (
-      !id ||
-      !Number.isFinite(hz) ||
-      hz < 1 ||
-      hz > 200 ||
-      keys.some((key) => HERO84_KEY_POSITIONS[key] === undefined)
-    )
+  update({
+    id,
+    keys,
+    hz
+  }: HallSubscription) {
+    const positions = allRegisteredKeyPositions();
+    if (!id || !Number.isFinite(hz) || hz < 1 || hz > 200 || keys.some(key => positions[key] === undefined)) {
       throw Error("Invalid Hall subscription");
+    }
     if (!keys.length) {
       this.unsubscribe(id);
       return;
     }
-    this.subscriptions.set(id, { id, keys: [...new Set(keys)], hz });
+    this.subscriptions.set(id, {
+      id,
+      keys: [...new Set(keys)],
+      hz
+    });
   }
   unsubscribe(id: string) {
     this.subscriptions.delete(id);
@@ -34,22 +38,23 @@ export class HallBroker {
   }
   get demands() {
     const result = new Map<string, number>();
-    for (const sub of this.subscriptions.values())
-      for (const key of sub.keys)
+    for (const sub of this.subscriptions.values()) {
+      for (const key of sub.keys) {
         result.set(key, Math.max(result.get(key) ?? 0, sub.hz));
+      }
+    }
     return result;
   }
   command(excludePrefix = "") {
+    const positions = allRegisteredKeyPositions();
     const demands = new Map<string, number>();
-    for (const sub of this.subscriptions.values())
-      if (!excludePrefix || !sub.id.startsWith(excludePrefix))
-        for (const key of sub.keys)
+    for (const sub of this.subscriptions.values()) {
+      if (!excludePrefix || !sub.id.startsWith(excludePrefix)) {
+        for (const key of sub.keys) {
           demands.set(key, Math.max(demands.get(key) ?? 0, sub.hz));
-    return (
-      "hall-config:" +
-      [...demands]
-        .map(([key, hz]) => `${HERO84_KEY_POSITIONS[key]},${hz}`)
-        .join("|")
-    );
+        }
+      }
+    }
+    return "hall-config:" + [...demands].map(([key, hz]) => `${positions[key]},${hz}`).join("|");
   }
 }

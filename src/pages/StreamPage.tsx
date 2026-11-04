@@ -1,36 +1,37 @@
-import { useEffect, useState } from 'react'
-import { useI18n } from '../i18n'
-import { translateHallError } from '../i18n/deviceErrors'
-import Hero68Preview from '../components/Hero68Preview'
-import type { AdvancedBinding } from '../protocol/hero68/advanced'
-import { HERO68_HALL_VISUAL_MAX_MM } from '../protocol/hero68/hallStream'
-import type { useHero68HallStream } from '../protocol/hero68/hallStream'
-import { hallKeyLabel } from '../app/helpers'
-import { heroLayout } from '../keyboard/layout'
-import type { HeroDeviceModelId } from '../keyboard/devices'
-
-const liveKeysPerGroup = 10
-
-type HallStream = ReturnType<typeof useHero68HallStream>
-type HallStreamSample = HallStream['samples'][string]
-
+import { useEffect, useState } from 'react';
+import { useI18n } from '../i18n';
+import { translateHallError } from '../i18n/deviceErrors';
+import Hero68Preview from '../components/Hero68Preview';
+import type { AdvancedBinding } from '../protocol/hero68/advanced';
+import { HERO68_HALL_VISUAL_MAX_MM } from '../protocol/hero68/hallStream';
+import type { useHero68HallStream } from '../protocol/hero68/hallStream';
+import { hallKeyLabel } from '../app/helpers';
+import { heroLayout } from '../keyboard/layout';
+import type { HeroDeviceModelId } from '../keyboard/devices';
+const liveKeysPerGroup = 10;
+type HallStream = ReturnType<typeof useHero68HallStream>;
+type HallStreamSample = HallStream['samples'][string];
 export interface StreamPageProps {
-  model: HeroDeviceModelId
-  hallStream: HallStream
-  deviceConnected: boolean
-  handleHallStreamToggle: () => Promise<void>
-  advancedBindings: AdvancedBinding[]
-  hallStreamPreviewSelection: Set<string>
-  toggleHallStreamPin: (keyId: string) => void
-  hallStreamPreviewByKey: Record<string, { distanceMm: number; rawAdc: number; pressed: boolean; releaseInferred: boolean }>
-  hallStreamPinnedKeyId: string | null
-  hallStreamFocusKeyId: string | null
-  hallStreamFocusSample: HallStreamSample | undefined
-  hallStreamFocusPercent: number
-  hallStreamActiveSamples: HallStreamSample[]
-  hallStreamListKeyIds: string[]
+  model: HeroDeviceModelId;
+  hallStream: HallStream;
+  deviceConnected: boolean;
+  handleHallStreamToggle: () => Promise<void>;
+  advancedBindings: AdvancedBinding[];
+  hallStreamPreviewSelection: Set<string>;
+  toggleHallStreamPin: (keyId: string) => void;
+  hallStreamPreviewByKey: Record<string, {
+    distanceMm: number;
+    rawAdc: number;
+    pressed: boolean;
+    releaseInferred: boolean;
+  }>;
+  hallStreamPinnedKeyId: string | null;
+  hallStreamFocusKeyId: string | null;
+  hallStreamFocusSample: HallStreamSample | undefined;
+  hallStreamFocusPercent: number;
+  hallStreamActiveSamples: HallStreamSample[];
+  hallStreamListKeyIds: string[];
 }
-
 function StreamPage({
   model,
   hallStream,
@@ -45,25 +46,27 @@ function StreamPage({
   hallStreamFocusSample,
   hallStreamFocusPercent,
   hallStreamActiveSamples,
-  hallStreamListKeyIds,
+  hallStreamListKeyIds
 }: StreamPageProps) {
-  const { tr } = useI18n()
+  const {
+    tr
+  } = useI18n();
   // Model order keeps unpressed keys stable; layout order is the visual order.
-  const liveKeyOrder = new Map(heroLayout(model).keyIds.map((key, index) => [key, index]))
-  const orderedKeyIds = [...hallStreamListKeyIds].sort((a, b) =>
-    Number(!!hallStream.samples[b]?.pressed) - Number(!!hallStream.samples[a]?.pressed)
-    || (liveKeyOrder.get(a) ?? liveKeyOrder.size) - (liveKeyOrder.get(b) ?? liveKeyOrder.size))
-  const groupCount = Math.max(1, Math.ceil(orderedKeyIds.length / liveKeysPerGroup))
-  const [group, setGroup] = useState(0)
-  const visibleGroup = group % groupCount
+  const liveKeyOrder = new Map(heroLayout(model).keyIds.map((key, index) => [key, index]));
+  const orderedKeyIds = [...hallStreamListKeyIds].sort((a, b) => Number(!!hallStream.samples[b]?.pressed) - Number(!!hallStream.samples[a]?.pressed) || (liveKeyOrder.get(a) ?? liveKeyOrder.size) - (liveKeyOrder.get(b) ?? liveKeyOrder.size));
+  const groupCount = Math.max(1, Math.ceil(orderedKeyIds.length / liveKeysPerGroup));
+  const [group, setGroup] = useState(0);
+  const visibleGroup = group % groupCount;
   useEffect(() => {
-    if (groupCount === 1) { setGroup(0); return }
-    const timer = window.setInterval(() => setGroup(current => (current + 1) % groupCount), 2200)
-    return () => window.clearInterval(timer)
-  }, [groupCount])
-  const visibleKeyIds = orderedKeyIds.slice(visibleGroup * liveKeysPerGroup, (visibleGroup + 1) * liveKeysPerGroup)
-  return (
-            <div className="page quick-page stream-page page-enter">
+    if (groupCount === 1) {
+      setGroup(0);
+      return;
+    }
+    const timer = window.setInterval(() => setGroup(current => (current + 1) % groupCount), 2200);
+    return () => window.clearInterval(timer);
+  }, [groupCount]);
+  const visibleKeyIds = orderedKeyIds.slice(visibleGroup * liveKeysPerGroup, (visibleGroup + 1) * liveKeysPerGroup);
+  return <div className="page quick-page stream-page page-enter">
               <div className="stream-toolbar">
                 <div>
                   <h1>{tr('Hall Stream')}</h1>
@@ -80,14 +83,7 @@ function StreamPage({
               </div>
 
               <section className="keyboard-stage stream-keyboard-stage">
-                <Hero68Preview
-                  model={model}
-                  advancedBindings={advancedBindings}
-                  selectedKeys={hallStreamPreviewSelection}
-                  onToggleKey={toggleHallStreamPin}
-                  overlayMode="stream"
-                  streamPreviewValues={hallStreamPreviewByKey}
-                />
+                <Hero68Preview model={model} advancedBindings={advancedBindings} selectedKeys={hallStreamPreviewSelection} onToggleKey={toggleHallStreamPin} overlayMode="stream" streamPreviewValues={hallStreamPreviewByKey} />
               </section>
 
               <section className="stream-dashboard">
@@ -106,8 +102,12 @@ function StreamPage({
                       <span>0.0</span><span>1.0</span><span>2.0</span><span>3.0</span><span>{HERO68_HALL_VISUAL_MAX_MM.toFixed(1)}</span>
                     </div>
                     <div className="stream-travel-track">
-                      <div className="stream-travel-fill" style={{ height: `${hallStreamFocusPercent}%` }} />
-                      <div className="stream-travel-marker" style={{ top: `${hallStreamFocusPercent}%` }} />
+                      <div className="stream-travel-fill" style={{
+              height: `${hallStreamFocusPercent}%`
+            }} />
+                      <div className="stream-travel-marker" style={{
+              top: `${hallStreamFocusPercent}%`
+            }} />
                     </div>
                     <div className="stream-travel-readout">
                       <strong>{hallStreamFocusSample ? hallStreamFocusSample.visualDistanceMm.toFixed(2) : '0.00'}<small> mm</small></strong>
@@ -119,22 +119,25 @@ function StreamPage({
                 <article className="setting-card stream-observed-card">
                   <div className="card-head compact-head">
                     <h2>{tr('Live keys')}</h2>
-                    <span>{hallStreamActiveSamples.length} {tr('active')}{groupCount > 1 && <> · {tr('Auto group {group}/{total}', { group: visibleGroup + 1, total: groupCount })}</>}</span>
+                    <span>{hallStreamActiveSamples.length} {tr('active')}{groupCount > 1 && <> · {tr('Auto group {group}/{total}', {
+                group: visibleGroup + 1,
+                total: groupCount
+              })}</>}</span>
                   </div>
                   <div className="stream-selected-list">
-                    {visibleKeyIds.map((keyId) => {
-                      const sample = hallStream.samples[keyId]
-                      const pct = sample ? Math.max(0, Math.min(100, (sample.visualDistanceMm / HERO68_HALL_VISUAL_MAX_MM) * 100)) : 0
-                      return (
-                        <div className="stream-selected-row" key={keyId} title={sample && hallStream.keyTelemetryHz[keyId] ? `${hallKeyLabel(keyId)} · ${hallStream.keyTelemetryHz[keyId].toFixed(1)} Hz` : undefined}>
+                    {visibleKeyIds.map(keyId => {
+            const sample = hallStream.samples[keyId];
+            const pct = sample ? Math.max(0, Math.min(100, sample.visualDistanceMm / HERO68_HALL_VISUAL_MAX_MM * 100)) : 0;
+            return <div className="stream-selected-row" key={keyId} title={sample && hallStream.keyTelemetryHz[keyId] ? `${hallKeyLabel(keyId)} · ${hallStream.keyTelemetryHz[keyId].toFixed(1)} Hz` : undefined}>
                           <strong>{hallKeyLabel(keyId)}</strong>
-                          <span className="stream-row-bar"><i style={{ width: `${pct}%` }} /></span>
+                          <span className="stream-row-bar"><i style={{
+                  width: `${pct}%`
+                }} /></span>
                           <span className="stream-row-value">
-                            <b>{sample ? (sample.releaseInferred ? '0.00 mm' : `${sample.visualDistanceMm.toFixed(2)} mm`) : '—'}</b>
+                            <b>{sample ? sample.releaseInferred ? '0.00 mm' : `${sample.visualDistanceMm.toFixed(2)} mm` : '—'}</b>
                           </span>
-                        </div>
-                      )
-                    })}
+                        </div>;
+          })}
                     {hallStreamListKeyIds.length === 0 && <p className="stream-empty-copy">{tr('Start the stream, then press a key. Its travel will appear here and directly on the keyboard.')}</p>}
                   </div>
                 </article>
@@ -142,11 +145,11 @@ function StreamPage({
 
               <div className="stream-footline">
                 <span>{tr('68-key Hall monitoring')}</span>
-                <span>{hallStream.recovering ? tr('Recovering Hall telemetry…') : hallStream.telemetryHz ? tr('~{rate} Hz refresh', { rate: hallStream.telemetryHz.toFixed(1) }) : hallStream.active ? tr('Measuring refresh rate…') : tr('Ready')}</span>
+                <span>{hallStream.recovering ? tr('Recovering Hall telemetry…') : hallStream.telemetryHz ? tr('~{rate} Hz refresh', {
+          rate: hallStream.telemetryHz.toFixed(1)
+        }) : hallStream.active ? tr('Measuring refresh rate…') : tr('Ready')}</span>
               </div>
               {hallStream.error && <p className="stream-error stream-error-banner">{translateHallError(hallStream.error, tr)}</p>}
-            </div>
-  )
+            </div>;
 }
-
-export { StreamPage }
+export { StreamPage };

@@ -1,51 +1,62 @@
-import { HERO68_LAYOUT, makeDemoLighting, type Hero68Row } from './hero68Layout'
-import { HERO84_DEMO_HUES, HERO84_ONLY_KEYS, buildHero84Layout } from './hero84Layout'
+import { HERO68_KEY_IDS, HERO68_LAYOUT, makeDemoLighting } from './hero68Layout'
+import { HERO84_LAYOUT, makeHero84DemoLighting } from './hero84Layout'
 import { heroDeviceModel, type HeroDeviceModel, type HeroDeviceModelId } from './devices'
+import {
+  computeKeyCoordinates,
+  detectBoardFromProductName,
+  detectBoardFromUuid,
+  getBoard,
+  getBoards,
+  registerBoard,
+  unregisterBoard,
+  type BoardDescriptor,
+  type HeroKeyDefinition,
+  type HeroKeyRow,
+} from './registry'
 
-/**
- * Model-keyed keyboard definitions. Layouts are keyed by key id, so one
- * lighting frame or key-label map serves whichever model is selected.
- */
-export type HeroLayout = {
+export type { HeroKeyDefinition, HeroKeyRow }
+export {
+  HERO68_KEY_IDS,
+  HERO68_LAYOUT,
+  HERO84_LAYOUT,
+  makeDemoLighting,
+  makeHero84DemoLighting,
+  getBoard,
+  getBoards,
+  registerBoard,
+  unregisterBoard,
+  detectBoardFromUuid,
+  detectBoardFromProductName,
+  computeKeyCoordinates,
+}
+
+export type HeroKeyboardLayout = {
+  id: HeroDeviceModelId
   model: HeroDeviceModel
-  rows: Hero68Row[]
-  keyIds: string[]
+  rows: HeroKeyRow[]
+  keyIds: readonly string[]
   keyIdSet: ReadonlySet<string>
-  /** Demo lighting frame covering every key on the board. */
   makeDemoLighting: () => Record<string, string>
 }
 
-function wootilityHueColor(hue: number) {
-  return `hsl(${hue} 80% 41%)`
-}
+export type HeroLayout = HeroKeyboardLayout
 
-function buildLayout(modelId: HeroDeviceModelId): HeroLayout {
-  const rows = modelId === 'hero84' ? buildHero84Layout(HERO68_LAYOUT) : HERO68_LAYOUT
-  const keyIds = rows.flat().filter((key) => !key.spacer).map((key) => key.id)
-  return {
-    model: heroDeviceModel(modelId),
-    rows,
-    keyIds,
-    keyIdSet: new Set(keyIds),
-    makeDemoLighting: () => {
-      const frame = makeDemoLighting()
-      if (modelId === 'hero84') {
-        for (const key of HERO84_ONLY_KEYS) {
-          frame[key.id] = wootilityHueColor(HERO84_DEMO_HUES[key.id] ?? 0)
-        }
-      }
-      return frame
-    },
+const LAYOUT_CACHE = new WeakMap<BoardDescriptor, HeroKeyboardLayout>()
+
+export function heroLayout(model: HeroDeviceModelId): HeroKeyboardLayout {
+  const board = getBoard(model)
+  const cached = LAYOUT_CACHE.get(board)
+  if (cached) {
+    return cached
   }
-}
-
-const LAYOUTS: Record<HeroDeviceModelId, HeroLayout> = {
-  hero68: buildLayout('hero68'),
-  hero84: buildLayout('hero84'),
-}
-
-export function heroLayout(modelId: HeroDeviceModelId): HeroLayout {
-  const layout = LAYOUTS[modelId]
-  if (!layout) throw new RangeError(`Unknown keyboard model: ${modelId}`)
+  const layout: HeroKeyboardLayout = {
+    id: board.id,
+    model: heroDeviceModel(board.id),
+    rows: board.rows,
+    keyIds: board.keyIds,
+    keyIdSet: board.keyIdSet,
+    makeDemoLighting: board.makeDemoLighting,
+  }
+  LAYOUT_CACHE.set(board, layout)
   return layout
 }

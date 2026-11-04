@@ -166,3 +166,110 @@ test('unknown models fail loudly', () => {
   assert.throws(() => heroDeviceModel('hero96'), RangeError)
   assert.equal(heroDeviceModel('hero84').layout, '75%')
 })
+
+test('registerBoard dynamically enables a 3rd keyboard model across layout, protocol, RGB, and Gamepad', () => {
+  const hero68Board = layouts.getBoard('hero68')
+  const extraRow = [
+    { id: 'F1', label: 'F1' },
+    { id: 'F2', label: 'F2' },
+    { id: 'F3', label: 'F3' },
+    { id: 'F4', label: 'F4' },
+    { id: 'F5', label: 'F5' },
+    { id: 'F6', label: 'F6' },
+    { id: 'F7', label: 'F7' },
+    { id: 'Spacer75', label: '', width: 9, spacer: true },
+  ]
+  const mockRows = [extraRow, ...hero68Board.rows]
+  const mockKeyIds = mockRows.flat().filter((k) => !k.spacer).map((k) => k.id)
+  assert.equal(mockKeyIds.length, 75)
+
+  const mockKeyIdToPos = {
+    ...hero68Board.keyIdToPos,
+    F1: 2,
+    F2: 3,
+    F3: 4,
+    F4: 5,
+    F5: 6,
+    F6: 7,
+    F7: 8,
+  }
+  const mockPosToKeyId = new Map(Object.entries(mockKeyIdToPos).map(([id, pos]) => [pos, id]))
+
+  const mockHero75 = {
+    id: 'hero75',
+    name: 'Hero75',
+    label: 'AULA HERO 75 HE (Mock)',
+    layoutTag: '75%',
+    sideTab: false,
+    thumbnail: hero68Board.thumbnail,
+    usb: {
+      vendorId: 0x372e,
+      productIds: [0x103e],
+      usagePage: 0xff60,
+      usage: 0x0061,
+      reportId: 0x09,
+      productNames: ['AULA HERO 75 MOCK'],
+      deviceUuids: ['110000000009'],
+      modelByte: 0x09,
+    },
+    capabilities: {
+      keyCount: 75,
+      rowCount: 6,
+      widthUnits: 16,
+      maxTravelMm: 3.4,
+      writablePollingRate: true,
+      hasSideRgb: false,
+      sideLedCount: 0,
+      maxGamepadBindings: 75,
+      maxAdvancedBindings: 40,
+    },
+    rows: mockRows,
+    keyIds: mockKeyIds,
+    keyIdSet: new Set(mockKeyIds),
+    keyCoordinates: layouts.computeKeyCoordinates(mockRows),
+    keyIdToPos: mockKeyIdToPos,
+    posToKeyId: mockPosToKeyId,
+    validPositions: new Set(Object.values(mockKeyIdToPos)),
+    factoryRemapLayers: hero68Board.factoryRemapLayers,
+    makeDemoLighting: () => Object.fromEntries(mockKeyIds.map((id) => [id, '#ffffff'])),
+  }
+
+  layouts.registerBoard(mockHero75)
+  try {
+    assert.equal(layouts.getBoard('hero75').capabilities.keyCount, 75)
+    assert.equal(layouts.heroLayout('hero75').keyIds.length, 75)
+    assert.equal(layouts.detectBoardFromUuid([0x11, 0, 0, 0, 0, 0x09]), 'hero75')
+    assert.equal(layouts.detectBoardFromProductName('AULA HERO 75 MOCK'), 'hero75')
+  } finally {
+    layouts.unregisterBoard('hero75')
+  }
+})
+
+test('persistence loadOpenHeroState and saveOpenHeroState preserve v1 schema compatibility', async () => {
+  const persistence = await bundle('src/state/persistence.ts')
+  assert.equal(persistence.OPENHERO68_STATE_KEY, 'openhero68:web-state:v1')
+
+  const store = new Map()
+  globalThis.window = {
+    localStorage: {
+      getItem: (k) => store.get(k) ?? null,
+      setItem: (k, v) => store.set(k, String(v)),
+    },
+  }
+  try {
+    persistence.saveOpenHeroState({
+      deviceModel: 'hero84',
+      profileSlot: 2,
+      languagePreference: 'vi',
+      selectedKeys: ['Escape', 'F1'],
+    })
+    const loaded = persistence.loadOpenHeroState()
+    assert.equal(loaded.deviceModel, 'hero84')
+    assert.equal(loaded.profileSlot, 2)
+    assert.equal(loaded.languagePreference, 'vi')
+    assert.equal(loaded.languageManuallySet, true)
+    assert.deepEqual(loaded.selectedKeys, ['Escape', 'F1'])
+  } finally {
+    delete globalThis.window
+  }
+})

@@ -179,14 +179,24 @@ createServer(async (req, res) => {
       });
       return;
     }
+    const targetSlot = input.slot ?? slot;
     if (input.configuration)
-      config[input.slot] = validateGamepad(input.configuration);
+      config[targetSlot] = validateGamepad(input.configuration);
     if (url.pathname === "/gamepad/start") {
-      slot = input.slot;
+      slot = targetSlot;
       enabled = true;
     }
     if (url.pathname === "/gamepad/stop") enabled = false;
-    if (url.pathname === "/gamepad/profile") slot = input.slot;
+    if (url.pathname === "/gamepad/toggle") {
+      if (input.expectedEnabled !== undefined && enabled === input.expectedEnabled) {
+        publish();
+        json(status());
+        return;
+      }
+      slot = targetSlot;
+      enabled = !enabled;
+    }
+    if (url.pathname === "/gamepad/profile") slot = targetSlot;
     publish();
     json(status());
     return;

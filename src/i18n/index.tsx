@@ -1,9 +1,7 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react'
-
-export type Language = 'en' | 'vi'
-export type LanguagePreference = Language
-export type RegionGroup = 'VN' | 'OTHER'
-
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+export type Language = 'en' | 'vi';
+export type LanguagePreference = Language;
+export type RegionGroup = 'VN' | 'OTHER';
 const VI: Record<string, string> = {
   'Connection, profile saving and background service help.': 'Hướng dẫn kết nối, lưu hồ sơ và thiết lập ứng dụng nền.',
   "These preferences change the app interface and are saved in this browser.": "Các tùy chọn này thay đổi giao diện ứng dụng và được lưu trong trình duyệt này.",
@@ -512,7 +510,6 @@ const VI: Record<string, string> = {
   'To adjust Rapid Trigger, please select one or more keys first.': 'Để chỉnh Rapid Trigger, trước tiên hãy chọn một hoặc nhiều phím.',
   'travel': 'hành trình',
   'active': 'đang hoạt động',
-
   "Advanced Key output tester": "Trình thử đầu ra Phím nâng cao",
   "Close action picker": "Đóng bộ chọn hành động",
   "Firmware binding": "Liên kết firmware",
@@ -911,30 +908,41 @@ const VI: Record<string, string> = {
   "HERO68 send timed out (command={command}, zone={zone})": "HERO68 không nhận được lệnh kịp thời (lệnh={command}, vùng={zone})",
   "Auto group {group}/{total}": "Tự chuyển nhóm {group}/{total}",
   "Press a key": "Nhấn một phím",
-  "Changes apply automatically": "Thay đổi được áp dụng tự động",
-}
-
-export type TranslationVars = Record<string, string | number>
-
+  "Changes apply automatically": "Thay đổi được áp dụng tự động"
+};
+export type TranslationVars = Record<string, string | number>;
 function interpolate(text: string, vars?: TranslationVars) {
-  if (!vars) return text
-  return text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key] ?? `{${key}}`))
+  if (!vars) {
+    return text;
+  }
+  return text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key] ?? `{${key}}`));
 }
-
 export function createTranslator(language: Language) {
-  return (text: string, vars?: TranslationVars) => interpolate(language === 'vi' ? (VI[text] ?? text) : text, vars)
+  return (text: string, vars?: TranslationVars) => interpolate(language === 'vi' ? VI[text] ?? text : text, vars);
 }
-
-const I18nContext = createContext<{ language: Language; tr: ReturnType<typeof createTranslator> }>({
+const I18nContext = createContext<{
+  language: Language;
+  tr: ReturnType<typeof createTranslator>;
+}>({
   language: 'en',
-  tr: createTranslator('en'),
-})
-
-export function I18nProvider({ language, children }: { language: Language; children: ReactNode }) {
-  const value = useMemo(() => ({ language, tr: createTranslator(language) }), [language])
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
+  tr: createTranslator('en')
+});
+export function I18nProvider({
+  language,
+  children
+}: {
+  language: Language;
+  children: ReactNode;
+}) {
+  const value = useMemo(() => ({
+    language,
+    tr: createTranslator(language)
+  }), [language]);
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
-
 export function useI18n() {
-  return useContext(I18nContext)
+  return useContext(I18nContext);
+}
+export function useT() {
+  return useContext(I18nContext).tr;
 }
