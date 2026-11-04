@@ -12,7 +12,7 @@ import { heroLayout } from "../keyboard/layout";
 import { HERO68_KEY_LABEL_BY_ID } from "../app/helpers";
 import { WINDOWS_SCANS } from "../keyboard/windowsScans";
 import { defaultGamepad, restoreGamepad, validateGamepad, mapGamepad, GAMEPAD_ACTIONS, isAnalogAction, isToggleModifier, normalizeToggleKeybind, formatToggleKeybind, GamepadToggleTracker, CURVE_PRESETS, type GamepadAction, type GamepadConfiguration, type CurvePoint } from "../keyboard/gamepad";
-import { gamepadService, useSharedHallService, VIGEMBUS_DOWNLOAD, type GamepadStatus } from "../protocol/gamepadService";
+import { gamepadService, useSharedHallService, VIGEMBUS_DOWNLOAD, isToggleModifierConfigured, outOfDateToggleModifier, type GamepadStatus } from "../protocol/gamepadService";
 import { gamepadAccess } from "../protocol/gamepadAccess";
 import { GamepadAutoApply, type GamepadSaveState } from "../protocol/gamepadAutoApply";
 import "./GamepadPage.css";
@@ -236,6 +236,11 @@ export default function GamepadPage({
       if (restoreFromService.current && v.slot === slot) {
         restoreFromService.current = false;
         setConfig(restoreGamepad(v.configuration));
+      }
+      // A service that reports no Gamepad capability predates the shortcut,
+      // yet the saved profile may still carry one; say why it does nothing.
+      if (!v.capabilities?.gamepad && isToggleModifierConfigured(v.configuration)) {
+        setError(t(outOfDateToggleModifier()));
       }
       setStatus(v);
       setServiceConnected(true);

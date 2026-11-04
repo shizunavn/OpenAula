@@ -254,6 +254,21 @@ export function createGamepadController({
     }
   }
 
+  // ViGEmBus initializes its XInput mapping lazily after boot, so the first
+  // attach can fail and a second attempt succeeds. Retry once instead of
+  // asking the user to press the toggle twice.
+  async function startNativeGamepad() {
+    const command = ctx.gamepadState.fastInputSupported ? 'gamepad-start-paused' : 'gamepad-start';
+    const first = await getBridge().line(command);
+    if (first === 'gamepad-ready') {
+      return;
+    }
+    const retry = await getBridge().line(command);
+    if (retry !== 'gamepad-ready') {
+      throw Error(/Xbox controller/i.test(first) ? `${retry}. Start Gamepad again; ViGEmBus finishes initializing after the first attempt.` : retry);
+    }
+  }
+
   function onGamepadToggleInput(id: string, pressed: boolean) {
     const config = ctx.gamepadConfigurations[ctx.gamepadSlot];
     if (!ctx.gamepadToggleTracker.event(id, pressed, config.toggleKeybind)) {
@@ -299,12 +314,7 @@ export function createGamepadController({
         }
         await bridge.request(selectProfile(ctx.gamepadSlot as 0 | 1 | 2));
         await configureNativeGamepad(activeConfig, true);
-        const r = await bridge.line(
-          ctx.gamepadState.fastInputSupported ? 'gamepad-start-paused' : 'gamepad-start',
-        );
-        if (r !== 'gamepad-ready') {
-          throw Error(r);
-        }
+        await startNativeGamepad();
         ctx.gamepadState = {
           ...ctx.gamepadState,
           enabled: true,
@@ -481,12 +491,7 @@ export function createGamepadController({
           }
           // Check the driver before mutating firmware. Output remains neutral
           // until Hall subscriptions are installed and every bound key rests.
-          const r = await bridge.line(
-            ctx.gamepadState.fastInputSupported ? 'gamepad-start-paused' : 'gamepad-start',
-          );
-          if (r !== 'gamepad-ready') {
-            throw Error(r);
-          }
+          await startNativeGamepad();
           ctx.gamepadState = {
             ...ctx.gamepadState,
             enabled: true,
