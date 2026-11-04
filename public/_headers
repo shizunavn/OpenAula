@@ -11,3 +11,8 @@
   X-Content-Type-Options: nosniff
   Cache-Control: public, max-age=86400
 
+# Pages answers clean URLs with a 308 that drops the .html, so the token has to
+# be served verbatim at the extensionless path Search Console follows.
+/googlea1b4ec26aceda08c
+  X-Robots-Tag: noindex
+
