@@ -670,6 +670,25 @@ export function useDeviceSyncController({
       }
       if (dirtyKeys.size) {
         await saveDeviceConfiguration(snapshot);
+        const readback = await hydrateFromDevice(hero68DeviceManager, profileSlot, [...dirtyKeys], deviceModel);
+        const near = (actual: number | undefined, wanted: number) => actual !== undefined && Math.abs(actual - wanted) <= 0.025;
+        for (const expected of snapshot.keys) {
+          const actual = readback.get(expected.keyId);
+          const expectedRelease = expected.rapidTriggerEnabled ? expected.splitSensitivity ? expected.releaseSensitivityMm : expected.rapidSensitivityMm : 0;
+          const expectedPress = expected.rapidTriggerEnabled ? expected.splitSensitivity ? expected.pressSensitivityMm : expected.rapidSensitivityMm : 0;
+          const rtMismatch =
+            expected.rapidTriggerEnabled &&
+            (!near(actual?.pressSensitivityMm, expectedPress) || !near(actual?.releaseSensitivityMm, expectedRelease));
+          if (
+            !actual ||
+            !near(actual.actuationMm, expected.actuationMm) ||
+            actual.rapidTriggerEnabled !== expected.rapidTriggerEnabled ||
+            rtMismatch
+          ) {
+            throw Error(`Key setting readback mismatch: ${expected.keyId}`);
+          }
+        }
+        applyHydratedPerformance(readback);
       }
       if ([...dirtyRemaps].some(change => {
         const [layerText, keyId] = change.split(':');
