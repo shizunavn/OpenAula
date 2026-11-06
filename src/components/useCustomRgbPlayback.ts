@@ -1,11 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { RgbProfile } from '../protocol/hero68/rgb';
 import { restoreCustomRgb } from '../keyboard/customRgbModel';
 import { rgbService } from '../protocol/rgbService';
 import { publishRgbServiceStatus, refreshRgbService, unsupportedRgbEffects, useRgbServiceState } from '../protocol/rgbServiceState';
 import { hero68DeviceManager } from '../protocol/hero68/webhid';
 import { hero68HallStream } from '../protocol/hero68/hallStream';
-import { buildXsydRgbWriteFrame, XSYD_MAX_BRIGHTNESS, XSYD_PER_KEY_RGB_MODE, xsydDeviceManager } from '../protocol/xsyd/device';
+import { xsydDeviceManager } from '../protocol/xsyd/device';
+import {
+  isXsydCustomRgbActive,
+  startXsydCustomRgb,
+  stopXsydCustomRgb,
+  subscribeXsydCustomRgb,
+  updateXsydCustomRgbProfile,
+} from '../protocol/serviceLighting';
 import { CustomRgbSession, customSignature, mergeRunningCustom, type CustomSessionState } from '../protocol/customRgbSession';
 import { BRAND } from '../brand';
 export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbProfile) => void, onSetup: () => void, slot = 0, editing = true) {
@@ -23,7 +30,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewOnly, setPreviewOnly] = useState(false);
-  const [xsydLive, setXsydLive] = useState(false);
+  const xsydLive = useSyncExternalStore(subscribeXsydCustomRgb, isXsydCustomRgbActive, () => false);
   const [backup, setBackup] = useState<RgbProfile | null>(null);
   const current = useRef(value);
   current.current = value;
@@ -34,10 +41,15 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
   const config = restoreCustomRgb(value.custom, value);
   const unsupported = status ? unsupportedRgbEffects(config, status) : [];
   const updateRequired = !!status && ((status.apiVersion ?? 0) < 3 || status.customRevision === undefined || unsupported.length > 0);
-  const applied = (xsydLive && xsydDeviceManager.connected && !previewOnly) || (!!state.session && status?.sessionId === state.session && status.enabled && status.mode === 'custom' && !previewOnly);
+  const applied = (xsydLive && !previewOnly) || (!!state.session && status?.sessionId === state.session && status.enabled && status.mode === 'custom' && !previewOnly);
   const signature = customSignature(value);
   const previousSignature = useRef(signature);
   const previousEditing = useRef(false);
+  useEffect(() => {
+    if (xsydLive) {
+      updateXsydCustomRgbProfile(value);
+    }
+  }, [value, xsydLive]);
   useEffect(() => {
     let active = true;
     const key = `${BRAND.storagePrefix}:custom-recovery:${slot}`;
@@ -109,24 +121,18 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
     if (busy) {
       return false;
     }
-    if (xsydDeviceManager.connected) {
+    const isXsydContext =
+      xsydDeviceManager.connected ||
+      current.current.keys?.colorIndex !== undefined ||
+      current.current.keys?.reverse !== undefined ||
+      Array.isArray(current.current.keys?.palette);
+    if (isXsydContext) {
       const token = ++action.current;
       setBusy(true);
       setError(null);
       try {
-        await xsydDeviceManager.request(
-          buildXsydRgbWriteFrame({
-            mode: XSYD_PER_KEY_RGB_MODE,
-            mix: false,
-            rgb: [255, 255, 255],
-            brightness: XSYD_MAX_BRIGHTNESS,
-            speed: 3,
-            reverse: false,
-            colorIndex: 0,
-          })
-        );
-        if (token !== action.current) {
-          return false;
+        if (!xsydDeviceManager.connected && await xsydDeviceManager.hasAuthorizedDevice()) {
+          await xsydDeviceManager.connect(false).catch(() => {});
         }
         const profile = {
           ...current.current,
@@ -135,10 +141,13 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
             enabled: true
           }
         };
+        await startXsydCustomRgb(profile);
+        if (token !== action.current) {
+          return false;
+        }
         current.current = profile;
         previousSignature.current = customSignature(profile);
         callbacks.current(profile);
-        setXsydLive(true);
         demo(false);
         return true;
       } catch (reason) {
@@ -200,9 +209,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
       publishRgbServiceStatus(result);
       queue.current?.observe(result);
       demo(false);
-      // WIN 68 HE MAX keeps streaming straight to XSYD; the WebHID handoff
-      // would probe for a HERO68 UUID the device does not have.
-      if (result.connected && !xsydDeviceManager.connected && result.deviceModel !== 'win68HeMax' && result.deviceModel !== 'win68') {
+      if (result.connected && !xsydDeviceManager.connected) {
         await hero68DeviceManager.connectViaService();
       }
       return token === action.current;
@@ -221,16 +228,15 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
     if (busy) {
       return;
     }
-    if (xsydLive && xsydDeviceManager.connected) {
+    if (xsydLive) {
       const token = ++action.current;
       setBusy(true);
       setError(null);
       try {
-        await xsydDeviceManager.request(buildXsydRgbWriteFrame(current.current.keys));
+        await stopXsydCustomRgb(current.current);
         if (token !== action.current) {
           return;
         }
-        setXsydLive(false);
         callbacks.current({
           ...current.current,
           custom: {

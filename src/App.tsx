@@ -240,7 +240,8 @@ function App() {
     };
   }, [ui.activeRail, ui.activePage, workspace.profileSlot, workspace.profileBusy, tachyon, deviceSettings.setDeviceActionError]);
   const deviceConnected = deviceConnectionState === 'connected';
-  const canSaveAll = deviceConnected && workspace.loadedProfileSlot === workspace.profileSlot && (perf.dirtyKeys.size > 0 || workspace.dirtyRemaps.size > 0 || workspace.rgbPending > 0 || workspace.advancedPending);
+  const customRgbPending = isWin68HeMaxModel(deviceModel) && JSON.stringify(workspace.rgb.custom ?? null) !== JSON.stringify(workspace.rgbBaseline.custom ?? null);
+  const canSaveAll = deviceConnected && workspace.loadedProfileSlot === workspace.profileSlot && (perf.dirtyKeys.size > 0 || workspace.dirtyRemaps.size > 0 || workspace.rgbPending > 0 || customRgbPending || workspace.advancedPending);
   const devicePanel = <DeviceConnectionPanel deviceConnectionState={deviceConnectionState} deviceModel={deviceModel} selectedModel={selectedModel} onSelectDeviceModel={selectDeviceModel} onConnectOrDisconnect={() => void sync.handleDeviceConnection()} profileSlot={workspace.profileSlot} onSelectProfileSlot={slot => void sync.selectOnboardProfile(slot)} onReadFromDevice={() => void sync.handleReadFromDevice()} profileBusy={workspace.profileBusy} deviceReadState={deviceSettings.deviceReadState} deviceActionError={deviceSettings.deviceActionError} deviceError={activeDevice.error} />;
   return <I18nProvider language={ui.resolvedLanguage}>
       <DeviceFamilyContext.Provider value={isWin68HeMaxModel(deviceModel) ? 'win68HeMax' : 'hero'}>
@@ -265,7 +266,7 @@ function App() {
             }} /> : ui.activePage === 'rgb' ? <RgbPage onSetup={() => {
               ui.setActiveSettingsPage('background-service');
               ui.setActiveRail('settings');
-            }} initialCustom={ui.rgbCustomEntry} onEntered={() => ui.setRgbCustomEntry(false)} onTabChange={ui.setActiveRgbTab} activeTab={ui.activeRgbTab} advancedBindings={workspace.advancedBindings} profileSlot={workspace.profileSlot} rgb={workspace.rgb} profileBusy={workspace.profileBusy} setRgb={workspace.setRgb} setSaveState={workspace.setSaveState} RgbSettingsPage={RgbSettingsPage} /> : <div className="placeholder-page page-enter">
+            }} initialCustom={ui.rgbCustomEntry} onEntered={() => ui.setRgbCustomEntry(false)} onTabChange={ui.setActiveRgbTab} advancedBindings={workspace.advancedBindings} profileSlot={workspace.profileSlot} rgb={workspace.rgb} profileBusy={workspace.profileBusy} setRgb={workspace.setRgb} setSaveState={workspace.setSaveState} RgbSettingsPage={RgbSettingsPage} /> : <div className="placeholder-page page-enter">
                     <div className="placeholder-icon"><SlidersHorizontal size={28} /></div>
                     <h1>{tr('Profile')}</h1>
                     <p>{tr('This page is not implemented yet.')}</p>

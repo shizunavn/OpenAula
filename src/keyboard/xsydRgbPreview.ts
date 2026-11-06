@@ -22,6 +22,7 @@ import {
   xsydColorIndexForZone,
 } from '../protocol/xsyd/rgb'
 import type { LightingFrame } from './lightingPreviewBus'
+import { FirmwareRgbPreview } from './rgbPreview'
 
 // VA 0x1D2A0 (27 bytes): External Mode ID (0..26) -> Internal Mode ID (1..27)
 export const EXT_TO_INT_ROM: readonly number[] = [
@@ -159,8 +160,9 @@ export function externalToInternalMode(extMode: number, brightness = 4): number 
   if (brightness <= 0) {
     return 0
   }
-  if (extMode >= 0 && extMode < EXT_TO_INT_ROM.length) {
-    return EXT_TO_INT_ROM[extMode]
+  const normalized = extMode >= 200 && extMode < 300 ? extMode - 200 : extMode
+  if (normalized >= 0 && normalized < EXT_TO_INT_ROM.length) {
+    return EXT_TO_INT_ROM[normalized]
   }
   return 7
 }
@@ -823,8 +825,8 @@ export class AulaWin68ExactRgbEngine {
         if (this.phase < 8) {
           this.zoneHues = [(this.zoneHues[0] + 23) % 360, (this.zoneHues[1] + 47) % 360]
         }
-        const cA = this.hsvToRgb(this.zoneHues[0], 255, 255)
-        const cB = this.hsvToRgb(this.zoneHues[1], 255, 255)
+        const cA = this.hsvToRgb((this.zoneHues[0] + (this.phase >> 2)) % 360, 255, 255)
+        const cB = this.hsvToRgb((this.zoneHues[1] + (this.phase >> 2)) % 360, 255, 255)
         for (let x = 0; x < 21; x++) {
           const zone = Math.trunc(x / 7)
           const inv = ((zone & 1) ^ dir) !== 0
@@ -885,7 +887,7 @@ export class AulaWin68ExactRgbEngine {
           if (single.isSingle) {
             rgb = this.modulateSingleColor(single.rgb, single.hsv, activeB ? 255 : 55, 40)
           } else {
-            rgb = activeB ? this.wipe.cB : this.wipe.cA
+            rgb = activeB ? this.lerpRgb(this.wipe.cB, this.wipe.cA, x / 24) : this.lerpRgb(this.wipe.cA, this.wipe.cB, x / 24)
           }
           for (let y = 0; y < 6; y++) this.setPixel(x, y, rgb)
         }
@@ -986,17 +988,18 @@ export class AulaWin68ExactRgbEngine {
         for (let m = this.meteors.length - 1; m >= 0; m--) {
           const drop = this.meteors[m]
           drop.yFp8 += drop.speedFp8
-          let hsv = hsvCache.get(drop.color)
+          const activeDropColor = single.isSingle ? single.rgb : drop.color
+          let hsv = hsvCache.get(activeDropColor)
           if (!hsv) {
-            hsv = this.rgbToHsv(drop.color)
-            hsvCache.set(drop.color, hsv)
+            hsv = this.rgbToHsv(activeDropColor)
+            hsvCache.set(activeDropColor, hsv)
           }
           for (let y = 0; y < 6; y++) {
             const distRows = (drop.yFp8 - (y << 8)) >> 8
             if (distRows >= 0 && distRows <= 2) {
               const v = distRows === 0 ? 255 : distRows === 1 ? 150 : 65
               const effY = dir ? 5 - y : y
-              this.setPixel(drop.col, effY, this.modulateSingleColor(drop.color, hsv, v, 20))
+              this.setPixel(drop.col, effY, this.modulateSingleColor(activeDropColor, hsv, v, 20))
             }
           }
           if (drop.yFp8 > (6 + 3) << 8) {
@@ -1064,7 +1067,7 @@ export class AulaWin68ExactRgbEngine {
           if (v === 0) {
             this.rgbFb[i] = this.backColor
           } else {
-            const baseRgb = this.reactiveSingleRgb[i] || 0xff0000
+            const baseRgb = single.isSingle ? single.rgb : (this.reactiveSingleRgb[i] || this.palette[(i + this.reactiveColorRot) % 7] || 0xff0000)
             this.rgbFb[i] = this.modulateSingleColor(baseRgb, this.rgbToHsv(baseRgb), v, 37)
           }
         }
@@ -1120,7 +1123,7 @@ export class AulaWin68ExactRgbEngine {
           slot.v = 255
           slot.active = true
         }
-        const stepR = Math.max(0.35, (spd + 30) / 90.0)
+        const stepR = Math.max(0.12, (spd + 30) / 500.0)
         for (const slot of this.laserSlots) {
           if (!slot.active) continue
           const baseRgb = single.isSingle ? single.rgb : this.palette[slot.cIdx % 7]
@@ -1131,7 +1134,9 @@ export class AulaWin68ExactRgbEngine {
             if (distFromFront <= 3.5) {
               const v = Math.round(Math.max(0, 1.0 - distFromFront / 3.5) * slot.v)
               if (v >= 25) {
-                const rgb = this.modulateSingleColor(baseRgb, hsv, v, 25)
+                const rgb = single.isSingle
+                  ? this.modulateSingleColor(baseRgb, hsv, v, 25)
+                  : this.hsvToRgb((hsv.h + off * 18) % 360, 255, v)
                 this.setPixel(slot.kx + off, slot.ky, rgb)
                 this.setPixel(slot.kx - off, slot.ky, rgb)
               }
@@ -1232,17 +1237,48 @@ export class XsydFirmwareRgbPreview {
   public ticks = 0
   private lastTickMs = 0
   private accumMs = 0
+  private heroDelegate: FirmwareRgbPreview | null = null
 
   constructor(public config: RgbProfile, seed = 1) {
     this.core = new AulaWin68ExactRgbEngine(seed)
     this.configure(config, true)
   }
 
+  private isCrossHeroMode(mode: number): boolean {
+    return mode >= 100 && mode < 200
+  }
+
+  private toHeroDelegateProfile(config: RgbProfile): RgbProfile {
+    const k = config.keys
+    const heroMode = Math.max(0, Math.min(19, k.mode - 100))
+    const normBright = normalizeXsydBrightness(k.brightness)
+    return {
+      ...config,
+      keys: {
+        ...k,
+        mode: heroMode,
+        brightness: normBright * 5,
+      },
+    }
+  }
+
   public configure(config: RgbProfile, initial = false): void {
     const k = config.keys
     const prevK = this.config?.keys
-    const extMode = k.mode === 19 ? XSYD_PER_KEY_RGB_MODE : k.mode
-    const prevExtMode = prevK ? (prevK.mode === 19 ? XSYD_PER_KEY_RGB_MODE : prevK.mode) : -1
+    if (this.isCrossHeroMode(k.mode)) {
+      this.config = config
+      const delegateProfile = this.toHeroDelegateProfile(config)
+      if (!this.heroDelegate) {
+        this.heroDelegate = new FirmwareRgbPreview(delegateProfile)
+      } else {
+        this.heroDelegate.configure(delegateProfile)
+      }
+      return
+    }
+    const rawMode = k.mode >= 200 && k.mode < 300 ? k.mode - 200 : k.mode
+    const prevRawMode = prevK ? (prevK.mode >= 200 && prevK.mode < 300 ? prevK.mode - 200 : prevK.mode) : -1
+    const extMode = rawMode
+    const prevExtMode = prevRawMode
     const normBright = normalizeXsydBrightness(k.brightness)
     const targetInternal = externalToInternalMode(extMode, normBright)
 
@@ -1277,13 +1313,17 @@ export class XsydFirmwareRgbPreview {
     if (initial || extMode !== prevExtMode || targetInternal !== this.core.internalMode) {
       this.core.initInternalMode(targetInternal)
       this.core.stepTick()
-    } else if (targetInternal >= 1 && targetInternal <= 7) {
-      // Refresh static / per-key buffer immediately when color/palette changes
+    } else {
+      // Refresh buffer immediately whenever color/palette/mix/speed/reverse changes
       this.core.stepTick()
     }
   }
 
   public event(keyId: string, pressed: boolean): void {
+    if (this.isCrossHeroMode(this.config.keys.mode)) {
+      this.heroDelegate?.event(keyId, pressed)
+      return
+    }
     const cell = WIN68_CELL_BY_KEY_ID.get(keyId)
     if (!cell) return
     this.core.keyTrigger[cell.linearIdx] = pressed ? 2 : 0
@@ -1293,6 +1333,12 @@ export class XsydFirmwareRgbPreview {
   }
 
   public advance(milliseconds: number): void {
+    if (this.isCrossHeroMode(this.config.keys.mode)) {
+      this.heroDelegate?.advance(milliseconds)
+      this.ticks = Math.floor(milliseconds / XSYD_RGB_TICK_MS)
+      this.lastTickMs = milliseconds
+      return
+    }
     const targetTicks = Math.floor(milliseconds / XSYD_RGB_TICK_MS)
     if (targetTicks <= this.ticks) {
       return
@@ -1317,6 +1363,12 @@ export class XsydFirmwareRgbPreview {
     keys: LightingFrame
     side: string[]
   } {
+    if (this.isCrossHeroMode(this.config.keys.mode) && this.heroDelegate) {
+      return {
+        keys: this.heroDelegate.frame().keys,
+        side: [],
+      }
+    }
     const normBright = normalizeXsydBrightness(this.config.keys.brightness)
     const brightRom = normBright <= 0 ? 0 : (BRIGHT_ROM_TABLE[this.core.brightIdx] ?? 80)
 

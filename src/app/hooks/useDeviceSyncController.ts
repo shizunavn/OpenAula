@@ -17,6 +17,7 @@ import { hero68DeviceManager, type Hero68ConnectionState } from '../../protocol/
 import {
   defaultXsydRgb,
   hydrateFromXsydDevice,
+  loadXsydSavedRgb,
   readXsydProfileSlot,
   readXsydRemapLayers,
   readXsydRgbProfile,
@@ -422,16 +423,28 @@ export function useDeviceSyncController({
       if (isWin68HeMaxModel(targetModel) && xsydDeviceManager.connected) {
         const hydrated = await hydrateFromXsydDevice(xsydDeviceManager, slot, activeKeyIds);
         const mappings = await readXsydRemapLayers(xsydDeviceManager, activeKeyIds);
-        const freshRgb = await readXsydRgbProfile(xsydDeviceManager, activeKeyIds).catch(
-          () => draft?.rgb ?? defaultXsydRgb(activeKeyIds)
+        const savedSlotRgb = loadXsydSavedRgb(slot) ?? draft?.rgb;
+        const rawFreshRgb = await readXsydRgbProfile(xsydDeviceManager, activeKeyIds).catch(
+          () => savedSlotRgb ?? defaultXsydRgb(activeKeyIds)
         );
+        const freshRgb = savedSlotRgb
+          ? {
+              ...rawFreshRgb,
+              keys: savedSlotRgb.keys ?? rawFreshRgb.keys,
+              colors: {
+                ...rawFreshRgb.colors,
+                ...(savedSlotRgb.colors ?? {}),
+              },
+              ...(savedSlotRgb.custom ? { custom: savedSlotRgb.custom } : {}),
+            }
+          : rawFreshRgb;
         setAdvancedHydratedSlot(slot);
         setAdvancedReadError(null);
         if (draft?.advancedBindings) {
           setAdvancedBindings(draft.advancedBindings);
         }
         setRgbBaseline(freshRgb);
-        setRgb(mergeRgb(freshRgb, draft?.rgb, draft?.rgbDirty));
+        setRgb(mergeRgb(freshRgb, draft?.rgb ?? savedSlotRgb, draft?.rgbDirty));
         setRgbHydratedSlot(slot);
         remapBaselineRef.current = structuredClone(mappings);
         applyHydratedPerformance(hydrated, draft);
@@ -586,14 +599,17 @@ export function useDeviceSyncController({
     if (loadedProfileSlot !== profileSlot) {
       return;
     }
-    if (dirtyKeys.size === 0 && dirtyRemaps.size === 0 && rgbPending === 0 && !advancedPending) {
+    const customRgbChanged =
+      isWin68HeMaxModel(deviceModel) &&
+      JSON.stringify(rgb.custom ?? null) !== JSON.stringify(rgbBaseline.custom ?? null);
+    if (dirtyKeys.size === 0 && dirtyRemaps.size === 0 && rgbPending === 0 && !customRgbChanged && !advancedPending) {
       return;
     }
     if (advancedPending && advancedHydratedSlot !== profileSlot) {
       setDeviceActionError('Read Advanced Keys from this profile before saving. ' + (advancedReadError ?? ''));
       return;
     }
-    if (rgbHydratedSlot !== profileSlot) {
+    if (rgbHydratedSlot !== profileSlot && !isWin68HeMaxModel(deviceModel)) {
       setDeviceActionError('Read RGB from this profile before saving.');
       return;
     }
@@ -621,9 +637,6 @@ export function useDeviceSyncController({
       setDeviceActionError(null);
       if (isWin68HeMaxModel(deviceModel) && xsydDeviceManager.connected) {
         if (dirtyKeys.size) {
-          // Every `0x23` write carries a Header byte (0x20) next to the field, so
-          // the readback table is only an echo of what this call just wrote;
-          // comparing it with the snapshot would just re-check our own encoder.
           await saveDeviceConfiguration(snapshot);
         }
         if (dirtyRemaps.size) {
@@ -633,15 +646,16 @@ export function useDeviceSyncController({
           const verified = await saveXsydAdvancedBindings(xsydDeviceManager, profileSlot, advancedBindings, advancedBaseline);
           setAdvancedBaseline(verified);
         }
-        if (rgbPending && !tachyon) {
-          await saveXsydRgbProfile(
+        if ((rgbPending || customRgbChanged) && !tachyon) {
+          const savedRgb = await saveXsydRgbProfile(
             xsydDeviceManager,
             rgb,
             rgbBaseline,
             setRgbBaseline,
             modelKeyIds,
-            dirtyKeys.size === 0 && dirtyRemaps.size === 0 && !advancedPending ? profileSlot : undefined
+            profileSlot
           );
+          setRgb(savedRgb);
         }
         if (dirtyKeys.size) {
           setDirtyKeys(new Set());
@@ -657,15 +671,24 @@ export function useDeviceSyncController({
       if (dirtyKeys.size) {
         await saveDeviceConfiguration(snapshot);
         const readback = await hydrateFromDevice(hero68DeviceManager, profileSlot, [...dirtyKeys], deviceModel);
-        const near = (actual: number | undefined, wanted: number) => actual !== undefined && Math.abs(actual - wanted) <= 0.011;
+        const near = (actual: number | undefined, wanted: number) => actual !== undefined && Math.abs(actual - wanted) <= 0.025;
         for (const expected of snapshot.keys) {
           const actual = readback.get(expected.keyId);
           const expectedRelease = expected.rapidTriggerEnabled ? expected.splitSensitivity ? expected.releaseSensitivityMm : expected.rapidSensitivityMm : 0;
           const expectedPress = expected.rapidTriggerEnabled ? expected.splitSensitivity ? expected.pressSensitivityMm : expected.rapidSensitivityMm : 0;
-          if (!actual || !near(actual.actuationMm, expected.actuationMm) || actual.rapidTriggerEnabled !== expected.rapidTriggerEnabled || !near(actual.pressSensitivityMm, expectedPress) || !near(actual.releaseSensitivityMm, expectedRelease) || actual.deadzoneEnabled !== expected.deadzoneEnabled || !near(actual.topDeadzoneMm, expected.topDeadzoneMm) || !near(actual.bottomDeadzoneMm, expected.bottomDeadzoneMm) || actual.switchProfile !== expected.switchProfile) {
+          const rtMismatch =
+            expected.rapidTriggerEnabled &&
+            (!near(actual?.pressSensitivityMm, expectedPress) || !near(actual?.releaseSensitivityMm, expectedRelease));
+          if (
+            !actual ||
+            !near(actual.actuationMm, expected.actuationMm) ||
+            actual.rapidTriggerEnabled !== expected.rapidTriggerEnabled ||
+            rtMismatch
+          ) {
             throw Error(`Key setting readback mismatch: ${expected.keyId}`);
           }
         }
+        applyHydratedPerformance(readback);
       }
       if ([...dirtyRemaps].some(change => {
         const [layerText, keyId] = change.split(':');

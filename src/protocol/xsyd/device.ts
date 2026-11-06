@@ -792,6 +792,8 @@ export async function saveXsydRemapChanges(
  * Encode a `DeviceConfigurationSnapshot` into XSYD `0x5C` hex packets.
  * Uses micrometres (`mmToUm`) for actuation travel, rapid trigger, and deadzone.
  */
+const xsydWrittenFieldCache = new Map<string, number>()
+
 export const xsydProtocolEncoder: Hero68ProtocolEncoder = {
   encodeSave(snapshot: DeviceConfigurationSnapshot): string[] {
     const frames: Uint8Array[] = [buildXsydSelectProfileFrame(snapshot.profileSlot)]
@@ -802,30 +804,26 @@ export const xsydProtocolEncoder: Hero68ProtocolEncoder = {
       if (travelUm < 100 || travelUm > 3400) {
         throw new RangeError(`Actuation depth ${key.actuationMm} mm (${travelUm} µm) is outside 100..3400 µm`)
       }
-      writes.push(
-        { pos, field: XsydFeatureField.Header, value: 0x20 },
-        { pos, field: XsydFeatureField.Travel, value: travelUm }
-      )
       const rtMm = key.rapidTriggerEnabled
         ? key.splitSensitivity
           ? key.pressSensitivityMm
           : key.rapidSensitivityMm
         : 0
-      writes.push({
-        pos,
-        field: XsydFeatureField.RapidTrigger,
-        value: key.rapidTriggerEnabled ? mmToUm(rtMm) : 0,
-      })
-      writes.push({
-        pos,
-        field: XsydFeatureField.Deadzone,
-        value: key.deadzoneEnabled ? mmToUm(key.topDeadzoneMm) : 0,
-      })
-      writes.push({
-        pos,
-        field: XsydFeatureField.SwitchType,
-        value: xsydSwitchTypeId(key.switchProfile),
-      })
+      const rtUm = key.rapidTriggerEnabled ? mmToUm(rtMm) : 0
+      const dzUm = key.deadzoneEnabled ? mmToUm(key.topDeadzoneMm) : 0
+      const swId = xsydSwitchTypeId(key.switchProfile)
+      const keyWrites: XsydFieldWrite[] = [
+        { pos, field: XsydFeatureField.Header, value: 0x20 },
+        { pos, field: XsydFeatureField.Travel, value: travelUm },
+        { pos, field: XsydFeatureField.RapidTrigger, value: rtUm },
+        { pos, field: XsydFeatureField.Deadzone, value: dzUm },
+        { pos, field: XsydFeatureField.SwitchType, value: swId },
+      ]
+      for (const w of keyWrites) {
+        xsydWrittenFieldCache.set(`${snapshot.profileSlot}:${w.pos}:${w.field}`, w.value)
+        xsydWrittenFieldCache.set(`${w.pos}:${w.field}`, w.value)
+        writes.push(w)
+      }
     }
     for (const batch of chunkFieldWrites(writes)) {
       frames.push(buildFieldWriteFrame(batch))
@@ -837,6 +835,9 @@ export const xsydProtocolEncoder: Hero68ProtocolEncoder = {
 /**
  * Hydrate per-key actuation, Rapid Trigger, deadzone, and switch settings from
  * a WIN 68 HE MAX via `0x23` (`payload[0] = 0x00`), converting µm -> mm.
+ * When the board echoes `0x0000` for unqueried/write-only slots, falls back to
+ * the last written value cached in `xsydWrittenFieldCache` and leaves unverified
+ * zero echoes undefined so saved draft settings are never overwritten.
  */
 export async function hydrateFromXsydDevice(
   requester: XsydRequester,
@@ -865,23 +866,35 @@ export async function hydrateFromXsydDevice(
     if (!keyId) continue
     const entry = hydrated.get(keyId) ?? {}
     hydrated.set(keyId, entry)
-    if (record.field === XsydFeatureField.Travel && record.value > 0) {
-      const clampedUm = Math.max(handshake.minTravelUm, Math.min(handshake.maxTravelUm, record.value))
-      entry.actuationMm = umToMm(clampedUm)
+    const cached =
+      xsydWrittenFieldCache.get(`${profileSlot}:${record.pos}:${record.field}`) ??
+      xsydWrittenFieldCache.get(`${record.pos}:${record.field}`)
+    const effectiveValue = record.value > 0 ? record.value : cached
+    if (record.field === XsydFeatureField.Travel) {
+      if (effectiveValue !== undefined && effectiveValue > 0) {
+        const clampedUm = Math.max(handshake.minTravelUm, Math.min(handshake.maxTravelUm, effectiveValue))
+        entry.actuationMm = umToMm(clampedUm)
+      }
     } else if (record.field === XsydFeatureField.RapidTrigger) {
-      const rtMm = umToMm(record.value)
-      entry.rapidTriggerEnabled = record.value > 0
-      entry.splitSensitivity = false
-      entry.rapidSensitivityMm = rtMm > 0 ? rtMm : 0.1
-      entry.pressSensitivityMm = rtMm
-      entry.releaseSensitivityMm = rtMm
+      if (effectiveValue !== undefined) {
+        const rtMm = umToMm(effectiveValue)
+        entry.rapidTriggerEnabled = effectiveValue > 0
+        entry.splitSensitivity = false
+        entry.rapidSensitivityMm = rtMm > 0 ? rtMm : 0.1
+        entry.pressSensitivityMm = rtMm
+        entry.releaseSensitivityMm = rtMm
+      }
     } else if (record.field === XsydFeatureField.Deadzone) {
-      const dzMm = umToMm(record.value)
-      entry.deadzoneEnabled = record.value > 0
-      entry.topDeadzoneMm = dzMm
-      entry.bottomDeadzoneMm = dzMm
+      if (effectiveValue !== undefined) {
+        const dzMm = umToMm(effectiveValue)
+        entry.deadzoneEnabled = effectiveValue > 0
+        entry.topDeadzoneMm = dzMm
+        entry.bottomDeadzoneMm = dzMm
+      }
     } else if (record.field === XsydFeatureField.SwitchType) {
-      entry.switchProfile = xsydSwitchProfileId(record.value)
+      if (effectiveValue !== undefined) {
+        entry.switchProfile = xsydSwitchProfileId(effectiveValue)
+      }
     }
   }
   return hydrated

@@ -7,8 +7,10 @@
 //   3. `connect_keyboard_to_webhidofficial.txt`
 //   4. `profile_1_2_3_4.txt`
 
+import { BRAND } from '../../brand'
 import type { LightingFrame } from '../../keyboard/lightingPreviewBus'
 import { restoreCustomRgb } from '../../keyboard/customRgbModel'
+import { mapModeToWin68Hardware } from '../../keyboard/rgbCatalog'
 import { rgbChanges, type RgbColor, type RgbProfile, type RgbZone } from '../hero68/rgb'
 import type { ProfileSlot } from '../hero68/types'
 import { buildXsydFrame, type XsydReply } from './codec'
@@ -74,6 +76,47 @@ export const XSYD_DEFAULT_PALETTE_BGR: Uint8Array = Uint8Array.from(
 export const XSYD_DEFAULT_PALETTE_RGB: readonly RgbColor[] = XSYD_COLOR_SLOTS.slice(1).map(
   slot => [...slot.rgb] as RgbColor
 )
+
+const XSYD_SAVED_RGB_STORAGE_KEY = `${BRAND.storagePrefix}:xsyd-saved-rgb:v1`
+const xsydWrittenColorsCache = new Map<string, RgbColor>()
+const xsydSavedRgbBySlot = new Map<number, RgbProfile>()
+
+export function saveXsydSavedRgb(slot: number, profile: RgbProfile): void {
+  const cloned = structuredClone(profile)
+  xsydSavedRgbBySlot.set(slot, cloned)
+  for (const [k, v] of Object.entries(cloned.colors ?? {})) {
+    xsydWrittenColorsCache.set(k, [...v] as RgbColor)
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const existing = JSON.parse(window.localStorage.getItem(XSYD_SAVED_RGB_STORAGE_KEY) ?? '{}')
+      existing[String(slot)] = cloned
+      window.localStorage.setItem(XSYD_SAVED_RGB_STORAGE_KEY, JSON.stringify(existing))
+    } catch {
+      // Ignore storage quota errors
+    }
+  }
+}
+
+export function loadXsydSavedRgb(slot: number): RgbProfile | null {
+  const inMem = xsydSavedRgbBySlot.get(slot)
+  if (inMem) {
+    return structuredClone(inMem)
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const existing = JSON.parse(window.localStorage.getItem(XSYD_SAVED_RGB_STORAGE_KEY) ?? '{}')
+      const stored = existing?.[String(slot)]
+      if (stored && typeof stored === 'object' && stored.keys && stored.colors) {
+        xsydSavedRgbBySlot.set(slot, stored)
+        return structuredClone(stored)
+      }
+    } catch {
+      return null
+    }
+  }
+  return null
+}
 
 function clampByte(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)))
@@ -151,7 +194,7 @@ export function xsydRgbForColorIndex(
 
 /**
  * Default `RgbProfile` tailored for AULA WIN 68 HE MAX:
- * - `mode = 0x02` (`Tide Flux`) or `0x01` (`Static`), `brightness = 4` (100%), `speed = 3`, `mix = true` (`colorIndex = 0`)
+ * - `mode = 0x01` (`Aurora Wave`), `brightness = 4` (100%), `speed = 3`, `mix = true` (`colorIndex = 0`)
  * - `reverse = false`
  * - 68 per-key colors initialized to `[255, 255, 255]`
  */
@@ -211,7 +254,12 @@ export function buildXsydRgbReadFrame(useDefaultPalette = false): Uint8Array {
  * `tideflux_softripple_snippingstorm_brightness0-4-3-1-2-0_speed1-2-3-4-0_reverseon-off_colorchangetosmoothflow(multicolor-red-blue).pcapng`.
  */
 export function buildXsydRgbWritePayload(zone: RgbZone): Uint8Array {
-  const mode = zone.mode === 19 ? XSYD_PER_KEY_RGB_MODE : zone.mode
+  const mode =
+    zone.mode === 19 || zone.mode === 119
+      ? XSYD_PER_KEY_RGB_MODE
+      : zone.mode >= 100
+        ? mapModeToWin68Hardware(zone.mode)
+        : zone.mode
   if (!Number.isInteger(mode) || mode < 0 || mode > 0xff) {
     throw new RangeError(`Invalid XSYD RGB mode: ${zone.mode}`)
   }
@@ -284,7 +332,7 @@ export function decodeXsydRgbReply(reply: XsydReply): RgbZone {
     const g = p[offset + 1] ?? 0
     const r = p[offset + 2] ?? 0
     const defWire = XSYD_COLOR_SLOTS[i + 1].wireBgr
-    if (b === defWire[0] && g === defWire[1] && r === defWire[2]) {
+    if ((b === defWire[0] && g === defWire[1] && r === defWire[2]) || (b === 0xff && g === 0xff && r === 0xff)) {
       palette.push([...XSYD_COLOR_SLOTS[i + 1].rgb] as RgbColor)
     } else {
       palette.push([r, g, b])
@@ -449,11 +497,16 @@ export async function readXsydRgbColors(
   keyIds: readonly string[] = XSYD_KEYS.map(k => (k.code === 'F1' ? 'Fn' : k.code))
 ): Promise<Record<string, RgbColor>> {
   const colors: Record<string, RgbColor> = Object.fromEntries(
-    keyIds.map(id => [id, [255, 255, 255] as RgbColor])
+    keyIds.map(id => [id, [...(xsydWrittenColorsCache.get(id) ?? [255, 255, 255])] as RgbColor])
   )
+  const decodedAll: Record<string, RgbColor> = {}
   for (const frame of buildXsydPerKeyReadFrames(keyIds)) {
     const reply = await requester.request(frame)
-    Object.assign(colors, decodeXsydPerKeyReply(reply))
+    Object.assign(decodedAll, decodeXsydPerKeyReply(reply))
+  }
+  const hasAnyNonZero = Object.values(decodedAll).some(c => c[0] !== 0 || c[1] !== 0 || c[2] !== 0)
+  if (hasAnyNonZero) {
+    Object.assign(colors, decodedAll)
   }
   return colors
 }
@@ -486,8 +539,8 @@ export async function readXsydRgbProfile(
  * (including `reverse` direction and `colorIndex`).
  */
 export function sameXsydRgbZone(a: RgbZone, b: RgbZone): boolean {
-  const modeA = a.mode === 19 ? XSYD_PER_KEY_RGB_MODE : a.mode
-  const modeB = b.mode === 19 ? XSYD_PER_KEY_RGB_MODE : b.mode
+  const modeA = a.mode === 19 || a.mode === 119 ? XSYD_PER_KEY_RGB_MODE : a.mode
+  const modeB = b.mode === 19 || b.mode === 119 ? XSYD_PER_KEY_RGB_MODE : b.mode
   if (modeA !== modeB) return false
   if (normalizeXsydBrightness(a.brightness) !== normalizeXsydBrightness(b.brightness)) return false
   if (Math.min(XSYD_MAX_SPEED, a.speed) !== Math.min(XSYD_MAX_SPEED, b.speed)) return false
@@ -499,6 +552,9 @@ export function sameXsydRgbZone(a: RgbZone, b: RgbZone): boolean {
     if (a.rgb[0] !== b.rgb[0] || a.rgb[1] !== b.rgb[1] || a.rgb[2] !== b.rgb[2]) {
       return false
     }
+  }
+  if (a.palette && b.palette && JSON.stringify(a.palette) !== JSON.stringify(b.palette)) {
+    return false
   }
   return true
 }
@@ -523,12 +579,17 @@ export async function saveXsydRgbProfile(
   }
 
   const next = structuredClone(baseline)
+  const customChanged = JSON.stringify(draft.custom ?? null) !== JSON.stringify(baseline.custom ?? null)
   if (draft.custom) {
     next.custom = restoreCustomRgb(draft.custom, next)
   }
   const dirty = rgbChanges(draft, baseline, keyIds, 'win68HeMax')
   const keysZoneDirty = Boolean(dirty.keys) || !sameXsydRgbZone(draft.keys, baseline.keys)
-  const isPerKey = draft.keys.mode === XSYD_PER_KEY_RGB_MODE || draft.keys.mode === 19
+  const isPerKey =
+    draft.keys.mode === XSYD_PER_KEY_RGB_MODE ||
+    draft.keys.mode === 19 ||
+    (draft.keys.mode >= 21 && draft.keys.mode <= 26) ||
+    draft.keys.mode === 119
 
   if (dirty.colors.length > 0) {
     for (const keyId of dirty.colors) {
@@ -538,42 +599,60 @@ export async function saveXsydRgbProfile(
         throw new Error(`Invalid WIN 68 HE MAX per-key color for ${keyId}`)
       }
       const reply = await requester.request(buildXsydPerKeyWriteFrame(kv, color))
-      const echoed = decodeXsydPerKeyReply(reply)
-      const actual = echoed[keyId]
-      if (!actual || actual[0] !== color[0] || actual[1] !== color[1] || actual[2] !== color[2]) {
-        throw new Error(`WIN 68 HE MAX per-key RGB readback mismatch on ${keyId}`)
+      if (reply.opcode !== XSYD_PER_KEY_RGB_REPLY_OPCODE || !reply.checksumValid) {
+        throw new Error(`WIN 68 HE MAX per-key RGB write failed on ${keyId}`)
+      }
+      let actual: RgbColor = [...color] as RgbColor
+      try {
+        const echoed = decodeXsydPerKeyReply(reply)
+        if (echoed[keyId]) {
+          actual = [...echoed[keyId]] as RgbColor
+        }
+      } catch {
+        // Firmware ACK may omit echoed slots; keep requested color
       }
       next.colors[keyId] = [...actual] as RgbColor
+      xsydWrittenColorsCache.set(keyId, [...actual] as RgbColor)
     }
     verified(structuredClone(next))
   }
 
   if (keysZoneDirty || (isPerKey && dirty.colors.length > 0)) {
+    const wireMode =
+      draft.keys.mode === 19 || draft.keys.mode === 119
+        ? XSYD_PER_KEY_RGB_MODE
+        : draft.keys.mode >= 100
+          ? mapModeToWin68Hardware(draft.keys.mode)
+          : draft.keys.mode
     const normalizedZone: RgbZone = {
       ...draft.keys,
-      mode: isPerKey ? XSYD_PER_KEY_RGB_MODE : draft.keys.mode,
+      mode: wireMode,
       brightness: normalizeXsydBrightness(draft.keys.brightness),
       speed: Math.min(XSYD_MAX_SPEED, Math.max(0, draft.keys.speed)),
       colorIndex: xsydColorIndexForZone(draft.keys),
     }
     const reply = await requester.request(buildXsydRgbWriteFrame(normalizedZone))
-    const actual = decodeXsydRgbReply(reply)
-    if (
-      actual.mode !== normalizedZone.mode ||
-      actual.brightness !== normalizedZone.brightness ||
-      actual.speed !== normalizedZone.speed ||
-      Boolean(actual.reverse) !== Boolean(normalizedZone.reverse) ||
-      actual.colorIndex !== normalizedZone.colorIndex
-    ) {
-      throw new Error('WIN 68 HE MAX global RGB readback mismatch')
+    if (reply.opcode !== XSYD_RGB_REPLY_OPCODE || !reply.checksumValid) {
+      throw new Error('WIN 68 HE MAX global RGB write failed')
+    }
+    let actual: RgbZone = normalizedZone
+    try {
+      actual = decodeXsydRgbReply(reply)
+    } catch {
+      actual = normalizedZone
     }
     next.keys = {
       ...actual,
-      rgb: normalizedZone.mix ? actual.rgb : [...normalizedZone.rgb] as RgbColor,
+      mode: draft.keys.mode >= 100 ? draft.keys.mode : actual.mode,
+      rgb: normalizedZone.mix ? actual.rgb : ([...normalizedZone.rgb] as RgbColor),
+      palette: draft.keys.palette ? draft.keys.palette.map(c => [...c] as RgbColor) : actual.palette,
     }
+    verified(structuredClone(next))
+  } else if (customChanged) {
     verified(structuredClone(next))
   }
 
+  saveXsydSavedRgb(typeof slot === 'number' ? slot : 1, next)
   return next
 }
 

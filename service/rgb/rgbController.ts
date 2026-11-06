@@ -125,7 +125,7 @@ export function createRgbController({
     ctx.lastError = null;
     ctx.hallSamples.clear();
     ctx.frameEncoder.reset();
-    ctx.engine = ctx.playback.start(ctx.profile);
+    ctx.engine = ctx.playback.start(ctx.profile, ctx.deviceModel ?? undefined);
     ctx.outputHeld.clear();
     ctx.pendingInputs.length = 0;
     ctx.lastFrameAt = 0;
@@ -493,7 +493,7 @@ export function createRgbController({
           await bridge.stopRhythm();
         }
         if (ctx.mode !== 'custom') {
-          ctx.engine = ctx.playback.start(ctx.profile);
+          ctx.engine = ctx.playback.start(ctx.profile, ctx.deviceModel ?? undefined);
           ctx.outputHeld.clear();
           ctx.pendingInputs.length = 0;
         }
@@ -656,7 +656,7 @@ export function createRgbController({
         if (ctx.engine) {
           ctx.engine.configure(ctx.profile);
         } else {
-          ctx.engine = ctx.playback.start(ctx.profile);
+          ctx.engine = ctx.playback.start(ctx.profile, ctx.deviceModel ?? undefined);
         }
         if (url === '/preset') {
           ctx.presetSave.schedule();
@@ -672,7 +672,7 @@ export function createRgbController({
           throw Error('Send a preset first');
         }
         if (ctx.mode !== 'custom') {
-          ctx.engine = ctx.playback.start(ctx.profile);
+          ctx.engine = ctx.playback.start(ctx.profile, ctx.deviceModel ?? undefined);
           ctx.outputHeld.clear();
           ctx.pendingInputs.length = 0;
         }

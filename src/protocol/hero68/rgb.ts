@@ -1,5 +1,6 @@
 import { buildReport, checksum, u16be } from './codec';
 import { allRegisteredKeyPositions, getBoard, type HeroDeviceModelId } from '../../keyboard/registry';
+import { mapModeToHero68Hardware } from '../../keyboard/rgbCatalog';
 import { HERO68_KEY_POSITIONS, keyIdToPos, posToKeyId } from './keyPositions';
 import type { DecodedReport } from './types';
 import { restoreCustomRgb, type CustomRgbConfiguration } from '../../keyboard/customRgbModel';
@@ -70,14 +71,17 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const wireMix = (value: RgbZone) => value.mixValue ?? (value.mix ? 7 : 0);
 export function sameRgbZone(a: RgbZone, b: RgbZone) {
   const mix = wireMix(a);
+  const reverseSame = a.reverse === undefined || b.reverse === undefined || Boolean(a.reverse) === Boolean(b.reverse);
+  const colorIdxSame = a.colorIndex === undefined || b.colorIndex === undefined || a.colorIndex === b.colorIndex;
+  const paletteSame = a.palette === undefined || b.palette === undefined || same(a.palette, b.palette);
   return (
     a.mode === b.mode &&
     mix === wireMix(b) &&
     a.brightness === b.brightness &&
     a.speed === b.speed &&
-    Boolean(a.reverse) === Boolean(b.reverse) &&
-    (a.colorIndex ?? -1) === (b.colorIndex ?? -1) &&
-    same(a.palette ?? null, b.palette ?? null) &&
+    reverseSame &&
+    colorIdxSame &&
+    paletteSame &&
     (mix === 7 || same(a.rgb, b.rgb))
   );
 }
@@ -112,20 +116,20 @@ export function mergeRgb(fresh: RgbProfile, draft?: RgbProfile, dirty?: RgbDirty
   return result;
 }
 export function rgbModePacket(zone: 1 | 6, config: RgbZone) {
+  const rawMode = zone === 1 && config.mode >= 100 ? mapModeToHero68Hardware(config.mode) : config.mode;
   const {
-    mode,
     mix,
     rgb,
     brightness,
     speed
   } = config;
-  if (!Number.isInteger(mode) || mode < 0 || mode > 255 || !Number.isInteger(brightness) || brightness < 0 || brightness > (zone === 6 ? 4 : 20) || !Number.isInteger(speed) || speed < 0 || speed > 4 || rgb.some(x => !Number.isInteger(x) || x < 0 || x > 255)) {
+  if (!Number.isInteger(rawMode) || rawMode < 0 || rawMode > 255 || !Number.isInteger(brightness) || brightness < 0 || brightness > (zone === 6 ? 4 : 20) || !Number.isInteger(speed) || speed < 0 || speed > 4 || rgb.some(x => !Number.isInteger(x) || x < 0 || x > 255)) {
     throw Error('Invalid RGB parameters');
   }
   const packet = buildReport({
     command: 4,
     zone,
-    data: [mode, config.mixValue ?? (mix ? 7 : 0), ...rgb, brightness, speed]
+    data: [rawMode, config.mixValue ?? (mix ? 7 : 0), ...rgb, brightness, speed]
   });
   if (zone === 6 && mix) {
     packet[6] = 4;
@@ -211,6 +215,9 @@ export async function readRgbProfile(device: RgbTransport, ids: readonly string[
 }
 export async function saveRgbProfile(device: RgbTransport, draft: RgbProfile, baseline: RgbProfile, verified: (baseline: RgbProfile) => void, keyIds?: readonly string[], model?: HeroDeviceModelId) {
   const next = structuredClone(baseline);
+  if (draft.custom) {
+    next.custom = restoreCustomRgb(draft.custom, next);
+  }
   const dirty = rgbChanges(draft, baseline, keyIds, model);
   if (dirty.colors.length) {
     for (const packet of rgbColorPackets(draft.colors, dirty.colors, model)) {
@@ -224,13 +231,19 @@ export async function saveRgbProfile(device: RgbTransport, draft: RgbProfile, ba
     verified(structuredClone(next));
   }
   for (const [name, zone] of ([['keys', 1], ['side', 6]] as const)) {
-    if (dirty[name] || name === 'keys' && draft.keys.mode === 19 && dirty.colors.length) {
-      await device.request(rgbModePacket(zone, draft[name]), 4, zone);
+    const isPerKey = name === 'keys' && (draft.keys.mode === 19 || mapModeToHero68Hardware(draft.keys.mode) === 19);
+    if (dirty[name] || isPerKey && dirty.colors.length) {
+      const hardwareZone = name === 'keys' && draft.keys.mode >= 100
+        ? { ...draft[name], mode: mapModeToHero68Hardware(draft[name].mode) }
+        : draft[name];
+      await device.request(rgbModePacket(zone, hardwareZone), 4, zone);
       const actual = await readZone(device, zone);
-      if (!sameRgbZone(actual, draft[name])) {
+      if (!sameRgbZone(actual, hardwareZone)) {
         throw Error(`${name} RGB readback mismatch`);
       }
-      next[name] = actual;
+      next[name] = name === 'keys' && draft.keys.mode >= 100
+        ? { ...actual, mode: draft.keys.mode }
+        : actual;
       verified(structuredClone(next));
     }
   }

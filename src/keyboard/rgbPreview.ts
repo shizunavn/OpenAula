@@ -2,6 +2,7 @@ import { RgbArm } from './rgbArm';
 import { HERO68_LAYOUT } from './hero68Layout';
 import type { RgbProfile } from '../protocol/hero68/rgb';
 import type { LightingFrame } from './lightingPreviewBus';
+import { XsydFirmwareRgbPreview } from './xsydRgbPreview';
 export const RGB_TICK_MS = 0.5;
 // Visible lanes serialize rows 1..5, with 15/15/14/14/10 nodes.
 // Firmware event/table indices are NOT configuration protocol POS values.
@@ -11,19 +12,46 @@ export class FirmwareRgbPreview {
   ticks = 0;
   /** Keys whose stored colour is loaded; the emulated HERO68 engine only renders these. */
   panels: readonly string[] = Object.keys(RGB_LED_COORDINATES);
+  private xsydDelegate: XsydFirmwareRgbPreview | null = null;
   constructor(public config: RgbProfile, seed = 1) {
     this.cpu.write(0x20000444, seed, 4);
     this.configure(config, true);
   }
+  private isCrossWin68Mode(mode: number): boolean {
+    return mode >= 200 && mode < 300;
+  }
+  private toXsydDelegateProfile(config: RgbProfile): RgbProfile {
+    const k = config.keys;
+    const win68Mode = Math.max(0, Math.min(26, k.mode - 200));
+    const normBright = k.brightness <= 0 ? 0 : k.brightness > 4 ? Math.max(1, Math.min(4, Math.round(k.brightness / 5))) : k.brightness;
+    return {
+      ...config,
+      keys: {
+        ...k,
+        mode: win68Mode,
+        brightness: normBright,
+      },
+    };
+  }
   configure(config: RgbProfile, initial = false, panels: readonly string[] = Object.keys(RGB_LED_COORDINATES)) {
+    const normalizedMode = config.keys.mode >= 100 && config.keys.mode < 200 ? config.keys.mode - 100 : config.keys.mode;
     const keysChanged = initial || JSON.stringify(config.keys) !== JSON.stringify(this.config.keys) || JSON.stringify(config.colors) !== JSON.stringify(this.config.colors);
     const sideChanged = initial || JSON.stringify(config.side) !== JSON.stringify(this.config.side);
     this.config = config;
     this.panels = panels;
+    if (this.isCrossWin68Mode(normalizedMode)) {
+      const delegateProfile = this.toXsydDelegateProfile(config);
+      if (!this.xsydDelegate) {
+        this.xsydDelegate = new XsydFirmwareRgbPreview(delegateProfile);
+      } else {
+        this.xsydDelegate.configure(delegateProfile);
+      }
+    }
     const c = this.cpu;
     const k = config.keys;
     const s = config.side;
-    c.write(0x200016d1, k.mode);
+    const armMode = this.isCrossWin68Mode(normalizedMode) ? 20 : normalizedMode;
+    c.write(0x200016d1, armMode);
     c.write(0x20000068, k.mixValue ?? (k.mix ? 7 : 0));
     k.rgb.forEach((v, i) => c.write(0x2000005e + i, v));
     c.write(0x20000069, k.brightness);
@@ -40,7 +68,7 @@ export class FirmwareRgbPreview {
       color.forEach((v, i) => c.write(0x20006b77 + pos + i * 126, v));
     }
     // Match the command handler's deferred initialization through the dispatcher.
-    if (keysChanged && k.mode < 20) {
+    if (keysChanged && armMode < 20) {
       c.write(0x20000050, c.read(0x20000050, 4) | 2, 4);
     }
     if (sideChanged) {
@@ -57,17 +85,24 @@ export class FirmwareRgbPreview {
     throw Error(`Unmapped RGB key ${id}`);
   }
   event(keyId: string, pressed: boolean) {
+    if (this.isCrossWin68Mode(this.config.keys.mode)) {
+      this.xsydDelegate?.event(keyId, pressed);
+    }
     if (RGB_LED_COORDINATES[keyId]) {
       this.cpu.call(pressed ? 0x080200b8 : 0x0802009c, this.effectPosition(keyId));
     }
   }
   advance(milliseconds: number) {
+    if (this.isCrossWin68Mode(this.config.keys.mode)) {
+      this.xsydDelegate?.advance(milliseconds);
+    }
     const target = Math.floor(milliseconds / RGB_TICK_MS);
+    const normalizedMode = this.config.keys.mode >= 100 && this.config.keys.mode < 200 ? this.config.keys.mode - 100 : this.config.keys.mode;
     for (; this.ticks < target; this.ticks++) {
       for (const addr of [0x20000080, 0x20000086, 0x20000088]) {
         this.cpu.write(addr, this.cpu.read(addr, 2) + 1, 2);
       }
-      if (this.config.keys.mode < 20) {
+      if (!this.isCrossWin68Mode(normalizedMode) && normalizedMode < 20) {
         this.cpu.call(0x080208b8);
       }
       if (this.config.side.mode < 6) {
@@ -97,17 +132,25 @@ export class FirmwareRgbPreview {
       return Math.max(0, Math.min(255, Math.round(encoded * 255)));
     };
     const hex = (values: number[], brightness: number) => '#' + values.map(x => applyBrightness(x, brightness).toString(16).padStart(2, '0')).join('');
+    const sideBrightness = Math.min(20, this.cpu.read(0x08029b98 + this.config.side.brightness));
+    const side = Array.from({
+      length: 18
+    }, (_, i) => hex([0, 1, 2].map(j => this.cpu.read(0x20000f36 + i * 3 + j)), sideBrightness));
+    if (this.isCrossWin68Mode(this.config.keys.mode) && this.xsydDelegate) {
+      return {
+        keys: this.xsydDelegate.frame().keys,
+        side
+      };
+    }
+    const normalizedMode = this.config.keys.mode >= 100 && this.config.keys.mode < 200 ? this.config.keys.mode - 100 : this.config.keys.mode;
     const keys: LightingFrame = {};
     for (const [id, [col, row]] of Object.entries(RGB_LED_COORDINATES)) {
       const p = 0x20000dbc + col * 18 + row * 3;
-      keys[id] = this.config.keys.mode >= 20 ? '#35393b' : hex([0, 1, 2].map(i => this.cpu.read(p + i)), this.config.keys.brightness);
+      keys[id] = normalizedMode >= 20 ? '#35393b' : hex([0, 1, 2].map(i => this.cpu.read(p + i)), this.config.keys.brightness);
     }
-    const sideBrightness = Math.min(20, this.cpu.read(0x08029b98 + this.config.side.brightness));
     return {
       keys,
-      side: Array.from({
-        length: 18
-      }, (_, i) => hex([0, 1, 2].map(j => this.cpu.read(0x20000f36 + i * 3 + j)), sideBrightness))
+      side
     };
   }
 }

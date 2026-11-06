@@ -227,7 +227,7 @@ export function AppShell({
             </div>
 
             <div className="topbar-actions">
-              {showKeyboardArea && (activePage === 'gamepad' || (activePage === 'rgb' && activeRgbTab !== 'onboard')) ? (
+              {showKeyboardArea && (activePage === 'gamepad' || (activePage === 'rgb' && activeRgbTab === 'rhythm')) ? (
                 <span className="profile-status">{tr('Changes apply automatically')}</span>
               ) : showKeyboardArea && activePage === 'macros' ? (
                 <span className="profile-status">{tr('Local + HERO68 macro library')}</span>

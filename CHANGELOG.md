@@ -5,7 +5,7 @@ their original validation scope; they are not claims of new hardware testing.
 
 ## 1.3.1 - WIN 68 HE MAX RGB editor fixes
 
-- Rhythm Sync and Custom RGB no longer fail with "This keyboard did not report a HERO68/HERO84 device UUID" on WIN 68 HE MAX. The editors handed the board to the HERO68 WebHID manager whenever the service reported `connected`, which sends HERO68's `0x82` identity probe; the handoff now only happens for HERO68/HERO84.
+- Rhythm Sync and Custom RGB no longer fail with "Error: unsupported" on WIN 68 HE MAX. The editors handed the board to the HERO68 WebHID manager whenever the service reported `connected`, which sends HERO68's `0x82` identity probe; the handoff now only happens for HERO68/HERO84.
 - Custom Effects always show the seven gradient palettes; previously the palette row disappeared while a gradient layer was set to a single color.
 - Switching tabs no longer leaves the WIN 68 HE MAX custom preview black. The RGB page kept its own tab state while the shell kept `activeRgbTab`, so the editor was hidden (and its engine released) while the shell still expected its output.
 - Multicolor in the onboard color strip works again on WIN 68 HE MAX: the draft is reset to the multicolor color, instead of writing `colorIndex 0` with a stale single color into slot 0.

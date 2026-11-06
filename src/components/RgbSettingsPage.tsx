@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react';
-import { Lightbulb, Sparkles, Waves, Palette, RotateCcw, ArrowLeftRight } from 'lucide-react';
+import { Lightbulb, Sparkles, Waves, Palette, RotateCcw, ArrowLeftRight, Save, Trash2 } from 'lucide-react';
 import CustomRgbEditor from './CustomRgbEditor';
 import RhythmSyncEditor from './RhythmSyncEditor';
 import Hero68Preview from './Hero68Preview';
@@ -15,18 +15,24 @@ import { heroLayout } from '../keyboard/layout';
 import { acceptsRgbPreviewKey } from '../keyboard/rgbPreviewInput';
 import { BRAND } from '../brand';
 import { rgbPreviewDarkReason } from '../keyboard/rgbPreviewDefaults';
-import { isWin68PerKeyMode, KEY_RGB_MODES, SIDE_RGB_MODES, WIN68_KEY_RGB_MODES } from '../keyboard/rgbCatalog';
-import type { LightingFrame } from '../keyboard/lightingPreviewBus';
+import { isWin68PerKeyMode, mergedKeyRgbModesForModel, SIDE_RGB_MODES, WIN68_KEY_RGB_MODES } from '../keyboard/rgbCatalog';
+import { publishLightingFrame, type LightingFrame } from '../keyboard/lightingPreviewBus';
 import type { RgbColor, RgbProfile, RgbZone } from '../protocol/hero68/rgb';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import {
+  buildXsydPerKeyWriteFrame,
+  buildXsydRgbWriteFrame,
+  closestXsydColorSlot,
   normalizeXsydBrightness,
+  saveXsydSavedRgb,
   XSYD_COLOR_SLOTS,
   XSYD_DEFAULT_PALETTE_RGB,
   XSYD_MAX_BRIGHTNESS,
   xsydColorIndexForZone,
+  xsydDeviceManager,
   xsydRgbForColorIndex,
-} from '../protocol/xsyd/rgb';
+} from '../protocol/xsyd/device';
+import { keyValueForCode } from '../protocol/xsyd/features';
 import './RgbSettingsPage.css';
 import { useI18n } from '../i18n';
 import { TachyonContext } from '../app/TachyonContext';
@@ -35,6 +41,33 @@ import { useRgbServiceState } from '../protocol/rgbServiceState';
 const colorHex = (color: RgbColor) => '#' + color.map(v => v.toString(16).padStart(2, '0')).join('');
 const hexColor = (hex: string): RgbColor => ([1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as RgbColor);
 export type RgbTab = 'onboard' | 'custom' | 'rhythm';
+const SAVED_RGB_PRESETS_KEY = `${BRAND.storagePrefix}:saved-rgb-presets:v1`;
+export type SavedRgbPresetItem = {
+  id: string;
+  name: string;
+  profile: RgbProfile;
+};
+export function loadSavedRgbPresets(): SavedRgbPresetItem[] {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SAVED_RGB_PRESETS_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter(item => item && item.id && item.name && item.profile) : [];
+  } catch {
+    return [];
+  }
+}
+export function persistSavedRgbPresets(list: SavedRgbPresetItem[]): void {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(SAVED_RGB_PRESETS_KEY, JSON.stringify(list));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
 function previousRgbTab(): RgbTab {
   try {
     const tab = sessionStorage.getItem(`${BRAND.storagePrefix}:rgb-tab`);
@@ -53,7 +86,6 @@ type RgbSettingsProps = {
   onEntered?: () => void;
   slot?: number;
   onTabChange?: (tab: RgbTab) => void;
-  activeTab?: RgbTab;
   model?: HeroDeviceModelId;
 };
 export default function RgbSettingsPage(props: RgbSettingsProps) {
@@ -76,7 +108,7 @@ export default function RgbSettingsPage(props: RgbSettingsProps) {
         <p>{tr('Key and side lighting, Custom Effects and Rhythm Sync are off. Turn off Tachyon Mode to use RGB again.')}</p>
       </section>
   </div>;
-  }
+}
   return <ActiveRgbSettingsPage {...props} />;
 }
 function ActiveRgbSettingsPage({
@@ -89,7 +121,6 @@ function ActiveRgbSettingsPage({
   onEntered,
   slot = 0,
   onTabChange,
-  activeTab,
   model: modelProp
 }: RgbSettingsProps) {
   const {
@@ -106,6 +137,8 @@ function ActiveRgbSettingsPage({
   const [selected, setSelected] = useState(new Set<string>());
   const [paint, setPaint] = useState('#ffd95a');
   const [replay, setReplay] = useState(0);
+  const [savedPresets, setSavedPresets] = useState<SavedRgbPresetItem[]>(() => loadSavedRgbPresets());
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [frame, setFrame] = useState<{
     keys: LightingFrame;
     side: string[];
@@ -126,19 +159,6 @@ function ActiveRgbSettingsPage({
     }
     return previousRgbTab();
   });
-  // ActiveRgbTab (AppShell) and this tab drive the same editor. Following it keeps
-  // the editor visible when the sidebar switches tabs, and publishing ours back
-  // tells the shell which editor the preview output belongs to.
-  useEffect(() => {
-    if (activeTab && activeTab !== tab) {
-      setTab(activeTab);
-    }
-  }, [activeTab]);
-  useEffect(() => {
-    if (activeTab !== tab) {
-      onTabChange?.(tab);
-    }
-  }, [tab]);
   const customMode = tab === 'custom';
   const rhythmMode = tab === 'rhythm';
   const [rhythmVisited, setRhythmVisited] = useState(rhythmMode);
@@ -153,6 +173,9 @@ function ActiveRgbSettingsPage({
     } catch {
 }
   }, [tab]);
+  useEffect(() => {
+    onTabChange?.(tab);
+  }, [tab, onTabChange]);
   const playback = useCustomRgbPlayback(value, onChange, onSetup, slot, tab === 'custom');
   const engineRef = useRef<FirmwareRgbPreview | XsydFirmwareRgbPreview | null>(null);
   const replayRef = useRef(replay);
@@ -160,13 +183,19 @@ function ActiveRgbSettingsPage({
     at: number;
     id: string;
   }[]>([]);
-  const effects = isWin68 ? WIN68_KEY_RGB_MODES : activeZone === 'keys' ? KEY_RGB_MODES : SIDE_RGB_MODES;
+  const effects = activeZone === 'keys' ? mergedKeyRgbModesForModel(isWin68) : SIDE_RGB_MODES;
   const config = value[activeZone];
   const capability = effects.find(mode => mode.id === config.mode);
-  const win68Capability = isWin68 ? WIN68_KEY_RGB_MODES.find(mode => mode.id === config.mode) : undefined;
+  // Native WIN68 modes carry their own direction flag; borrowed HERO68 modes
+  // (`100 + id`) only inherit the reverse-free HERO68 capability.
+  const win68Capability: { reverse?: boolean } | undefined = isWin68
+    ? config.mode <= 26
+      ? WIN68_KEY_RGB_MODES.find(mode => mode.id === config.mode)
+      : undefined
+    : undefined;
   const perKey = isWin68
     ? activeZone === 'keys' && isWin68PerKeyMode(config.mode)
-    : activeZone === 'keys' && config.mode === 19;
+    : activeZone === 'keys' && (config.mode === 19 || (config.mode >= 221 && config.mode <= 226));
   const brightnessMax = isWin68 ? XSYD_MAX_BRIGHTNESS : activeZone === 'side' ? 4 : 20;
   const effectiveBrightness = isWin68 ? normalizeXsydBrightness(config.brightness) : config.brightness;
   const darkReason = rgbPreviewDarkReason(
@@ -174,26 +203,87 @@ function ActiveRgbSettingsPage({
     activeZone === 'side',
     isWin68
   );
-  const activeColorIndex = isWin68 ? xsydColorIndexForZone(config) : config.mix ? 0 : 1;
-  const win68Palette = isWin68
-    ? (config.palette && config.palette.length === 7
-        ? config.palette
-        : XSYD_DEFAULT_PALETTE_RGB.map(c => [...c] as RgbColor))
-    : [];
+  const activeColorIndex = config.mix ? 0 : (config.colorIndex && config.colorIndex >= 1 && config.colorIndex <= 7 ? config.colorIndex : closestXsydColorSlot(config.rgb));
+  const paletteSlots = config.palette && config.palette.length === 7
+    ? config.palette
+    : XSYD_DEFAULT_PALETTE_RGB.map(c => [...c] as RgbColor);
+
+  function pushWin68LiveZone(nextZone: RgbZone) {
+    if (!isWin68 || !xsydDeviceManager.connected) {
+      return;
+    }
+    void xsydDeviceManager.request(buildXsydRgbWriteFrame(nextZone)).catch(() => {});
+  }
 
   function change(patch: Partial<RgbZone>) {
-    onChange({
+    const nextMix = patch.mix !== undefined ? patch.mix : config.mix;
+    const nextRgb = patch.rgb ?? config.rgb;
+    const nextColorIndex =
+      patch.colorIndex !== undefined
+        ? patch.colorIndex
+        : patch.mix !== undefined
+          ? patch.mix
+            ? 0
+            : config.colorIndex && config.colorIndex >= 1 && config.colorIndex <= 7
+              ? config.colorIndex
+              : closestXsydColorSlot(nextRgb)
+          : config.colorIndex;
+    const nextZone: RgbZone = {
+      ...config,
+      ...(isWin68 ? { brightness: effectiveBrightness } : {}),
+      ...patch,
+      mix: nextMix,
+      ...(nextColorIndex !== undefined ? { colorIndex: nextColorIndex } : {}),
+      ...(patch.mix !== undefined || patch.rgb !== undefined ? {
+        mixValue: undefined
+      } : {})
+    };
+    const nextProfile: RgbProfile = {
       ...value,
-      [activeZone]: {
-        ...config,
-        ...(isWin68 ? { brightness: effectiveBrightness } : {}),
-        ...patch,
-        ...(patch.mix !== undefined || patch.rgb !== undefined ? {
-          mixValue: undefined
-        } : {})
-      }
-    });
+      [activeZone]: nextZone
+    };
+    onChange(nextProfile);
+    if (isWin68) {
+      saveXsydSavedRgb(slot, nextProfile);
+      pushWin68LiveZone(nextZone);
+    }
   }
+
+  function handleSaveRgbPreset() {
+    const presetName = `${capability?.name ?? 'RGB'} #${savedPresets.length + 1}`;
+    const item: SavedRgbPresetItem = {
+      id: `rgb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: presetName,
+      profile: structuredClone(value),
+    };
+    const nextList = [item, ...savedPresets].slice(0, 12);
+    setSavedPresets(nextList);
+    persistSavedRgbPresets(nextList);
+    if (isWin68) {
+      saveXsydSavedRgb(slot, value);
+      pushWin68LiveZone(value.keys);
+    }
+    setSavedNotice(tr('Saved'));
+    if (typeof window !== 'undefined' && window.setTimeout) {
+      window.setTimeout(() => setSavedNotice(null), 1600);
+    }
+  }
+
+  function handleApplySavedPreset(item: SavedRgbPresetItem) {
+    const nextProfile = structuredClone(item.profile);
+    onChange(nextProfile);
+    if (isWin68) {
+      saveXsydSavedRgb(slot, nextProfile);
+      pushWin68LiveZone(nextProfile.keys);
+    }
+  }
+
+  function handleDeleteSavedPreset(id: string) {
+    const nextList = savedPresets.filter(item => item.id !== id);
+    setSavedPresets(nextList);
+    persistSavedRgbPresets(nextList);
+  }
+
   useEffect(() => {
     if (customMode || rhythmMode) {
       return;
@@ -230,18 +320,20 @@ function ActiveRgbSettingsPage({
       engine.configure(value);
       engineRef.current = engine;
       replayRef.current = replay;
-      // A paused/reduced-motion preview still needs a newly generated frame,
-      // rather than displaying the previous Single-color frame after MIX changes.
-      elapsed = engine.ticks * 0.5 + (!reused || document.hidden || reduced.matches ? 110 : 0.5);
+      // Advance by 110ms on every configuration update so re-initialized firmware
+      // effects and Multicolor toggles render their new colors immediately.
+      elapsed = engine.ticks * 0.5 + 110;
       engine.advance(elapsed);
-      setFrame(engine.frame());
+      const initialFrame = engine.frame();
+      setFrame(initialFrame);
+      if (Object.values(initialFrame.keys).some(c => c !== '#000000')) {
+        publishLightingFrame(initialFrame.keys);
+      }
       for (const event of events) {
         event.at += elapsed;
       }
       const cycleStart = elapsed;
-      const repeatSamples = isWin68
-        ? WIN68_KEY_RGB_MODES.find(m => m.id === value.keys.mode)?.reactive
-        : KEY_RGB_MODES[value.keys.mode]?.reactive;
+      const repeatSamples = capability?.reactive;
       if (reduced.matches) {
         for (const event of events) {
           engine.advance(event.at);
@@ -249,7 +341,11 @@ function ActiveRgbSettingsPage({
         }
         elapsed = events.at(-1)!.at + 25;
         engine.advance(elapsed);
-        setFrame(engine.frame());
+        const nextRendered = engine.frame();
+        setFrame(nextRendered);
+        if (Object.values(nextRendered.keys).some(c => c !== '#000000')) {
+          publishLightingFrame(nextRendered.keys);
+        }
         eventIndex = events.length;
       }
       function render(now: number) {
@@ -275,7 +371,11 @@ function ActiveRgbSettingsPage({
             engine.event(event.id, false);
           }
           engine.advance(elapsed);
-          setFrame(engine.frame());
+          const nextRendered = engine.frame();
+          setFrame(nextRendered);
+          if (Object.values(nextRendered.keys).some(c => c !== '#000000')) {
+            publishLightingFrame(nextRendered.keys);
+          }
           handle = requestAnimationFrame(render);
         } catch (e) {
           setError(e instanceof Error ? e.message : String(e));
@@ -366,21 +466,35 @@ function ActiveRgbSettingsPage({
   const rhythmActive = Boolean(status?.enabled && status.mode === 'rhythm');
   return <RgbWorkspace tab={tab} onTab={setTab} disabled={busy || playback.busy} output={customActive ? 'custom' : rhythmActive ? 'rhythm' : 'onboard'}>
     {(rhythmMode || rhythmVisited) && <RhythmSyncEditor onSetup={onSetup} visible={rhythmMode} advancedBindings={advancedBindings} />}
-    <CustomRgbEditor value={value} onChange={onChange} busy={busy} advancedBindings={advancedBindings} visible={customMode} onSetup={onSetup} playback={playback} />
+    <CustomRgbEditor value={value} onChange={onChange} busy={busy} advancedBindings={advancedBindings} visible={customMode} onSetup={onSetup} playback={playback} savedPresets={savedPresets} onSaveRgbPreset={handleSaveRgbPreset} onApplySavedPreset={handleApplySavedPreset} onDeleteSavedPreset={handleDeleteSavedPreset} savedNotice={savedNotice} />
     {!customMode && !rhythmMode && <>
-    <RgbToolbarSlot>{(status?.enabled || playback.applied) && <button className="apply-button" disabled={busy || playback.busy} onClick={() => void playback.onboard()}>{tr('Use onboard lighting')}</button>}</RgbToolbarSlot>
+    <RgbToolbarSlot>
+      {(status?.enabled || playback.applied) && <button className="apply-button" disabled={busy || playback.busy} onClick={() => void playback.onboard()}>{tr('Use onboard lighting')}</button>}
+      <button type="button" className="secondary-button" disabled={busy} onClick={handleSaveRgbPreset}><Save size={15} /> {savedNotice ?? tr('Save')}</button>
+    </RgbToolbarSlot>
     <RgbToolbarSlot notice>{playback.error && <p className="stream-error" role="alert">{tr(playback.error)}</p>}</RgbToolbarSlot>
     <RgbPreviewPanel source={tr('Draft preview')} hint={perKey ? tr('Select keys on the preview to paint.') : tr('Onboard changes use Save to profile.')} actions={capability?.reactive ? <button className="secondary-button" onClick={() => setReplay(x => x + 1)}><RotateCcw size={15} /> {tr('Try effect')}</button> : undefined} footer={perKey && <RgbKeyPaintTools selected={selected} onSelect={setSelected} color={paint} onColor={setPaint} disabled={busy} onPaint={() => {
         const colors = {
           ...value.colors
         };
+        const rgbTuple = hexColor(paint);
         for (const id of selected) {
-          colors[id] = hexColor(paint);
+          colors[id] = rgbTuple;
+          if (isWin68 && xsydDeviceManager.connected) {
+            const kv = keyValueForCode(id);
+            if (kv !== undefined) {
+              void xsydDeviceManager.request(buildXsydPerKeyWriteFrame(kv, rgbTuple)).catch(() => {});
+            }
+          }
         }
-        onChange({
+        const nextProfile = {
           ...value,
           colors
-        });
+        };
+        onChange(nextProfile);
+        if (isWin68) {
+          saveXsydSavedRgb(slot, nextProfile);
+        }
       }} />}>
       <Hero68Preview advancedBindings={advancedBindings} showAdvancedIcons={false} selectedKeys={perKey ? selected : new Set()} onToggleKey={toggle} lightingFrame={frame.keys} lightingSource="local" selectionEnabled={perKey} />
       {!isWin68 && <div className="rgb-side-preview" aria-label={tr('18 side light positions')}>{frame.side.map((color, i) => <span key={i} style={{
@@ -395,7 +509,7 @@ function ActiveRgbSettingsPage({
       ) : (
         <div className="rgb-section-heading">
           <h2>{tr('WIN 68 HE MAX Effects')}</h2>
-          <span>27 {tr('effects stored on your keyboard')}</span>
+          <span>{effects.length} {tr('effects stored on your keyboard')}</span>
         </div>
       )}
       {!isWin68 && <h2>{tr('Choose effect')}</h2>}
@@ -416,7 +530,7 @@ function ActiveRgbSettingsPage({
             <span>{tr('Lighting is dark')} · {darkReason}</span>
             <button type="button" className="secondary-button" disabled={busy} onClick={() => change({
               mix: true,
-              colorIndex: isWin68 ? 0 : undefined,
+              colorIndex: 0,
               brightness: effectiveBrightness || brightnessMax
             })}>{tr('Use Multicolor')}</button>
           </div>}
@@ -429,7 +543,7 @@ function ActiveRgbSettingsPage({
         {capability?.speed && <label>{tr('Speed')} <strong>{config.speed + 1} / 5</strong><input aria-label={tr('RGB speed')} type="range" min="0" max="4" value={config.speed} disabled={busy} onChange={e => change({
                 speed: Number(e.target.value)
               })} /></label>}
-        {isWin68 && win68Capability?.reverse && (
+        {win68Capability?.reverse && (
           <div className="rgb-color-controls">
             <label className="rgb-mix">
               <input
@@ -442,51 +556,57 @@ function ActiveRgbSettingsPage({
             </label>
           </div>
         )}
-        {capability?.color && !isWin68 && <div className="rgb-color-controls">
-              <div className="rgb-active-color">{config.mix ? <span className="rgb-rainbow-swatch" aria-label={tr('Multicolor palette')} /> : <><label>{tr('Color')}<RgbColorPicker label={tr('Effect color')} value={colorHex(config.rgb)} disabled={busy} onChange={hex => change({
-                      rgb: hexColor(hex)
-                    })} /></label><span>{colorHex(config.rgb).toUpperCase()}</span></>}</div>
-              <label className="rgb-mix"><input type="checkbox" checked={config.mix} disabled={busy} onChange={e => change({
-                  mix: e.target.checked
-                })} /> {tr('Multicolor')}</label>
-            </div>}
-        {capability?.color && isWin68 && (
+        {capability?.color && (
           <div className="rgb-color-controls">
             <div className="rgb-active-color">
-              {activeColorIndex === 0 ? (
-                <span className="rgb-rainbow-swatch" aria-label={tr('Multicolor palette')} />
-              ) : (
-                <>
-                  <label>
-                    {tr('Color')}
-                    <RgbColorPicker
-                      label={tr('Effect color')}
-                      value={colorHex(xsydRgbForColorIndex(activeColorIndex, win68Palette))}
-                      disabled={busy}
-                      onChange={hex => {
-                        const rgbTuple = hexColor(hex);
-                        const nextPalette = win68Palette.map((c, idx) =>
-                          idx === activeColorIndex - 1 ? rgbTuple : ([...c] as RgbColor)
-                        );
-                        change({
-                          mix: false,
-                          colorIndex: activeColorIndex,
-                          rgb: rgbTuple,
-                          palette: nextPalette,
-                        });
-                      }}
-                    />
-                  </label>
-                  <span>{colorHex(xsydRgbForColorIndex(activeColorIndex, win68Palette)).toUpperCase()}</span>
-                </>
-              )}
+              {config.mix && <span className="rgb-rainbow-swatch" aria-label={tr('Multicolor palette')} />}
+              <label>
+                {tr('Color')}
+                <RgbColorPicker
+                  label={tr('Effect color')}
+                  value={colorHex(activeColorIndex >= 1 ? xsydRgbForColorIndex(activeColorIndex, paletteSlots) : config.rgb)}
+                  disabled={busy}
+                  onChange={hex => {
+                    const rgbTuple = hexColor(hex);
+                    const targetSlot = activeColorIndex >= 1 && activeColorIndex <= 7 ? activeColorIndex : closestXsydColorSlot(rgbTuple);
+                    const nextPalette = paletteSlots.map((c, idx) =>
+                      idx === targetSlot - 1 ? rgbTuple : ([...c] as RgbColor)
+                    );
+                    change({
+                      mix: false,
+                      colorIndex: targetSlot,
+                      rgb: rgbTuple,
+                      palette: nextPalette,
+                    });
+                  }}
+                />
+              </label>
+              <span>{colorHex(activeColorIndex >= 1 ? xsydRgbForColorIndex(activeColorIndex, paletteSlots) : config.rgb).toUpperCase()}</span>
             </div>
+            <label className="rgb-mix">
+              <input
+                type="checkbox"
+                checked={config.mix}
+                disabled={busy}
+                onChange={e =>
+                  change({
+                    mix: e.target.checked,
+                    colorIndex: e.target.checked
+                      ? 0
+                      : config.colorIndex && config.colorIndex >= 1
+                        ? config.colorIndex
+                        : closestXsydColorSlot(config.rgb),
+                  })
+                }
+              />{' '}
+              {tr('Multicolor')}
+            </label>
             <div className="rgb-zone-tabs" role="group" aria-label={tr('Color slot')}>
               {XSYD_COLOR_SLOTS.map(slotInfo => {
-                const selectedSlot = activeColorIndex === slotInfo.index;
+                const selectedSlot = (config.mix ? 0 : activeColorIndex) === slotInfo.index;
                 const slotRgb = slotInfo.index === 0
                   ? null
-                  : xsydRgbForColorIndex(slotInfo.index, win68Palette);
+                  : xsydRgbForColorIndex(slotInfo.index, paletteSlots);
                 return (
                   <button
                     key={slotInfo.index}
@@ -495,15 +615,16 @@ function ActiveRgbSettingsPage({
                     aria-pressed={selectedSlot}
                     title={tr(slotInfo.name)}
                     onClick={() => {
-                      // `0x18` keeps the last single color in the zone it last
-                      // held, so a single-color draft must reset to Multicolor
-                      // explicitly; leaving the stale flags plus colorIndex 0
-                      // writes a black slot and the LEDs go dark.
-                      change({
-                        mix: true,
-                        colorIndex: 0,
-                        rgb: [...XSYD_COLOR_SLOTS[0].rgb] as RgbColor
-                      });
+                      if (slotInfo.index === 0) {
+                        change({ mix: true, colorIndex: 0 });
+                      } else {
+                        const nextRgb = xsydRgbForColorIndex(slotInfo.index, paletteSlots);
+                        change({
+                          mix: false,
+                          colorIndex: slotInfo.index,
+                          rgb: nextRgb,
+                        });
+                      }
                     }}
                   >
                     {slotRgb ? (
@@ -526,6 +647,28 @@ function ActiveRgbSettingsPage({
           </div>
         )}
       </div>
+      {savedPresets.length > 0 && (
+        <div className="rgb-saved-presets">
+          <h3>{tr('Saved')} RGB</h3>
+          <div className="rgb-zone-tabs" role="group" aria-label="Saved RGB">
+            {savedPresets.map(item => (
+              <div key={item.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <button type="button" disabled={busy} onClick={() => handleApplySavedPreset(item)}>
+                  {item.name}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  aria-label={`Delete ${item.name}`}
+                  onClick={() => handleDeleteSavedPreset(item.id)}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {capability?.reactive && <p className="rgb-inline-note">{tr('Preview only · sample key presses repeat automatically. Click or type to try your own keys.')}</p>}
       {!isWin68 && config.brightness > brightnessMax && <p className="rgb-inline-note">{tr('This draft has an unrecognized brightness value. Choose a supported level before saving this zone.')}</p>}
       {error && <p className="stream-error">{tr('Preview unavailable')}: {error}</p>}

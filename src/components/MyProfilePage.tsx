@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Keyboard, Pencil, Check, ArrowRight } from 'lucide-react';
+import { Keyboard, Pencil, Check, ArrowRight } from 'lucide-react';
 import type { ProfileSlot } from '../protocol/hero68/types';
 import { useI18n } from '../i18n';
 import { heroDeviceModel, type HeroDeviceModelId } from '../keyboard/devices';
@@ -15,7 +15,7 @@ type Props = {
   remappedKeys: number;
   onSelect: (slot: ProfileSlot) => void;
   onRename: (name: string) => Promise<boolean>;
-  onExport: () => void;
+  onExport?: () => void;
   onRemap: () => void;
   onRefresh: () => void;
 };
@@ -31,7 +31,6 @@ export default function MyProfilePage({
   remappedKeys,
   onSelect,
   onRename,
-  onExport,
   onRemap,
   onRefresh
 }: Props) {
@@ -67,7 +66,6 @@ export default function MyProfilePage({
         <h1>{tr('My Profile')}</h1>
         <p>{tr('Your keyboard settings, together in one profile.')}</p>
       </div>
-      <button className="secondary-button" disabled={busy} onClick={onExport}><Download size={16} />{tr('Export profile')}</button>
     </div>
       <article className="profile-detail settings-card">
         <div className={`profile-detail-icon profile-accent-${slot}`}><Keyboard size={32} /></div>

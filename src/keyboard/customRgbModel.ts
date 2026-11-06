@@ -333,10 +333,14 @@ export function createRgbLayer(effect: CustomRgbEffect = 'ripple', id: string = 
     ...RGB_EFFECT_METADATA[effect].defaults
   };
 }
+function isXsydLikeZone(zone?: Partial<RgbZone>): boolean {
+  return Boolean(zone && (zone.colorIndex !== undefined || zone.reverse !== undefined || Array.isArray(zone.palette)));
+}
 export function defaultCustomRgb(profile: RgbProfile): CustomRgbConfiguration {
+  const isXsyd = isXsydLikeZone(profile.keys);
   const base: RgbZone = {
     ...profile.keys,
-    mode: 19,
+    mode: isXsyd ? 21 : 19,
     mix: true,
     rgb: profile.keys.rgb.some(channel => channel > 0) ? [...profile.keys.rgb] : [255, 255, 255]
   };
@@ -361,16 +365,30 @@ export function restoreCustomRgb(value: unknown, profile: RgbProfile, validKeyId
   const allowedSet = new Set(validKeyIds ?? allRegisteredKeyIds());
   const defaultKeys = validKeyIds ?? HERO68_KEY_IDS;
   const ids = new Set<string>();
+  const restoredBase: RgbZone = {
+    mode: Math.round(finite(base.mode, fallback.base.mode, 0, 255)),
+    mix: typeof base.mix === 'boolean' ? base.mix : fallback.base.mix,
+    rgb: ([0, 1, 2].map(i => Math.round(finite(base.rgb?.[i], 255, 0, 255))) as RgbColor),
+    brightness: Math.round(finite(base.brightness, fallback.base.brightness, 0, 20)),
+    speed: Math.round(finite(base.speed, 2, 0, 4)),
+    ...(typeof base.reverse === 'boolean' ? { reverse: base.reverse } : {}),
+    ...(typeof base.colorIndex === 'number' && Number.isFinite(base.colorIndex)
+      ? { colorIndex: Math.round(clamp(base.colorIndex, 0, 7)) }
+      : {}),
+    ...(Array.isArray(base.palette) && base.palette.length === 7
+      ? {
+          palette: base.palette.map(c => ([
+            Math.round(finite(c?.[0], 255, 0, 255)),
+            Math.round(finite(c?.[1], 255, 0, 255)),
+            Math.round(finite(c?.[2], 255, 0, 255)),
+          ] as RgbColor)),
+        }
+      : {}),
+  };
   return {
     version: 1,
     enabled: v.enabled === true,
-    base: {
-      mode: Math.round(finite(base.mode, 19, 0, 19)),
-      mix: typeof base.mix === 'boolean' ? base.mix : fallback.base.mix,
-      rgb: ([0, 1, 2].map(i => Math.round(finite(base.rgb?.[i], 255, 0, 255))) as RgbColor),
-      brightness: Math.round(finite(base.brightness, 20, 0, 20)),
-      speed: Math.round(finite(base.speed, 2, 0, 4))
-    },
+    base: restoredBase,
     ...(v.baseEffect?.effect === 'aurora' ? {
       baseEffect: {
         effect: ('aurora' as const),
@@ -389,6 +407,7 @@ export function restoreCustomRgb(value: unknown, profile: RgbProfile, validKeyId
       }
       ids.add(id);
       const defaults = createRgbLayer(layer.effect, id, defaultKeys);
+      const hasValidPalette = Boolean(layer.palette && Object.hasOwn(RGB_GRADIENT_PALETTES, layer.palette));
       return [{
         id,
         effect: layer.effect,
@@ -403,8 +422,8 @@ export function restoreCustomRgb(value: unknown, profile: RgbProfile, validKeyId
         ...(layer.effect === 'scan' ? {
           scanPauseMs: finite(layer.scanPauseMs, 0, 0, 5000)
         } : {}),
-        ...(RGB_EFFECT_METADATA[layer.effect].gradient ? {
-          palette: layer.palette && Object.hasOwn(RGB_GRADIENT_PALETTES, layer.palette) ? layer.palette : defaults.palette
+        ...(RGB_EFFECT_METADATA[layer.effect].gradient || hasValidPalette ? {
+          palette: hasValidPalette ? layer.palette : defaults.palette
         } : {}),
         keys: Array.isArray(layer.keys) ? [...new Set(layer.keys.filter(id => allowedSet.has(id)))] : [...defaultKeys]
       }];

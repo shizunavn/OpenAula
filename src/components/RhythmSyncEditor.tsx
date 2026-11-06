@@ -12,6 +12,7 @@ import { latestUpdates } from '../protocol/latestUpdates';
 import { rgbFrameGuard } from '../protocol/rgbFrameGuard';
 import { BRAND } from '../brand';
 import { hero68DeviceManager } from '../protocol/hero68/webhid';
+import { xsydDeviceManager, XsydCustomRgbStreamer } from '../protocol/xsyd/device';
 import { hero68HallStream } from '../protocol/hero68/hallStream';
 import { useI18n } from '../i18n';
 import { AppSelect } from '../app/components/AppSelect';
@@ -92,12 +93,20 @@ function RhythmPreview({
       handle = requestAnimationFrame(render);
     };
     if (!paused && !simulate && live) {
+      const xsydStreamer = new XsydCustomRgbStreamer();
+      let xsydBusy = false;
       close = rgbService.frames(value => {
         if (!disposed && accept(value)) {
           latest.current = {
             ...value,
             keys: value.enabled && value.connected && value.keys ? value.keys : darkKeys
           };
+          if (value.enabled && value.connected && value.keys && xsydDeviceManager.connected && !xsydBusy) {
+            xsydBusy = true;
+            void xsydStreamer.pushFrameDelta(xsydDeviceManager, value.keys).catch(() => {}).finally(() => {
+              xsydBusy = false;
+            });
+          }
         }
       });
     }
@@ -306,10 +315,13 @@ export default function RhythmSyncEditor({
       publishRgbServiceStatus(result);
       setSession(result.sessionId ?? null);
       setDemo(false);
-      // The service already drives WIN 68 HE MAX over the XSYD protocol and
-      // publishes its frames; only the HERO68 path needs the WebHID handoff.
-      if (result.connected && result.deviceModel !== 'win68HeMax' && result.deviceModel !== 'win68') {
-        await hero68DeviceManager.connectViaService();
+      if (result.connected && !xsydDeviceManager.connected) {
+        if (await xsydDeviceManager.hasAuthorizedDevice()) {
+          await xsydDeviceManager.connect(false).catch(() => {});
+        }
+        if (!xsydDeviceManager.connected) {
+          await hero68DeviceManager.connectViaService();
+        }
       }
     } catch (e) {
       if (token === action.current) {

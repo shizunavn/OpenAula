@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Download, Layers, Plus, Play, Square, RotateCcw, Sparkles, Trash2, Waves } from 'lucide-react';
+import { ArrowDown, ArrowUp, Download, Layers, Plus, Play, Square, RotateCcw, Sparkles, Trash2, Waves, Save } from 'lucide-react';
 import Hero68Preview from './Hero68Preview';
 import RgbColorPicker from './RgbColorPicker';
 import RgbKeyPaintTools, { RgbKeySelectionTools } from './RgbKeyPaintTools';
@@ -9,16 +9,24 @@ import { HERO68_KEY_IDS } from '../keyboard/hero68Layout';
 import { isWin68HeMaxModel } from '../keyboard/devices';
 import { heroLayout } from '../keyboard/layout';
 import { DeviceModelContext } from '../app/DeviceModelContext';
-import { isWin68PerKeyMode, KEY_RGB_MODES, WIN68_KEY_RGB_MODES } from '../keyboard/rgbCatalog';
+import { isWin68PerKeyMode, mergedKeyRgbModesForModel } from '../keyboard/rgbCatalog';
 import { acceptsRgbPreviewKey } from '../keyboard/rgbPreviewInput';
 import { rgbPreviewDarkReason } from '../keyboard/rgbPreviewDefaults';
-import type { LightingFrame } from '../keyboard/lightingPreviewBus';
+import { publishLightingFrame, type LightingFrame } from '../keyboard/lightingPreviewBus';
 import type { RgbColor, RgbProfile } from '../protocol/hero68/rgb';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import { rgbService } from '../protocol/rgbService';
 import { refreshRgbService } from '../protocol/rgbServiceState';
-import { normalizeXsydBrightness, useXsydDevice, xsydDeviceManager, XsydCustomRgbStreamer } from '../protocol/xsyd/device';
+import {
+  closestXsydColorSlot,
+  normalizeXsydBrightness,
+  useXsydDevice,
+  XSYD_COLOR_SLOTS,
+  xsydDeviceManager,
+  XsydCustomRgbStreamer,
+} from '../protocol/xsyd/device';
 import type { useCustomRgbPlayback } from './useCustomRgbPlayback';
+import type { SavedRgbPresetItem } from './RgbSettingsPage';
 import { useI18n } from '../i18n';
 const hex = (color: RgbColor) => '#' + color.map(c => c.toString(16).padStart(2, '0')).join('');
 const rgb = (value: string): RgbColor => ([1, 3, 5].map(i => parseInt(value.slice(i, i + 2), 16)) as RgbColor);
@@ -64,6 +72,11 @@ type Props = {
   visible: boolean;
   onSetup: () => void;
   playback: ReturnType<typeof useCustomRgbPlayback>;
+  savedPresets?: SavedRgbPresetItem[];
+  onSaveRgbPreset?: () => void;
+  onApplySavedPreset?: (item: SavedRgbPresetItem) => void;
+  onDeleteSavedPreset?: (id: string) => void;
+  savedNotice?: string | null;
 };
 export default function CustomRgbEditor({
   value,
@@ -72,7 +85,12 @@ export default function CustomRgbEditor({
   advancedBindings,
   visible,
   onSetup,
-  playback
+  playback,
+  savedPresets = [],
+  onSaveRgbPreset,
+  onApplySavedPreset,
+  onDeleteSavedPreset,
+  savedNotice
 }: Props) {
   const {
     tr
@@ -99,7 +117,6 @@ export default function CustomRgbEditor({
   });
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [synced, setSynced] = useState(false);
-  const [mergedLayers, setMergedLayers] = useState<number | null>(null);
   const engineRef = useRef<CustomRgbEngine | null>(null);
   const streamerRef = useRef<XsydCustomRgbStreamer | null>(null);
   const streamingBusyRef = useRef(false);
@@ -120,28 +137,13 @@ export default function CustomRgbEditor({
   const live = applied && !demo;
   const disabled = busy || playback.busy;
   const layer = config.layers.find(l => l.id === active);
-  useEffect(() => {
-    if (mergedLayers === null) {
-      return;
-    }
-    const timer = setTimeout(() => setMergedLayers(null), 6000);
-    return () => clearTimeout(timer);
-  }, [mergedLayers]);
   const definition = layer ? CUSTOM_RGB_EFFECTS.find(e => e.id === layer.effect) : undefined;
   const metadata = layer ? RGB_EFFECT_METADATA[layer.effect] : undefined;
-  const baseCatalog = isWin68 ? WIN68_KEY_RGB_MODES : KEY_RGB_MODES;
+  const baseCatalog = useMemo(() => mergedKeyRgbModesForModel(isWin68), [isWin68]);
   const mode = baseCatalog.find(m => m.id === config.base.mode) ?? baseCatalog[0]!;
   const auroraBase = config.baseEffect?.effect === 'aurora';
-  const perKey = active === 'base' && !adding && !auroraBase && (isWin68 ? isWin68PerKeyMode(config.base.mode) : config.base.mode === 19);
+  const perKey = active === 'base' && !adding && !auroraBase && (isWin68 ? isWin68PerKeyMode(config.base.mode) : (config.base.mode === 19 || (config.base.mode >= 221 && config.base.mode <= 226)));
   const selectable = !adding && (perKey || !!layer);
-  // Cross-check the board we drive against the other board's catalog: per-key
-  // modes are key-map specific, so they never cross over.
-  const otherKeyModes: readonly { name: string; perKey?: boolean }[] = isWin68 ? KEY_RGB_MODES : WIN68_KEY_RGB_MODES;
-  const boardKeyModes: readonly { name: string }[] = isWin68 ? WIN68_KEY_RGB_MODES : KEY_RGB_MODES;
-  const foreignEffects = otherKeyModes
-    .filter(item => !item.perKey)
-    .map(item => item.name)
-    .filter(name => !boardKeyModes.some(mine => mine.name === name));
   const samplePreview = !auroraBase && mode.reactive || config.layers.some(layer => layer.enabled && ['pressure-wave', 'jelly', 'ripple', 'touch', 'reaction', 'aoe', 'mixing', 'trail', 'rt', 'afterglow'].includes(layer.effect));
   const effectiveBaseBrightness = isWin68 ? normalizeXsydBrightness(config.base.brightness) : config.base.brightness;
   const darkReason = auroraBase
@@ -182,11 +184,25 @@ export default function CustomRgbEditor({
     });
   }
   function base(patch: Partial<CustomRgbConfiguration['base']>) {
+    const nextMix = patch.mix !== undefined ? patch.mix : config.base.mix;
+    const nextRgb = patch.rgb ?? config.base.rgb;
+    const nextColorIndex =
+      patch.colorIndex !== undefined
+        ? patch.colorIndex
+        : patch.mix !== undefined
+          ? patch.mix
+            ? 0
+            : config.base.colorIndex && config.base.colorIndex >= 1
+              ? config.base.colorIndex
+              : closestXsydColorSlot(nextRgb)
+          : config.base.colorIndex;
     change({
       ...config,
       base: {
         ...config.base,
         ...patch,
+        mix: nextMix,
+        ...(nextColorIndex !== undefined ? { colorIndex: nextColorIndex } : {}),
         ...(patch.mix !== undefined || patch.rgb !== undefined ? {
           mixValue: undefined
         } : {})
@@ -277,92 +293,14 @@ export default function CustomRgbEditor({
       layers
     });
   }
-  function mergePreset() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json,.json';
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) {
-        return;
-      }
-      void file.text().then(text => {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          input.value = '';
-          return;
-        }
-        const source = parsed && typeof parsed === 'object' && 'custom' in parsed ? (parsed as RgbProfile).custom : undefined;
-        // The export stamps the source board; a preset from the other keyboard
-        // merges its layers (key ids are filtered below) but not its base effect.
-        const sameModel = !!parsed && typeof parsed === 'object' && (parsed as { model?: unknown }).model === model;
-        // Onboard effects are device state, not part of a custom preset: only
-        // Custom Effects (the base effect and its layers) is merged. A preset from
-        // another keyboard model cannot contribute a base effect (onboard modes
-        // are model-specific), so only its layers are merged.
-        const incoming = restoreCustomRgb(source, value);
-        const seen = new Set<string>();
-        const keyIds = isWin68 ? heroLayout(model).keyIds : HERO68_KEY_IDS;
-        const normalized = (layer: CustomRgbLayer): CustomRgbLayer => ({
-          ...layer,
-          keys: layer.keys.filter(id => keyIds.includes(id))
-        });
-        const signature = (layer: CustomRgbLayer) => JSON.stringify({
-          ...layer,
-          id: '',
-          keys: [...layer.keys].sort()
-        });
-        for (const layer of config.layers) {
-          seen.add(signature(layer));
-        }
-        const added = incoming.layers.flatMap(layer => {
-          const next = normalized(layer);
-          if (seen.has(signature(next))) {
-            return [];
-          }
-          seen.add(signature(next));
-          return [{
-            ...next,
-            id: crypto.randomUUID()
-          }];
-        });
-        // Same model: adopt the incoming base effect so nothing in its Custom
-        // Effects is left behind. Other models: keep ours, their onboard mode
-        // does not exist here.
-        if (added.length || sameModel) {
-          change({
-            ...config,
-            baseEffect: sameModel ? incoming.baseEffect : config.baseEffect,
-            layers: [...config.layers, ...added].slice(0, MAX_RGB_LAYERS)
-          });
-        }
-        setMergedLayers(added.length);
-        input.value = '';
-      });
-    };
-    input.click();
-  }
-  function exportPreset() {
-    const blob = new Blob([JSON.stringify({
-      model,
-      ...value,
-      custom: config
-    }, null, 2)], {
-      type: 'application/json'
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = isWin68 ? 'win68-custom-rgb.json' : 'hero68-custom-rgb.json';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
   useEffect(() => {
     engineRef.current?.configure(value);
     if (engineRef.current && (!live || isWin68) && !paused) {
-      setFrame(engineRef.current.frame());
+      const nextRendered = engineRef.current.frame();
+      setFrame(nextRendered);
+      if (Object.values(nextRendered.keys).some(c => c !== '#000000')) {
+        publishLightingFrame(nextRendered.keys);
+      }
     }
   }, [value, live, paused, isWin68]);
   useEffect(() => {
@@ -460,6 +398,9 @@ export default function CustomRgbEditor({
         engine.advance(elapsed);
         const nextFrame = engine.frame();
         setFrame(nextFrame);
+        if (Object.values(nextFrame.keys).some(c => c !== '#000000')) {
+          publishLightingFrame(nextFrame.keys);
+        }
         if (isWin68 && live && xsydDeviceManager.connected && !streamingBusyRef.current) {
           streamingBusyRef.current = true;
           void streamerRef.current
@@ -596,12 +537,9 @@ export default function CustomRgbEditor({
         }
       })}><Play size={15} />{playback.busy ? tr('Working…') : !isWin68 && updateRequired ? tr('Update app') : tr('Start Custom')}</button>}
       {(status?.enabled || (isWin68 && applied)) && <button className="secondary-button" title={tr('Return to onboard')} disabled={disabled} onClick={() => void playback.onboard()}><Square size={14} />{tr('Back to onboard')}</button>}
+      {onSaveRgbPreset && <button type="button" className="secondary-button" disabled={disabled} onClick={onSaveRgbPreset}><Save size={15} /> {savedNotice ?? tr('Save')}</button>}
     </RgbToolbarSlot>
     <RgbToolbarSlot visible={visible} notice>
-      {mergedLayers !== null && <div className="rgb-draft-recovery">
-        <span>{mergedLayers ? tr(`Merged ${mergedLayers} effect layer${mergedLayers === 1 ? '' : 's'}.`) : tr('Nothing merged: those effects are already here.')}</span>
-        <button className="secondary-button" onClick={() => setMergedLayers(null)}>{tr('Dismiss')}</button>
-      </div>}
       {playback.backup && <div className="rgb-draft-recovery">
         <span>{tr(playback.conflict ? 'Changes paused · restore your draft to continue' : 'Your previous draft is available.')}</span>
         <button className="secondary-button" disabled={disabled} onClick={playback.restoreDraft}>{tr('Restore draft')}</button>
@@ -647,7 +585,7 @@ export default function CustomRgbEditor({
           <button type="button" className="secondary-button" disabled={disabled} onClick={() => {
             base({
               mix: true,
-              colorIndex: isWin68 ? 0 : undefined,
+              colorIndex: 0,
               brightness: effectiveBaseBrightness || (isWin68 ? 4 : 20)
             });
             setReplay(n => n + 1);
@@ -698,8 +636,6 @@ export default function CustomRgbEditor({
               <h2>{adding ? tr('Add an effect') : active === 'base' ? auroraBase ? tr('Aurora') : tr(mode.name) : tr(definition?.name ?? 'Effect parameters')}</h2>
               <div className="custom-rgb-actions">
                 {!adding && !choosing && <button className="secondary-button" disabled={disabled} onClick={() => setChoosing(true)}>{tr('Change effect')}</button>}
-                <button className="secondary-button" disabled={disabled} onClick={exportPreset} title={tr('Export')} aria-label={tr('Export')}><Download size={15} /></button>
-                <button className="secondary-button" disabled={disabled} onClick={mergePreset} title={tr('Merge effects from another preset')} aria-label={tr('Merge preset')}><Layers size={15} /></button>
               </div>
             </div>
           {(adding || choosing) && <section className="custom-rgb-selection">
@@ -711,12 +647,6 @@ export default function CustomRgbEditor({
                 }}>{tr('Cancel')}</button>
               </div>
               <div className="custom-rgb-effect-grid">{active === 'base' && !adding ? <><button disabled={disabled} aria-pressed={auroraBase} onClick={() => chooseBase('aurora')}><Sparkles size={15} />{tr('Aurora')}</button>{baseCatalog.map(item => <button key={item.id} disabled={disabled} aria-pressed={!auroraBase && config.base.mode === item.id} onClick={() => chooseBase(item.id)}><Waves size={15} />{tr(item.name)}</button>)}</> : CUSTOM_RGB_EFFECTS.filter(effect => effect.id !== 'aurora' || layer?.effect === 'aurora' && !adding).map(effect => <button key={effect.id} disabled={disabled} aria-pressed={!adding && layer?.effect === effect.id} onClick={() => choose(effect.id)}><Sparkles size={15} />{tr(effect.name)}</button>)}</div>
-            </section>}
-          {(adding || choosing) && !adding && active === 'base' && foreignEffects.length > 0 && <section className="custom-rgb-selection">
-              <div className="custom-inspector-heading">
-                <h3>{tr('Only on the other board')}</h3>
-              </div>              <p className="custom-rgb-description">{tr('Wonder which effect is missing? These belong to the other board firmware and cannot be added to this one.')}</p>
-              <div className="custom-rgb-effect-grid">{foreignEffects.map(name => <button key={name} disabled title={tr('Belongs to the other board')}><Waves size={15} />{tr(name)}</button>)}</div>
             </section>}
           {!adding && !choosing && <div className="custom-rgb-parameters"><h3>{active === 'base' ? tr('Base parameters') : tr('Effect parameters')}</h3>{active === 'base' ? <><Slider label="Brightness" value={isWin68 ? effectiveBaseBrightness * 25 : config.base.brightness * 5} min={0} max={100} step={isWin68 ? 25 : 5} unit="%" disabled={disabled} onChange={v => base({
                   brightness: isWin68 ? v / 25 : v / 5
@@ -746,37 +676,80 @@ export default function CustomRgbEditor({
                     })}><span style={{
                         background: `linear-gradient(90deg,${palette.colors.join(',')})`
                       }} />{tr(palette.name)}</button>)}</div> : <label className="custom-rgb-color">{tr('Base color')}<RgbColorPicker label={tr('Base effect color')} value={hex(config.base.rgb)} disabled={disabled} onChange={v => base({
-                      rgb: rgb(v)
+                      rgb: rgb(v),
+                      mix: false
                     })} /></label>}
           </> : <>{mode.speed && <Slider label="Base speed" value={config.base.speed + 1} min={1} max={5} unit="/ 5" disabled={disabled} onChange={v => base({
                     speed: v - 1
-                  })} />} {mode.color && <><label className="custom-rgb-color">{tr('Base color')}<RgbColorPicker label={tr('Base effect color')} value={hex(config.base.rgb)} disabled={disabled} onChange={v => base({
-                        rgb: rgb(v)
-                      })} /></label><label className="custom-rgb-check"><input type="checkbox" checked={config.base.mix} disabled={disabled} onChange={e => base({
-                        mix: e.target.checked
-                      })} /> {tr('Multicolor')}</label></>}</>}</> : layer && metadata && <><p className="custom-rgb-description">{tr(definition?.detail ?? '')}</p>{layer.effect === "aurora" && <div className="custom-rgb-base-migration">
-                  <p>{tr('Aurora is now a Base effect. Move this layer to cover all keys and control its brightness directly.')}</p>
-                  <button className="secondary-button" disabled={disabled} onClick={moveAuroraToBase}>{tr('Move Aurora to Base')}</button>
-                </div>}{!metadata.semanticColor && <>{metadata.gradient ? <><div className="custom-rgb-direction">
+                  })} />} {mode.color && <>
+                    <div className="custom-rgb-direction">
                       <span>{tr('Color mode')}</span>
                       <div>
-                        <button disabled={disabled} aria-pressed={!layer.multicolor} onClick={() => patchLayer({
-                          multicolor: false
+                        <button disabled={disabled} aria-pressed={!config.base.mix} onClick={() => base({
+                          mix: false
                         })}>{tr('Single color')}</button>
-                        <button disabled={disabled} aria-pressed={layer.multicolor} onClick={() => patchLayer({
-                          multicolor: true
+                        <button disabled={disabled} aria-pressed={config.base.mix} onClick={() => base({
+                          mix: true,
+                          colorIndex: 0
                         })}>{tr('Palette')}</button>
                       </div>
-                    </div><div className="custom-palette-options">{Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => <button key={id} disabled={disabled || !layer.multicolor} aria-pressed={layer.multicolor && (layer.palette ?? metadata.defaults?.palette ?? 'aurora') === id} onClick={() => patchLayer({
+                    </div>
+                    <label className="custom-rgb-color">{tr('Base color')}<RgbColorPicker label={tr('Base effect color')} value={hex(config.base.rgb)} disabled={disabled} onChange={v => base({
+                      rgb: rgb(v),
+                      mix: false
+                    })} /></label>
+                    <label className="custom-rgb-check"><input type="checkbox" checked={config.base.mix} disabled={disabled} onChange={e => base({
+                      mix: e.target.checked
+                    })} /> {tr('Multicolor')}</label>
+                    <div className="rgb-zone-tabs" role="group" aria-label={tr('Color slot')}>
+                      {XSYD_COLOR_SLOTS.map(slotInfo => {
+                        const selectedSlot = (config.base.mix ? 0 : (config.base.colorIndex ?? closestXsydColorSlot(config.base.rgb))) === slotInfo.index;
+                        return <button key={slotInfo.index} type="button" disabled={disabled} aria-pressed={selectedSlot} title={tr(slotInfo.name)} onClick={() => {
+                          if (slotInfo.index === 0) {
+                            base({ mix: true, colorIndex: 0 });
+                          } else {
+                            base({ mix: false, colorIndex: slotInfo.index, rgb: [...slotInfo.rgb] as RgbColor });
+                          }
+                        }}>{slotInfo.index > 0 && <span style={{
+                          display: 'inline-block',
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          background: hex(slotInfo.rgb),
+                          marginRight: 5
+                        }} />}{tr(slotInfo.name)}</button>;
+                      })}
+                    </div>
+                  </>}</>}</> : layer && metadata && <><p className="custom-rgb-description">{tr(definition?.detail ?? '')}</p>{layer.effect === "aurora" && <div className="custom-rgb-base-migration">
+                  <p>{tr('Aurora is now a Base effect. Move this layer to cover all keys and control its brightness directly.')}</p>
+                  <button className="secondary-button" disabled={disabled} onClick={moveAuroraToBase}>{tr('Move Aurora to Base')}</button>
+                </div>}{!metadata.semanticColor && <>
+                  <div className="custom-rgb-direction">
+                    <span>{tr('Color mode')}</span>
+                    <div>
+                      <button disabled={disabled} aria-pressed={!layer.multicolor} onClick={() => patchLayer({
+                        multicolor: false
+                      })}>{tr('Single color')}</button>
+                      <button disabled={disabled} aria-pressed={layer.multicolor} onClick={() => patchLayer({
                         multicolor: true,
-                        palette: (id as RgbGradientPalette)
-                      })}><span style={{
-                          background: `linear-gradient(90deg,${palette.colors.join(',')})`
-                        }} />{tr(palette.name)}</button>)}</div></> : <label className="custom-rgb-check"><input type="checkbox" checked={layer.multicolor} disabled={disabled} onChange={e => patchLayer({
-                      multicolor: e.target.checked
-                    })} /> {tr('Multicolor')}</label>}{(!metadata.gradient || !layer.multicolor) && <label className="custom-rgb-color">{tr('Effect color')}<RgbColorPicker label={tr('Layer color')} value={hex(layer.color)} disabled={disabled} onChange={v => patchLayer({
-                      color: rgb(v)
-                    })} /></label>}</>}<div className="custom-slider-grid">
+                        palette: layer.palette ?? metadata.defaults?.palette ?? 'aurora'
+                      })}>{tr('Palette')}</button>
+                    </div>
+                  </div>
+                  <div className="custom-palette-options">{Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => <button key={id} disabled={disabled} aria-pressed={layer.multicolor && (layer.palette ?? metadata.defaults?.palette ?? 'aurora') === id} onClick={() => patchLayer({
+                    multicolor: true,
+                    palette: (id as RgbGradientPalette)
+                  })}><span style={{
+                    background: `linear-gradient(90deg,${palette.colors.join(',')})`
+                  }} />{tr(palette.name)}</button>)}</div>
+                  <label className="custom-rgb-check"><input type="checkbox" checked={layer.multicolor} disabled={disabled} onChange={e => patchLayer({
+                    multicolor: e.target.checked
+                  })} /> {tr('Multicolor')}</label>
+                  <label className="custom-rgb-color">{tr('Effect color')}<RgbColorPicker label={tr('Layer color')} value={hex(layer.color)} disabled={disabled} onChange={v => patchLayer({
+                    color: rgb(v),
+                    multicolor: false
+                  })} /></label>
+                </>}<div className="custom-slider-grid">
                   <Slider label="Opacity" value={layer.opacity} min={0} max={100} unit="%" disabled={disabled} onChange={v => patchLayer({
                     opacity: v
                   })} />
@@ -798,6 +771,28 @@ export default function CustomRgbEditor({
                       direction
                     })}>{direction === 'horizontal' ? tr('Horizontal') : tr('Vertical')}</button>)}</div>
                 </div>}{metadata.hall && <p className="custom-rgb-description">{live ? tr('Analog feedback runs automatically in the background app.') : tr('Use Try effect to simulate presses. Start Custom for actual analog feedback.')}</p>}</>}
+          {savedPresets.length > 0 && (
+            <div className="rgb-saved-presets">
+              <h3>{tr('Saved')} RGB</h3>
+              <div className="rgb-zone-tabs" role="group" aria-label="Saved RGB">
+                {savedPresets.map(item => (
+                  <div key={item.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <button type="button" disabled={disabled} onClick={() => onApplySavedPreset?.(item)}>
+                      {item.name}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      aria-label={`Delete ${item.name}`}
+                      onClick={() => onDeleteSavedPreset?.(item.id)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {active === 'base' && !auroraBase && <details className="service-details">
                 <summary>{tr('Advanced')}</summary>
                 <div>

@@ -45,7 +45,7 @@ export const WIN68_HE_MAX_BOARD: BoardDescriptor = {
     usage: MAX_HE_USAGE,
     reportId: 0x00,
     productNames: ['WIN 68 HE MAX', 'AULA WIN 68 HE MAX'],
-    deviceUuids: [],
+    deviceUuids: ['11000000005c', '12000000005c'],
     modelByte: 0x5c,
   },
   capabilities: {

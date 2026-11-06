@@ -202,7 +202,12 @@ export class Hero68DeviceManager implements Hero68Transport {
       if (service && ((service.apiVersion ?? 0) >= 3 || service.enabled && (service.apiVersion ?? 0) >= 2)) {
         try {
           await this.connectViaService();
-          return true;
+          if (this.connected) {
+            return true;
+          }
+          if (this.#snapshot.detectedModel === 'win68HeMax') {
+            return false;
+          }
         } catch (error) {
           if (!getHid()) {
             throw error;
@@ -397,8 +402,22 @@ export class Hero68DeviceManager implements Hero68Transport {
         zone: 1
       }));
       const detectedModel = detectHeroDeviceModelFromUuid(identity?.data);
-      if (!detectedModel || detectedModel === 'win68HeMax' || detectedModel === 'win68') {
+      if (!detectedModel) {
         throw new Error('This keyboard did not report a HERO68/HERO84 device UUID');
+      }
+      if (detectedModel === 'win68HeMax' || detectedModel === 'win68') {
+        // WIN 68 HE MAX uses XsydDeviceManager for WebHID configuration; recognize
+        // its bridge UUID (11000000005c / 12000000005c) without throwing.
+        this.#viaService = false;
+        this.#reconnectViaService = false;
+        this.#setSnapshot({
+          state: 'disconnected',
+          detectedModel: 'win68HeMax',
+          detectedModelFromUuid: true,
+          deviceName: heroDeviceModel('win68HeMax').label,
+          error: null
+        });
+        return;
       }
       this.#viaService = true;
       this.#reconnectViaService = false;

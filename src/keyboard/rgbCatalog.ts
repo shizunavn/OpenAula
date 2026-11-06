@@ -35,7 +35,7 @@ export const WIN68_KEY_RGB_MODES: readonly Win68RgbModeCapability[] = [
   { id: 1, internalId: 8, name: 'Aurora Wave', reactive: false, color: true, speed: true, reverse: true, perKey: false },
   { id: 2, internalId: 9, name: 'Tide Flux', reactive: false, color: true, speed: true, reverse: true, perKey: false },
   { id: 3, internalId: 10, name: 'Soft Ripple', reactive: false, color: true, speed: true, reverse: true, perKey: false },
-  { id: 4, internalId: 11, name: 'Snipping Storm', reactive: false, color: false, speed: true, reverse: true, perKey: false },
+  { id: 4, internalId: 11, name: 'Snipping Storm', reactive: false, color: true, speed: true, reverse: true, perKey: false },
   { id: 5, internalId: 12, name: 'Rotating Compass', reactive: false, color: true, speed: true, reverse: true, perKey: false },
   { id: 6, internalId: 13, name: 'Butterfly Wave', reactive: false, color: true, speed: true, reverse: true, perKey: false },
   { id: 7, internalId: 14, name: 'Radial Iris', reactive: false, color: true, speed: true, reverse: false, perKey: false },
@@ -61,5 +61,130 @@ export const WIN68_KEY_RGB_MODES: readonly Win68RgbModeCapability[] = [
 ]
 
 export function isWin68PerKeyMode(mode: number): boolean {
-  return mode >= 21 && mode <= 26
+  return (mode >= 21 && mode <= 26) || mode === 119
+}
+
+export type MergedRgbModeCapability = {
+  id: number
+  name: string
+  reactive: boolean
+  color: boolean
+  speed: boolean
+  reverse?: boolean
+  perKey?: boolean
+}
+
+const HERO_TO_WIN68_MODE_MAP: Readonly<Record<number, number>> = {
+  0: 0,   // Off -> Static (brightness 0 handled separately)
+  1: 0,   // Static -> Static
+  2: 7,   // Breathing -> Radial Iris / Breathing
+  3: 1,   // Rainbow -> Aurora Wave
+  4: 17,  // Reactive -> Reactive Key
+  5: 13,  // Starry -> Starry Shimmer
+  6: 3,   // Ripple -> Soft Ripple
+  7: 20,  // Key Ripples -> Reactive Ripple
+  8: 14,  // Raindrops -> Raindrops
+  9: 18,  // Snowflakes -> Reactive Cross
+  10: 12, // Continuous Flow -> Smooth Flow
+  11: 4,  // Windmill -> Snipping Storm
+  12: 19, // Follow Shadow -> Reactive Laser
+  13: 2,  // Light Wave -> Tide Flux
+  14: 10, // Scan -> Color Wipe
+  15: 5,  // Rotating Circle -> Rotating Compass
+  16: 15, // Waterfall -> Digital Rain
+  17: 6,  // Bloom -> Butterfly Wave
+  18: 4,  // Spinning Storm -> Snipping Storm
+  19: 21, // Per-key Color -> Per-key Color
+}
+
+const WIN68_TO_HERO_MODE_MAP: Readonly<Record<number, number>> = {
+  0: 1,   // Static -> Static
+  1: 13,  // Aurora Wave -> Light Wave
+  2: 10,  // Tide Flux -> Continuous Flow
+  3: 6,   // Soft Ripple -> Ripple
+  4: 18,  // Snipping Storm -> Spinning Storm
+  5: 15,  // Rotating Compass -> Rotating Circle
+  6: 17,  // Butterfly Wave -> Bloom
+  7: 2,   // Radial Iris -> Breathing
+  8: 13,  // 3-Zone Sine -> Light Wave
+  9: 10,  // Dual Sine Ribbon -> Continuous Flow
+  10: 14, // Color Wipe -> Scan
+  11: 10, // Sine Snake -> Continuous Flow
+  12: 10, // Smooth Flow -> Continuous Flow
+  13: 5,  // Starry Shimmer -> Starry
+  14: 8,  // Raindrops -> Raindrops
+  15: 16, // Digital Rain -> Waterfall
+  16: 6,  // Bouncing Orb -> Ripple
+  17: 4,  // Reactive Key -> Reactive
+  18: 9,  // Reactive Cross -> Snowflakes
+  19: 12, // Reactive Laser -> Follow Shadow
+  20: 7,  // Reactive Ripple -> Key Ripples
+  21: 19, // Per-key Color -> Per-key Color
+  22: 19, // Gaming Preset 1 -> Per-key Color
+  23: 19, // Gaming Preset 2 -> Per-key Color
+  24: 19, // Gaming Preset 3 -> Per-key Color
+  25: 19, // Gaming Preset 4 -> Per-key Color
+  26: 19, // User Custom Preset -> Per-key Color
+}
+
+export function mapModeToWin68Hardware(mode: number): number {
+  if (mode >= 0 && mode <= 26) return mode
+  if (mode >= 100 && mode < 200) {
+    return HERO_TO_WIN68_MODE_MAP[mode - 100] ?? 1
+  }
+  if (mode >= 200 && mode < 300) {
+    return Math.max(0, Math.min(26, mode - 200))
+  }
+  return HERO_TO_WIN68_MODE_MAP[mode] ?? 1
+}
+
+export function mapModeToHero68Hardware(mode: number): number {
+  if (mode >= 0 && mode <= 19) return mode
+  if (mode >= 100 && mode < 200) {
+    return Math.max(0, Math.min(19, mode - 100))
+  }
+  if (mode >= 200 && mode < 300) {
+    return WIN68_TO_HERO_MODE_MAP[mode - 200] ?? 1
+  }
+  return WIN68_TO_HERO_MODE_MAP[mode] ?? 1
+}
+
+/**
+ * Returns the unified, deduplicated onboard preset list combining all presets
+ * from both AULA HERO 68 HE and AULA WIN 68 HE MAX without duplicates.
+ *
+ * - On WIN 68 HE MAX (`isWin68 = true`), native WIN68 modes keep IDs `0..26`,
+ *   and unique HERO68 modes are appended with IDs `100 + heroMode.id`.
+ * - On HERO 68/84 (`isWin68 = false`), native HERO68 modes keep IDs `0..19`,
+ *   and unique WIN68 modes are appended with IDs `200 + win68Mode.id`.
+ */
+export function mergedKeyRgbModesForModel(isWin68: boolean): readonly MergedRgbModeCapability[] {
+  if (isWin68) {
+    const seen = new Set(WIN68_KEY_RGB_MODES.map(m => m.name.toLowerCase()))
+    const extra: MergedRgbModeCapability[] = KEY_RGB_MODES.filter(
+      m => m.name !== 'Off' && !seen.has(m.name.toLowerCase())
+    ).map(m => ({
+      id: 100 + m.id,
+      name: m.name,
+      reactive: m.reactive,
+      color: m.color,
+      speed: m.speed,
+      reverse: false,
+      perKey: m.id === 19,
+    }))
+    return [...WIN68_KEY_RGB_MODES, ...extra]
+  }
+  const seen = new Set(KEY_RGB_MODES.map(m => m.name.toLowerCase()))
+  const extra: MergedRgbModeCapability[] = WIN68_KEY_RGB_MODES.filter(
+    m => !seen.has(m.name.toLowerCase())
+  ).map(m => ({
+    id: 200 + m.id,
+    name: m.name,
+    reactive: m.reactive,
+    color: m.color,
+    speed: m.speed,
+    reverse: m.reverse,
+    perKey: m.perKey,
+  }))
+  return [...KEY_RGB_MODES, ...extra]
 }

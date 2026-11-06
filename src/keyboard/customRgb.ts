@@ -165,13 +165,27 @@ export class CustomRgbEngine {
     max: number;
   }[];
   constructor(private profile: RgbProfile, private model?: HeroDeviceModelId) {
-    const board = model ? getBoard(model) : getBoard('hero68');
-    this.coordinates = model ? board.keyCoordinates : CUSTOM_RGB_COORDINATES;
-    this.keyIds = model ? board.keyIds : HERO68_KEY_IDS;
-    this.keyIndex = model ? Object.fromEntries(board.keyIds.map((id, i) => [id, i])) : KEY_INDEX;
-    this.bounds = model ? computeBounds(this.coordinates) : defaultBounds;
+    const inferredWin68 = !model && Boolean(
+      profile.keys?.colorIndex !== undefined ||
+      profile.keys?.reverse !== undefined ||
+      Array.isArray(profile.keys?.palette) ||
+      (profile.keys?.mode !== undefined && profile.keys.mode > 19 && profile.keys.mode < 100) ||
+      profile.custom?.base?.colorIndex !== undefined ||
+      profile.custom?.base?.reverse !== undefined ||
+      Array.isArray(profile.custom?.base?.palette) ||
+      (profile.custom?.base?.mode !== undefined && profile.custom.base.mode > 19 && profile.custom.base.mode < 100)
+    );
+    if (inferredWin68) {
+      this.model = 'win68HeMax';
+    }
+    const resolvedModel = this.model;
+    const board = resolvedModel ? getBoard(resolvedModel) : getBoard('hero68');
+    this.coordinates = resolvedModel ? board.keyCoordinates : CUSTOM_RGB_COORDINATES;
+    this.keyIds = resolvedModel ? board.keyIds : HERO68_KEY_IDS;
+    this.keyIndex = resolvedModel ? Object.fromEntries(board.keyIds.map((id, i) => [id, i])) : KEY_INDEX;
+    this.bounds = resolvedModel ? computeBounds(this.coordinates) : defaultBounds;
     this.config = restoreCustomRgb(profile.custom, profile);
-    this.base = isWin68HeMaxModel(model)
+    this.base = isWin68HeMaxModel(resolvedModel)
       ? new XsydFirmwareRgbPreview(this.baseProfile())
       : new FirmwareRgbPreview(this.baseProfile());
     this.configureColorPalettes();
@@ -600,7 +614,7 @@ export class CustomRgbEngine {
       }
       const keys = layer.keys.filter(id => baseColors[id]);
       const background = ([0, 1, 2].map(i => keys.reduce((sum, id) => sum + baseColors[id][i], 0) / Math.max(1, keys.length)) as RgbColor);
-      cycleTints.set(layer.id, this.randomColor(entry.colors, layer.id, background));
+      cycleTints.set(layer.id, layer.palette ? gradient(layer, fract(this.time / 1000 / period)) : this.randomColor(entry.colors, layer.id, background));
     }
     for (const id of this.keyIds) {
       const [x, y] = this.coordinates[id];
@@ -613,7 +627,7 @@ export class CustomRgbEngine {
         const axis = layer.direction === 'horizontal' ? x : y;
         let strength = 0;
         let tint: RgbColor = cycleTints.get(layer.id) ?? layer.color;
-        const randomTint = (colors: Colors, source: string) => this.randomColor(colors, layer.id, baseColors[source]);
+        const randomTint = (colors: Colors, source: string) => layer.palette ? gradient(layer, fract((this.keyIndex[source] ?? 0) / 17 + (this.time / 3000))) : this.randomColor(colors, layer.id, baseColors[source]);
         const seconds = this.time / 1000;
         if (layer.effect === 'aurora') {
           ;
@@ -670,7 +684,7 @@ export class CustomRgbEngine {
           if (layer.multicolor) {
             const offset = (axis - band.center) / layer.width;
             strength = Math.exp(-2 * offset * offset);
-            tint = sampleCustomRgbSpectrum(band.colorPhase + offset / 8, this.colorPalettes.get(layer.id));
+            tint = layer.palette ? gradient(layer, fract(band.colorPhase + offset / 8)) : sampleCustomRgbSpectrum(band.colorPhase + offset / 8, this.colorPalettes.get(layer.id));
           } else {
             strength = smooth(1 - Math.abs(axis - band.center) / layer.width);
           }
