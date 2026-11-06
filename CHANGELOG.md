@@ -3,6 +3,15 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.3.1 - WIN 68 HE MAX RGB editor fixes
+
+- Rhythm Sync and Custom RGB no longer fail with "This keyboard did not report a HERO68/HERO84 device UUID" on WIN 68 HE MAX. The editors handed the board to the HERO68 WebHID manager whenever the service reported `connected`, which sends HERO68's `0x82` identity probe; the handoff now only happens for HERO68/HERO84.
+- Custom Effects always show the seven gradient palettes; previously the palette row disappeared while a gradient layer was set to a single color.
+- Switching tabs no longer leaves the WIN 68 HE MAX custom preview black. The RGB page kept its own tab state while the shell kept `activeRgbTab`, so the editor was hidden (and its engine released) while the shell still expected its output.
+- Multicolor in the onboard color strip works again on WIN 68 HE MAX: the draft is reset to the multicolor color, instead of writing `colorIndex 0` with a stale single color into slot 0.
+- Saving key settings on WIN 68 HE MAX no longer fails with `Key setting readback mismatch`. The `0x23` table is only an echo of the write that carries it, and a key the firmware skips is missing rather than wrong.
+- The base effect picker now lists the base effects the other board has and this one does not, so a missing onboard effect is visible instead of silently absent. The earlier "Merge preset" button, which imported exported JSON profiles, is removed.
+
 ## 1.3.0 — WIN 68 HE MAX lighting, Gamepad connection fix
 
 - WIN 68 HE MAX lighting runs on the XSYD (`0x5C`) stack: global zone `0x18` (effect, brightness, speed, direction, seven-slot palette) and per-key colour `0x2A` (single-key writes and the five-frame 68-key readback). Frames were checked against `connect_keyboard_to_webhidofficial.pcapng`, `profile_1_2_3_4.pcapng` and `Q(green)-E(red) -Z(yellow)-P(Pink).pcapng`; the 27 effect modes come from firmware table `EXT_TO_INT_ROM` (`VA 0x1D2A0`).
