@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2, X } from 'lucide-react';
 import Hero68Preview from './Hero68Preview';
@@ -7,7 +7,7 @@ import FeatureHelp from './FeatureHelp';
 import { useI18n } from '../i18n';
 import { HERO68_KEY_LABEL_BY_ID } from '../app/helpers';
 import { heroLayout } from '../keyboard/layout';
-import { DeviceModelContext } from '../app/DeviceModelContext';
+import { DeviceModelContext, isWin68HeMaxModel, type HeroDeviceModelId } from '../app/DeviceModelContext';
 import { ADVANCED_KINDS, ADVANCED_LIMIT, newAdvanced, validateAdvanced, type AdvancedBinding, type AdvancedKind } from '../protocol/hero68/advanced';
 import { REMAP_CATEGORIES, remapLabel } from '../protocol/hero68/remap';
 import { ADVANCED_PRESETS, applyAdvancedPreset, presetConflicts, type AdvancedPreset } from '../protocol/hero68/advancedPresets';
@@ -70,17 +70,44 @@ const SOCD_OPTIONS = [{
   title: 'Neutral',
   desc: 'Neither key is active while both are pressed.'
 }];
+const XSYD_SOCD_OPTIONS = [{
+  value: 0,
+  verified: true,
+  title: 'Default SOCD (type = 0, mode = 0)',
+  desc: 'Verified capture layout for WIN 68 HE MAX.'
+}, {
+  value: 1,
+  verified: false,
+  title: 'Other SOCD modes (mode 1–3)',
+  desc: 'Unverified — no USB capture with non-zero type/mode/delay yet.'
+}];
+const XSYD_UNVERIFIED_MODES = [{
+  id: 'RS',
+  title: 'Rappy Snappy (RS)',
+  description: 'Unverified on WIN 68 HE MAX — blocked until USB capture is available.'
+}, {
+  id: 'DDKS',
+  title: 'DDKS / Poll-rate (0x29)',
+  description: 'Unverified on WIN 68 HE MAX — blocked until USB capture is available.'
+}] as const;
+export const XSYD_DKS_DOC_URL = 'docs/xsyd-protocol.md#7-what-is-still-unknown';
 type Props = {
+  model?: HeroDeviceModelId;
   bindings: AdvancedBinding[];
   busy: boolean;
   pending: boolean;
   connected: boolean;
+  initialDksModalOpen?: boolean;
+  onSave?: () => void;
   onChange: (bindings: AdvancedBinding[]) => void;
 };
 type View = 'overview' | 'assign' | 'edit';
-function bindingSummary(binding: AdvancedBinding, tr: ReturnType<typeof useI18n>['tr']) {
+function bindingSummary(binding: AdvancedBinding, tr: ReturnType<typeof useI18n>['tr'], isWin68 = false) {
   const actions = binding.actions.map(remapLabel);
   if (binding.kind === 'SOCD') {
+    if (isWin68) {
+      return binding.mode === 0 ? tr('Default SOCD (type = 0, mode = 0)') : tr('Unverified');
+    }
     return tr(SOCD_OPTIONS.find(o => o.value === binding.mode)?.title ?? 'Existing keyboard priority');
   }
   if (binding.kind === 'MT') {
@@ -379,23 +406,59 @@ function OutputTester() {
     <strong>{tr('Test your binding')}</strong><p>{tr('Save to the keyboard, then click here and press your configured key.')}</p><small>{tr('Pressed keys')}</small><div className="ak-output">{held.length ? held.map(k => <kbd key={k}>{label(k)}</kbd>) : <span>—</span>}</div><small>{tr('Recently released')}</small><div className="ak-output is-released">{released.map(k => <kbd key={k}>{label(k)}</kbd>)}</div>
   </div>;
 }
+export function DksUnsupportedModal({
+  open,
+  onClose
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const {
+    tr
+  } = useI18n();
+  if (!open) {
+    return null;
+  }
+  return <div className="ak-modal-backdrop" onClick={onClose}>
+      <section role="dialog" aria-modal="true" aria-labelledby="ak-dks-unsupported-title" className="ak-remove-modal ak-dks-unsupported-modal" onClick={e => e.stopPropagation()}>
+        <h2 id="ak-dks-unsupported-title">{tr('DKS is not supported on WIN 68 HE MAX')}</h2>
+        <p>{tr('The firmware supports DKS, but its frame layout has not been verified by USB capture yet, so OpenAula blocks writing it to avoid corrupting your key configuration.')}</p>
+        <p>{tr('MT, TGL, MPT, and END are verified and ready to use.')}</p>
+        <div>
+          <a className="secondary-button ak-doc-link" href={XSYD_DKS_DOC_URL} target="_blank" rel="noopener noreferrer">{tr('View documentation')}</a>
+          <button type="button" autoFocus className="apply-button" onClick={onClose}>{tr('Close')}</button>
+        </div>
+      </section>
+    </div>;
+}
 export default function AdvancedKeysPage({
+  model: modelProp,
   bindings,
   busy,
   pending,
   connected,
+  initialDksModalOpen = false,
+  onSave,
   onChange
 }: Props) {
   const {
     tr
   } = useI18n();
-  const model = useContext(DeviceModelContext);
+  const contextModel = useContext(DeviceModelContext);
+  const model = modelProp ?? contextModel;
+  const isWin68 = isWin68HeMaxModel(model);
   const modelKeyIds = useMemo(() => heroLayout(model).keyIds, [model]);
   const neutral = useMemo(() => Object.fromEntries(modelKeyIds.map(k => [k, '#292d2f'])), [modelKeyIds]);
   const [view, setView] = useState<View>('overview');
   const [kind, setKind] = useState<AdvancedKind>('SOCD');
   const [presetReview, setPresetReview] = useState<AdvancedPreset | null>(null);
+  const [dksUnsupportedOpen, setDksUnsupportedOpen] = useState(() => isWin68 && initialDksModalOpen);
   const page = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isWin68 && dksUnsupportedOpen) {
+      setDksUnsupportedOpen(false);
+    }
+  }, [isWin68, dksUnsupportedOpen]);
   useEffect(() => {
     page.current?.scrollIntoView({
       block: 'start',
@@ -445,6 +508,10 @@ export default function AdvancedKeysPage({
         setError(tr('This firmware binding is preserved, but its editor is unavailable.'));
         return;
       }
+      if (isWin68 && existing.kind === 'DKS') {
+        setDksUnsupportedOpen(true);
+        return;
+      }
       setKind(existing.kind);
       setDraft(structuredClone(existing));
       setEditingId(existing.id);
@@ -479,6 +546,10 @@ export default function AdvancedKeysPage({
     }
   }
   function begin(mode: AdvancedKind, preset?: string[]) {
+    if (isWin68 && mode === 'DKS') {
+      setDksUnsupportedOpen(true);
+      return;
+    }
     setKind(mode);
     setEditingId(null);
     setError('');
@@ -502,13 +573,17 @@ export default function AdvancedKeysPage({
     if (!draft) {
       return;
     }
+    if (isWin68 && (draft.kind === 'DKS' || bindings.some(b => b.id !== editingId && b.kind === 'DKS'))) {
+      setDksUnsupportedOpen(true);
+      return;
+    }
     try {
       const next = [...bindings.filter(b => b.id !== editingId), {
         ...draft,
         id: draft.keys[0],
         raw: undefined
       }];
-      validateAdvanced(next);
+      validateAdvanced(next, model);
       onChange(next);
       cancel();
       setNotice(tr(editingId ? 'Binding updated in your profile draft. Save the profile to apply it to the keyboard.' : 'Binding added to your profile draft. Save the profile to apply it to the keyboard.'));
@@ -516,9 +591,22 @@ export default function AdvancedKeysPage({
       setError(e instanceof Error ? e.message : String(e));
     }
   }
+  function handleSaveRequest() {
+    if (isWin68 && bindings.some(b => b.kind === 'DKS')) {
+      setDksUnsupportedOpen(true);
+      return;
+    }
+    onSave?.();
+  }
   function applyPreset(preset: AdvancedPreset, confirmed = false) {
+    if (isWin68 && preset.kind === 'DKS') {
+      setPresetReview(null);
+      setDksUnsupportedOpen(true);
+      return;
+    }
     try {
       const next = applyAdvancedPreset(bindings, preset);
+      validateAdvanced(next, model);
       if (!confirmed && presetConflicts(bindings, preset).length) {
         setPresetReview(preset);
         return;
@@ -539,6 +627,10 @@ export default function AdvancedKeysPage({
       if (e.key !== 'Escape') {
         return;
       }
+      if (dksUnsupportedOpen) {
+        setDksUnsupportedOpen(false);
+        return;
+      }
       if (presetReview) {
         setPresetReview(null);
         return;
@@ -549,13 +641,13 @@ export default function AdvancedKeysPage({
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [removeOpen, presetReview]);
+  }, [removeOpen, presetReview, dksUnsupportedOpen]);
   const action = (index: number, title: string) => draft && <label className="ak-action-field"><span>{tr(title)}</span><ActionPicker title={tr(title)} value={draft.actions[index]} onChange={v => setDraft({
       ...draft,
       actions: draft.actions.map((a, i) => i === index ? v : a)
     })} /></label>;
-  return <div ref={page} className="page advanced-keys-page page-enter" aria-busy={busy}>
-    <section className={`keyboard-stage ak-keyboard-stage ${view === 'assign' ? 'is-assigning' : ''}`}><Hero68Preview advancedBindings={bindings} selectedKeys={highlighted} onToggleKey={assign} lightingFrame={neutral} keyDecorations={decorations} /></section>
+  return <div ref={page} className="page advanced-keys-page page-enter" aria-busy={busy} data-model={model}>
+    <section className={`keyboard-stage ak-keyboard-stage ${view === 'assign' ? 'is-assigning' : ''}`}><Hero68Preview model={model} advancedBindings={bindings} selectedKeys={highlighted} onToggleKey={assign} lightingFrame={neutral} keyDecorations={decorations} /></section>
     {error && <p className="ak-error" role="alert">{error}</p>}
     {view === 'overview' && notice && pending && <p className="ak-draft-notice" role="status">{notice}</p>}
     {view === 'overview' ? <><div className="ak-page-heading">
@@ -568,15 +660,58 @@ export default function AdvancedKeysPage({
           <p>{assignedKeys.length ? tr('{key} selected. Choose what it should do below.', {
               key: label(assignedKeys[0])
             }) : tr('Choose a type below, then select the key or keys you want to configure.')}</p>
-          <div className="ak-mode-list">{ADVANCED_KINDS.map(mode => <button key={mode} disabled={bindings.length >= ADVANCED_LIMIT || busy} onClick={() => begin(mode)}><AdvancedKeyIcon kind={mode} /><span><strong>{tr(INFO[mode].title)}</strong><span>{tr(INFO[mode].description)}</span></span></button>)}</div>
+          <div className="ak-mode-list">
+            {ADVANCED_KINDS.map(mode => {
+              const isUnsupportedDks = isWin68 && mode === 'DKS';
+              return <button
+                key={mode}
+                type="button"
+                data-mode={mode}
+                data-unsupported={isUnsupportedDks ? 'true' : undefined}
+                aria-disabled={isUnsupportedDks || bindings.length >= ADVANCED_LIMIT || busy ? 'true' : undefined}
+                className={isUnsupportedDks ? 'is-disabled is-unsupported' : ''}
+                disabled={!isUnsupportedDks && (bindings.length >= ADVANCED_LIMIT || busy)}
+                onClick={() => begin(mode)}
+              >
+                <AdvancedKeyIcon kind={mode} />
+                <span>
+                  <strong>
+                    {tr(INFO[mode].title)}
+                    {isUnsupportedDks && <span className="ak-unsupported-badge">{tr('Unsupported')}</span>}
+                  </strong>
+                  <span>{tr(INFO[mode].description)}</span>
+                </span>
+              </button>;
+            })}
+            {isWin68 && XSYD_UNVERIFIED_MODES.map(item => <button
+              key={item.id}
+              type="button"
+              data-mode={item.id}
+              data-unsupported="true"
+              disabled
+              aria-disabled="true"
+              title={tr('Unverified')}
+              className="is-disabled is-unsupported"
+            >
+              <AdvancedKeyIcon kind="UNKNOWN" />
+              <span>
+                <strong>
+                  {tr(item.title)}
+                  <span className="ak-unsupported-badge">{tr('Unsupported')}</span>
+                </strong>
+                <span>{tr(item.description)}</span>
+              </span>
+            </button>)}
+          </div>
         </article>
         <article className="ak-card ak-current">
           <h2>{tr('Configured Advanced Keys')} <small>{bindings.length} / {ADVANCED_LIMIT}</small></h2>
           {!bindings.length ? <div className="ak-empty">
             <p>{tr('No Advanced Keys configured yet. Select a type on the left to add your first binding.')}</p>
             <div className="ak-empty-symbol"><Plus size={28} /></div>
-          </div> : <div className="ak-binding-list">{bindings.map(b => <button key={b.id} onMouseEnter={() => setHovered(b.keys[0])} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(b.keys[0])} onBlur={() => setHovered(null)} onClick={() => assign(b.keys[0])}><AdvancedKeyIcon kind={b.kind} /><span><strong>{b.kind === 'UNKNOWN' ? tr('Firmware binding') : tr(INFO[b.kind].title)}</strong><span>{b.keys.map(k => <kbd key={k}>{label(k)}</kbd>)}</span><small className="ak-binding-summary">{bindingSummary(b, tr)}</small></span><span className="ak-edit-label">{tr(b.kind === 'UNKNOWN' ? 'Read only' : 'Edit')}</span></button>)}</div>}
+          </div> : <div className="ak-binding-list">{bindings.map(b => <button key={b.id} onMouseEnter={() => setHovered(b.keys[0])} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(b.keys[0])} onBlur={() => setHovered(null)} onClick={() => assign(b.keys[0])}><AdvancedKeyIcon kind={b.kind} /><span><strong>{b.kind === 'UNKNOWN' ? tr('Firmware binding') : tr(INFO[b.kind].title)}{isWin68 && b.kind === 'DKS' && <span className="ak-unsupported-badge">{tr('Unsupported')}</span>}</strong><span>{b.keys.map(k => <kbd key={k}>{label(k)}</kbd>)}</span><small className="ak-binding-summary">{bindingSummary(b, tr, isWin68)}</small></span><span className="ak-edit-label">{tr(b.kind === 'UNKNOWN' ? 'Read only' : 'Edit')}</span></button>)}</div>}
           <p className="ak-save-note">{tr(pending ? connected ? 'Draft changes are ready. Use Save to profile above to apply them to the keyboard.' : 'Draft changes are kept locally. Connect HERO68, then use Save to profile above.' : 'Select a binding to edit its behavior.')}</p>
+          {isWin68 && bindings.some(b => b.kind === 'DKS') && <button type="button" className="secondary-button ak-dks-save-guard" onClick={handleSaveRequest}>{tr('DKS is not supported on WIN 68 HE MAX')}</button>}
           {connected && !pending && bindings.length > 0 && <details className="ak-test-disclosure">
             <summary>{tr('Test saved keyboard output')}</summary>
             <OutputTester />
@@ -590,7 +725,7 @@ export default function AdvancedKeysPage({
           {view === 'edit' && editingId && <button className="secondary-button ak-delete" onClick={() => setRemoveOpen(true)}><Trash2 size={15} />{tr('Delete')}</button>}
           <button className="apply-button" disabled={busy || view === 'assign' && !ready} onClick={() => {
             if (view === 'assign') {
-              setDraft(newAdvanced(kind, assignedKeys));
+              setDraft(newAdvanced(kind, assignedKeys, model));
               setView('edit');
             } else {
               commit();
@@ -624,11 +759,29 @@ export default function AdvancedKeysPage({
             </div>
           {kind === 'SOCD' ? <div className="ak-socd-options">
               <h3>{tr('When both keys are pressed')}</h3>
-              {SOCD_OPTIONS.map(o => <label key={o.value} className={draft.mode === o.value ? 'is-active' : ''}><input type="radio" name="socd" checked={draft.mode === o.value} onChange={() => setDraft({
-                  ...draft,
-                  mode: o.value
-                })} /><span><strong>{tr(o.title)}{o.value === 3 ? ` (${label(draft.keys[0])})` : o.value === 4 ? ` (${label(draft.keys[1])})` : ''}</strong><span>{tr(o.desc)}</span></span></label>)}
-              {draft.mode === 2 && <p>{tr('Mode 2 is retained from the keyboard; choose a verified mode to change it.')}</p>}
+              {isWin68 ? XSYD_SOCD_OPTIONS.map(o => <label key={o.value} title={!o.verified ? tr('Unverified') : undefined} aria-disabled={!o.verified ? 'true' : undefined} className={`${draft.mode === o.value ? 'is-active' : ''} ${!o.verified ? 'is-disabled' : ''}`}>
+                <input type="radio" name="socd" disabled={!o.verified} checked={draft.mode === o.value} onChange={() => {
+                  if (o.verified) {
+                    setDraft({
+                      ...draft,
+                      mode: o.value
+                    });
+                  }
+                }} />
+                <span>
+                  <strong>
+                    {tr(o.title)}
+                    {!o.verified && <span className="ak-unverified-badge" title={tr('Unverified')}>{tr('Unverified')}</span>}
+                  </strong>
+                  <span>{tr(o.desc)}</span>
+                </span>
+              </label>) : <>
+                {SOCD_OPTIONS.map(o => <label key={o.value} className={draft.mode === o.value ? 'is-active' : ''}><input type="radio" name="socd" checked={draft.mode === o.value} onChange={() => setDraft({
+                    ...draft,
+                    mode: o.value
+                  })} /><span><strong>{tr(o.title)}{o.value === 3 ? ` (${label(draft.keys[0])})` : o.value === 4 ? ` (${label(draft.keys[1])})` : ''}</strong><span>{tr(o.desc)}</span></span></label>)}
+                {draft.mode === 2 && <p>{tr('Mode 2 is retained from the keyboard; choose a verified mode to change it.')}</p>}
+              </>}
             </div> : kind === 'DKS' ? <DksGrid binding={draft} onChange={setDraft} /> : kind === 'MPT' ? <div className="ak-mpt">
               <h3>{tr('Depth-triggered actions')}</h3>
               <p>{tr('Deeper presses add actions. Releasing the key removes them in reverse order.')}</p>
@@ -647,7 +800,7 @@ export default function AdvancedKeysPage({
                 })} />
               </div>)}
             </div> : <><p>{tr(info.description)}</p><div className="ak-simple-actions">{kind === 'MT' ? <>{action(0, 'Hold action')}{action(1, 'Tap action')}</> : action(0, kind === 'END' ? 'Action on release' : 'Toggle action')}</div>{['MT', 'TGL'].includes(kind) && <label className="ak-delay"><span>{tr(kind === 'MT' ? 'Hold duration' : 'Tap / hold duration')}</span><div>
-                  <input type="number" aria-label={tr('Tap hold delay')} min="1" max="65535" value={draft.delay} onChange={e => setDraft({
+                  <input type="number" aria-label={tr('Tap hold delay')} min={isWin68 ? '10' : '1'} max={isWin68 ? '2550' : '65535'} step={isWin68 ? '10' : '1'} value={draft.delay} onChange={e => setDraft({
                     ...draft,
                     delay: Number(e.target.value)
                   })} />
@@ -665,7 +818,7 @@ export default function AdvancedKeysPage({
         <aside className="ak-side-panel">{view === 'assign' ? <><h3>{tr(kind === 'SOCD' ? 'Suggested key pairs' : 'Ready-made bindings')}</h3>{kind === 'SOCD' ? <>{[['KeyA', 'KeyD'], ['ArrowLeft', 'ArrowRight']].map(pair => <button className="ak-preset" key={pair[0]} disabled={pair.some(k => occupied.has(k))} onClick={() => {
                 setKeys(pair);
                 setSlot(1);
-              }}><div>{pair.map(k => <kbd key={k}>{label(k)}</kbd>)}</div><strong>{tr(pair[0] === 'KeyA' ? 'Instant direction switching' : 'Left / right pair')}</strong><span>{tr('Use this pair, then choose its priority behavior.')}</span><small className="ak-preset-cta">{tr('Select this pair')}</small></button>)}</> : ADVANCED_PRESETS.some(p => p.kind === kind) ? <>{ADVANCED_PRESETS.filter(p => p.kind === kind).map(p => <button key={p.id} className="ak-preset" disabled={busy} onClick={() => applyPreset(p)}><div>{p.badges.map(b => <kbd key={b}>{b}</kbd>)}</div><strong>{tr(p.title)}</strong><span>{tr(p.description)}</span><small className="ak-preset-cta">{tr('Add preset to draft')}</small></button>)}<p className="ak-hint">{tr('Apply a preset to your profile draft in one click. Save to the keyboard when ready.')}</p></> : <div className="ak-preset-info">
+              }}><div>{pair.map(k => <kbd key={k}>{label(k)}</kbd>)}</div><strong>{tr(pair[0] === 'KeyA' ? 'Instant direction switching' : 'Left / right pair')}</strong><span>{tr('Use this pair, then choose its priority behavior.')}</span><small className="ak-preset-cta">{tr('Select this pair')}</small></button>)}</> : ADVANCED_PRESETS.some(p => p.kind === kind && (!isWin68 || p.kind !== 'DKS')) ? <>{ADVANCED_PRESETS.filter(p => p.kind === kind && (!isWin68 || p.kind !== 'DKS')).map(p => <button key={p.id} className="ak-preset" disabled={busy} onClick={() => applyPreset(p)}><div>{p.badges.map(b => <kbd key={b}>{b}</kbd>)}</div><strong>{tr(p.title)}</strong><span>{tr(p.description)}</span><small className="ak-preset-cta">{tr('Add preset to draft')}</small></button>)}<p className="ak-hint">{tr('Apply a preset to your profile draft in one click. Save to the keyboard when ready.')}</p></> : <div className="ak-preset-info">
               <AdvancedKeyIcon kind={kind} />
               <p>{tr('Choose one physical key to start. You can select its action in the next step.')}</p>
             </div>}</> : <><h3>{tr('Finish & save')}</h3><ol className="ak-finish-steps">
@@ -677,6 +830,7 @@ export default function AdvancedKeysPage({
             </ol><p className="ak-hint">{tr('After saving, test the binding from the configured bindings list.')}</p></>}</aside>
       </div>
     </section>}
+    {isWin68 && <DksUnsupportedModal open={dksUnsupportedOpen} onClose={() => setDksUnsupportedOpen(false)} />}
     {presetReview && <div className="ak-modal-backdrop" onClick={() => setPresetReview(null)}><section role="dialog" aria-modal="true" aria-labelledby="ak-preset-title" className="ak-remove-modal" onClick={e => e.stopPropagation()}>
         <h2 id="ak-preset-title">{tr('Replace existing bindings?')}</h2>
         <p>{tr('{name} will replace bindings on {keys}. Paired keys in a replaced binding are removed together.', {

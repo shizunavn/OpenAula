@@ -9,6 +9,7 @@
 - [Gamepad validation and unverified scenarios](GAMEPAD_VALIDATION.md)
 - [Macros UI](MACRO_UI.md)
 - [Advanced Keys UI](ADVANCED_KEYS_UI.md)
+- [XSYD `0x5C` protocol — AULA WIN 68 HE MAX](xsyd-protocol.md)
 - [Protocol implementation and evidence](../src/protocol/README.md)
 - [Changelog](../CHANGELOG.md)
 - [Windows service release notes](releases/)

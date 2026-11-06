@@ -1,6 +1,6 @@
 import { HERO68_PROTOCOL_KEY_MAP } from './keyMap';
 import type { ProfileSlot } from './hero68/types';
-import type { HeroDeviceModelId } from '../keyboard/devices';
+import { isWin68HeMaxModel, type HeroDeviceModelId } from '../keyboard/devices';
 export type KeyDeviceSettings = {
   keyId: string;
   matrixKey: number;
@@ -37,23 +37,35 @@ export type Hero68Transport = {
 };
 let protocolEncoder: Hero68ProtocolEncoder | null = null;
 let transport: Hero68Transport | null = null;
+let xsydProtocolEncoder: Hero68ProtocolEncoder | null = null;
+let xsydTransport: Hero68Transport | null = null;
 export function registerHero68Protocol(encoder: Hero68ProtocolEncoder, nextTransport: Hero68Transport) {
   protocolEncoder = encoder;
   transport = nextTransport;
 }
-export function isHero68ProtocolReady() {
+export function registerXsydProtocol(encoder: Hero68ProtocolEncoder, nextTransport: Hero68Transport) {
+  xsydProtocolEncoder = encoder;
+  xsydTransport = nextTransport;
+}
+export function isHero68ProtocolReady(model?: HeroDeviceModelId) {
+  if (isWin68HeMaxModel(model)) {
+    return Boolean((xsydProtocolEncoder && xsydTransport) || (protocolEncoder && transport));
+  }
   return Boolean(protocolEncoder && transport);
 }
 export async function saveDeviceConfiguration(snapshot: DeviceConfigurationSnapshot) {
-  if (!protocolEncoder || !transport) {
+  const useXsyd = isWin68HeMaxModel(snapshot.model) && xsydProtocolEncoder && xsydTransport;
+  const activeEncoder = useXsyd ? xsydProtocolEncoder : protocolEncoder;
+  const activeTransport = useXsyd ? xsydTransport : transport;
+  if (!activeEncoder || !activeTransport) {
     throw new Error('HERO68 protocol is not ready. Reconnect the keyboard and try again.');
   }
-  const packets = protocolEncoder.encodeSave(snapshot);
-  if (transport.sendBatchHex) {
-    await transport.sendBatchHex(packets);
+  const packets = activeEncoder.encodeSave(snapshot);
+  if (activeTransport.sendBatchHex) {
+    await activeTransport.sendBatchHex(packets);
   } else {
     for (const packet of packets) {
-      await transport.sendHex(packet);
+      await activeTransport.sendHex(packet);
     }
   }
   return {

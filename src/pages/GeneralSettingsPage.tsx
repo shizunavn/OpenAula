@@ -1,6 +1,6 @@
 import { Toggle } from '../app/components/Toggle'
 import { useT } from '../i18n'
-import type { HeroDeviceModel } from '../keyboard/devices'
+import { isWin68HeMaxModel, type HeroDeviceModel } from '../keyboard/devices'
 import type { BoardDescriptor } from '../keyboard/registry/types'
 import {
   POLLING_RATES,
@@ -60,7 +60,10 @@ export function GeneralSettingsPage({
   applyBooleanDeviceSetting,
 }: GeneralSettingsPageProps) {
   const tr = useT()
-  const controlsDisabled = !deviceConnected || deviceSettingsState === 'reading' || deviceSettingsState === 'saving'
+  const isWin68 = isWin68HeMaxModel(model.id)
+  const busyOrDisconnected = !deviceConnected || deviceSettingsState === 'reading' || deviceSettingsState === 'saving'
+  const controlsDisabled = busyOrDisconnected || isWin68
+  const pollingDisabled = busyOrDisconnected || !model.capabilities.writablePollingRate
 
   return (
     <div className="page settings-page general-device-settings page-enter">
@@ -72,7 +75,7 @@ export function GeneralSettingsPage({
         <button
           type="button"
           className="secondary-button"
-          disabled={controlsDisabled}
+          disabled={busyOrDisconnected}
           onClick={() => void readDeviceGeneralSettings()}
         >
           {deviceSettingsState === 'reading' ? tr('Reading…') : tr('Refresh device settings')}
@@ -87,7 +90,9 @@ export function GeneralSettingsPage({
               <p>{tr('A higher polling rate lets the keyboard report to the computer more often. Changing it makes firmware 0323 briefly reconnect over USB.')}</p>
               {!model.capabilities.writablePollingRate && (
                 <p className="device-setting-hint">
-                  {tr('HERO84: not verified. The official AULA driver has no polling-rate command for this board; it only reads the value. Changing it may show an error or be ignored.')}
+                  {isWin68
+                    ? tr('Unverified on WIN 68 HE MAX — blocked until USB capture is available.')
+                    : tr('HERO84: not verified. The official AULA driver has no polling-rate command for this board; it only reads the value. Changing it may show an error or be ignored.')}
                 </p>
               )}
             </div>
@@ -99,7 +104,8 @@ export function GeneralSettingsPage({
                   role="radio"
                   aria-checked={devicePollingRate === rate}
                   className={`device-option-row ${devicePollingRate === rate ? 'is-selected' : ''}`}
-                  disabled={controlsDisabled}
+                  disabled={pollingDisabled}
+                  title={!model.capabilities.writablePollingRate ? tr('Unverified') : undefined}
                   onClick={() => void handlePollingRateChange(rate)}
                 >
                   <span className="device-radio-dot" aria-hidden="true" />

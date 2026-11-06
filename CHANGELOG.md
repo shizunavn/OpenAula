@@ -3,6 +3,15 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.2.0 — AULA WIN 68 HE MAX (XSYD `0x5C`)
+
+- Add WIN 68 HE MAX support on its own protocol stack (`src/protocol/xsyd/`): 64-byte `0x5C` framing with the last-byte checksum the firmware computes, reply reassembly across `inputreport` events, and a key map for the 68-key Hall board. The board is registered as `win68HeMax` and is never driven by the HERO68/HERO84 `0x09` encoders.
+- Per-key settings (remap, actuation, rapid trigger, dead zone, switch type) go through the `0x23` field table; every field is a `u16` and travel is in micrometres, not hundredths of a millimetre.
+- Advanced keys MT (`0x24`), TGL (`0x25`), MPT (`0x27`) and END (`0x28`) are wired end to end, with layouts checked byte for byte against USBPcap captures of the official web driver.
+- Polling rate is read and written through `0x00` subcommand `0x50`, followed by a USB re-enumeration wait; the sequence matches a 4000 → 2000 → 1000 Hz capture.
+- Advanced Keys shows an explicit "DKS is not supported on WIN 68 HE MAX" modal instead of writing a guessed frame, and RS, DDKS and non-zero SOCD modes are blocked until a capture proves their layouts.
+- `npm run typecheck` now covers the web app and the Windows service in one command.
+
 ## 1.1.0 — structure, Gamepad toggle, ubuntu test parity
 
 - Split the monolithic layers so each concern has one owner: the Windows service into `service/server/`, `service/rgb/`, `service/gamepad/`, `service/hall/` and `service/bridge/`; the HERO68 protocol into `src/protocol/bytetech/` (old `src/protocol/hero68/*` paths keep re-exporting); the web app into `src/app/hooks/`, `src/app/components/` and `src/pages/`. Behaviour is unchanged apart from the fix below.

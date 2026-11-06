@@ -9,7 +9,7 @@ import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import AdvancedKeyIcon from './AdvancedKeyIcon';
 import { TachyonContext } from '../app/TachyonContext';
 import { DeviceModelContext } from '../app/DeviceModelContext';
-const tachyonLightingFrames = (Object.fromEntries((['hero68', 'hero84'] as const).map(model => [model, Object.fromEntries(heroLayout(model).rows.flat().map(key => [key.id, '#000000']))])) as Record<HeroDeviceModelId, LightingFrame>);
+const tachyonLightingFrames = (Object.fromEntries((['hero68', 'hero84', 'win68HeMax', 'win68'] as const).map(model => [model, Object.fromEntries(heroLayout(model).rows.flat().map(key => [key.id, '#000000']))])) as Record<HeroDeviceModelId, LightingFrame>);
 const WOOTILITY_MAX_FONT_PX = 12.3199;
 const HERO68_DESIGN_WIDTH_EM = 64.05;
 const HERO68_DESIGN_HEIGHT_EM = 21.35;
@@ -110,7 +110,7 @@ export default function Hero68Preview({
   const keyLabelById = useMemo(() => new Map(keyboard.rows.flat().map(key => [key.id, key.label])), [keyboard]);
   const tachyon = useContext(TachyonContext);
   const serviceLighting = useServiceLighting(!tachyon && lightingSource !== 'local');
-  const displayedLighting = tachyon ? tachyonLightingFrames[model] : lightingSource === 'local' ? lightingFrame : serviceLighting ?? lightingFrame;
+  const displayedLighting = tachyon ? (tachyonLightingFrames[model] ?? tachyonLightingFrames.hero68) : lightingSource === 'local' ? lightingFrame : serviceLighting ?? lightingFrame;
   const advancedByKey = useMemo(() => new Map(advancedBindings.flatMap(binding => binding.keys.map(key => ([key, binding] as const)))), [advancedBindings]);
   const previewTooltips = useMemo(() => {
     const result = {

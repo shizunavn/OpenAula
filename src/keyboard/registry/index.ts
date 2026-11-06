@@ -1,12 +1,21 @@
 import { HERO68_BOARD } from './models/hero68.board';
 import { HERO84_BOARD } from './models/hero84.board';
+import { WIN68_HE_MAX_BOARD } from './models/win68HeMax.board';
+import { MAX_HE_NAME_PATTERN } from '../maxHe';
 import { assertBoardDescriptorValid } from './shared/bytetechCatalog';
 import type { BoardDescriptor, HeroDeviceModelId } from './types';
 export * from './types';
 export { assertBoardDescriptorValid, computeKeyCoordinates } from './shared/bytetechCatalog';
 export { HERO68_BOARD } from './models/hero68.board';
 export { HERO84_BOARD } from './models/hero84.board';
+export { WIN68_HE_MAX_BOARD, WIN68_HE_MAX_KEY_POSITIONS, WIN68_HE_MAX_POS_TO_KEY_ID } from './models/win68HeMax.board';
+
+assertBoardDescriptorValid(WIN68_HE_MAX_BOARD);
+
 const REGISTRY = new Map<string, BoardDescriptor>();
+export function isWin68HeMaxModel(modelId?: string | null): boolean {
+  return modelId === 'win68HeMax' || modelId === 'win68';
+}
 export function registerBoard(board: BoardDescriptor): BoardDescriptor {
   assertBoardDescriptorValid(board);
   REGISTRY.set(board.id, board);
@@ -25,9 +34,12 @@ export function getBoards(): readonly BoardDescriptor[] {
   return Array.from(REGISTRY.values());
 }
 export function isBoardModelId(value: unknown): value is HeroDeviceModelId {
-  return typeof value === 'string' && REGISTRY.has(value);
+  return typeof value === 'string' && (REGISTRY.has(value) || isWin68HeMaxModel(value));
 }
 export function getBoard(modelId: HeroDeviceModelId | string = 'hero68'): BoardDescriptor {
+  if (isWin68HeMaxModel(modelId)) {
+    return WIN68_HE_MAX_BOARD;
+  }
   const board = REGISTRY.get(modelId);
   if (!board) {
     throw new RangeError(`Unknown keyboard model: ${modelId}`);
@@ -104,6 +116,9 @@ export function detectBoardFromProductName(productName?: string | null): HeroDev
     if (board.usb.productNames.some(candidate => candidate.toLowerCase() === normalized)) {
       return board.id;
     }
+  }
+  if (MAX_HE_NAME_PATTERN.test(productName)) {
+    return null;
   }
   if (/hero\s*(?:84|75)/i.test(productName)) {
     return 'hero84';

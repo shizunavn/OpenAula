@@ -8,6 +8,11 @@ Add binding / Apply changes stages a binding in the current profile draft. The s
 
 The wire integration follows the existing fw0320 RE: depths are hundredths of a millimeter, Mod Tap action 1 is hold/action 2 is tap, and SOCD modes 0/1/3/4 are neutral/last/first-key/second-key priority. Existing mode 2 is preserved without claiming Rappy Snappy support.
 
+> **Scope:** the paragraph above describes the HERO68 board. The AULA WIN 68 HE MAX
+> (XSYD) uses a different protocol with **micron** depths and different opcodes —
+> see [`xsyd-protocol.md`](./xsyd-protocol.md). Do not carry these units or masks
+> across to that board.
+
 DKS clicks use mask 10. Dragged hold intervals use the verified masks 14, [6,12,0,0], [6,4,12,0] and [0,6,12,0], depending on the interval. The displayed hold span represents the physical press/release journey rather than raw firmware bytes. The alternative pattern selector supports keyboard operation.
 
 Validation completed:

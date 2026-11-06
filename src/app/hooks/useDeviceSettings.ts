@@ -3,6 +3,7 @@ import type { PersistedOpenHeroState } from '../../state/persistence';
 import { hero68DeviceManager } from '../../protocol/hero68/webhid';
 import { hero68HallStream } from '../../protocol/hero68/hallStream';
 import { liveIdle, POLLING_RATES, readAutoCalibration, readHallDebounce, readOsMode, readPollingRate, readWinLock, writePollingRate } from '../../protocol/hero68/commands';
+import { readXsydPollingRate, xsydDeviceManager } from '../../protocol/xsyd/device';
 import { setTachyonLighting } from '../../protocol/tachyon';
 import { rgbService } from '../../protocol/rgbService';
 import type { PollingRate } from '../../protocol/hero68/types';
@@ -81,6 +82,9 @@ export function useDeviceSettings({
   const [deviceReadState, setDeviceReadState] = useState<'idle' | 'reading' | 'success' | 'error'>('idle');
   const [deviceActionError, setDeviceActionError] = useState<string | null>(null);
   async function readCurrentPollingRate(): Promise<PollingRate> {
+    if (xsydDeviceManager.connected) {
+      return readXsydPollingRate(xsydDeviceManager);
+    }
     const report = await hero68DeviceManager.request(readPollingRate(), 0x84, 0x17, 1000);
     const level = report.data[0] ?? 3;
     const rate = POLLING_RATES[level];
@@ -90,11 +94,17 @@ export function useDeviceSettings({
     return rate;
   }
   async function readDeviceGeneralSettings() {
-    if (!hero68DeviceManager.connected) {
+    if (!hero68DeviceManager.connected && !xsydDeviceManager.connected) {
       return;
     }
     setDeviceSettingsState('reading');
     try {
+      if (xsydDeviceManager.connected) {
+        const polling = await readXsydPollingRate(xsydDeviceManager);
+        setDevicePollingRateState(polling);
+        setDeviceSettingsState('ready');
+        return;
+      }
       const polling = await readCurrentPollingRate();
       const osMode = await hero68DeviceManager.request(readOsMode(), 0x84, 17, 1000);
       const winLock = await hero68DeviceManager.request(readWinLock(), 0x84, 21, 1000);
@@ -113,6 +123,13 @@ export function useDeviceSettings({
     }
   }
   async function setDevicePollingRate(rate: PollingRate) {
+    if (xsydDeviceManager.connected) {
+      // Verified on 4k_to_2k_to_1k.pcapng: WIN 68 HE MAX replies 0x80 and then
+      // immediately re-enumerates USB with the new bInterval before readback (50 07).
+      const actual = await xsydDeviceManager.writePollingRate(rate, 7000);
+      setDevicePollingRateState(actual);
+      return;
+    }
     // Firmware 0323 immediately re-enumerates USB after a polling write; waiting
     // for a normal 0x04 ACK leaves a stale WebHID handle. Send, reopen the new
     // interface, then verify the persisted enum with 0x84/0x17.
@@ -124,7 +141,7 @@ export function useDeviceSettings({
     setDevicePollingRateState(actual);
   }
   async function handlePollingRateChange(rate: PollingRate) {
-    if (!hero68DeviceManager.connected || deviceSettingsState === 'saving') {
+    if ((!hero68DeviceManager.connected && !xsydDeviceManager.connected) || deviceSettingsState === 'saving') {
       return;
     }
     setDeviceActionError(null);
@@ -134,13 +151,15 @@ export function useDeviceSettings({
         await hero68HallStream.stop();
       }
       if (rgbStreamActive) {
-        if (!hero68DeviceManager.viaService) {
+        if (hero68DeviceManager.connected && !hero68DeviceManager.viaService) {
           await hero68DeviceManager.send(liveIdle()).catch(() => {});
         }
         setRgbStreamActive(false);
       }
       if (tachyon && rate !== 8000) {
-        await setTachyonLighting(false);
+        if (hero68DeviceManager.connected) {
+          await setTachyonLighting(false);
+        }
       }
       await setDevicePollingRate(rate);
       if (tachyon && rate !== 8000) {
