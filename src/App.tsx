@@ -265,7 +265,7 @@ function App() {
             }} /> : ui.activePage === 'rgb' ? <RgbPage onSetup={() => {
               ui.setActiveSettingsPage('background-service');
               ui.setActiveRail('settings');
-            }} initialCustom={ui.rgbCustomEntry} onEntered={() => ui.setRgbCustomEntry(false)} onTabChange={ui.setActiveRgbTab} advancedBindings={workspace.advancedBindings} profileSlot={workspace.profileSlot} rgb={workspace.rgb} profileBusy={workspace.profileBusy} setRgb={workspace.setRgb} setSaveState={workspace.setSaveState} RgbSettingsPage={RgbSettingsPage} /> : <div className="placeholder-page page-enter">
+            }} initialCustom={ui.rgbCustomEntry} onEntered={() => ui.setRgbCustomEntry(false)} onTabChange={ui.setActiveRgbTab} activeTab={ui.activeRgbTab} advancedBindings={workspace.advancedBindings} profileSlot={workspace.profileSlot} rgb={workspace.rgb} profileBusy={workspace.profileBusy} setRgb={workspace.setRgb} setSaveState={workspace.setSaveState} RgbSettingsPage={RgbSettingsPage} /> : <div className="placeholder-page page-enter">
                     <div className="placeholder-icon"><SlidersHorizontal size={28} /></div>
                     <h1>{tr('Profile')}</h1>
                     <p>{tr('This page is not implemented yet.')}</p>

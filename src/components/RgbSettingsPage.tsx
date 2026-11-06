@@ -53,6 +53,7 @@ type RgbSettingsProps = {
   onEntered?: () => void;
   slot?: number;
   onTabChange?: (tab: RgbTab) => void;
+  activeTab?: RgbTab;
   model?: HeroDeviceModelId;
 };
 export default function RgbSettingsPage(props: RgbSettingsProps) {
@@ -88,6 +89,7 @@ function ActiveRgbSettingsPage({
   onEntered,
   slot = 0,
   onTabChange,
+  activeTab,
   model: modelProp
 }: RgbSettingsProps) {
   const {
@@ -124,6 +126,19 @@ function ActiveRgbSettingsPage({
     }
     return previousRgbTab();
   });
+  // ActiveRgbTab (AppShell) and this tab drive the same editor. Following it keeps
+  // the editor visible when the sidebar switches tabs, and publishing ours back
+  // tells the shell which editor the preview output belongs to.
+  useEffect(() => {
+    if (activeTab && activeTab !== tab) {
+      setTab(activeTab);
+    }
+  }, [activeTab]);
+  useEffect(() => {
+    if (activeTab !== tab) {
+      onTabChange?.(tab);
+    }
+  }, [tab]);
   const customMode = tab === 'custom';
   const rhythmMode = tab === 'rhythm';
   const [rhythmVisited, setRhythmVisited] = useState(rhythmMode);
@@ -138,9 +153,6 @@ function ActiveRgbSettingsPage({
     } catch {
 }
   }, [tab]);
-  useEffect(() => {
-    onTabChange?.(tab);
-  }, [tab, onTabChange]);
   const playback = useCustomRgbPlayback(value, onChange, onSetup, slot, tab === 'custom');
   const engineRef = useRef<FirmwareRgbPreview | XsydFirmwareRgbPreview | null>(null);
   const replayRef = useRef(replay);
