@@ -272,10 +272,13 @@ Verified on `tideflux_softripple_snippingstorm_brightness0-4-3-1-2-0_speed1-2-3-
 
 See `src/protocol/xsyd/rgb.ts` and `src/keyboard/xsydRgbPreview.ts`.
 
+The service's Rhythm Sync reuses exactly these two opcodes: it writes `0x18`
+with mode `0x15` once, then streams `0x2A` batch frames of the rendered key
+colours, and writes `0x18` mode `0x00` on stop. See `docs/RHYTHM_SYNC.md`.
+
 ---
 
 ## 9. What is still unknown
-
 | item | why it is unknown |
 |---|---|
 | DKS layout | no capture; the only related frame (`0x28`, LEN 4) turned out to be END |

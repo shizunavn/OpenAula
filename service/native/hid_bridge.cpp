@@ -424,6 +424,10 @@ struct BridgeSession {
   bool wasGamepadEnabled = false;
   // Set by TS via `device-model:<id>`; HERO84-only keys copy a HERO68 key's colour.
   bool hero84Rhythm = false;
+  // WIN 68 HE MAX rhythm state: the last sent colours and whether the `0x18`
+  // Per-key Color switch has been written for this session yet.
+  std::array<rhythm::Color, 68> xsydRhythmKeys{};
+  bool xsydRhythmPrimed = false;
   uint8_t xsydTableStep = 0;
   uint8_t xsydActiveSlot = 0;
   std::array<std::array<uint32_t, 256>, 3> xsydRemaps{};
@@ -783,7 +787,12 @@ struct BridgeSession {
         auto audio = capture.snapshot();
         rhythm::Frame frame = engine.render(audio.audio, now);
         const double renderedAt = rhythm::clockMs();
-        const auto encoded = rhythm::encode(frame, hero84Rhythm);
+        // WIN 68 HE MAX speaks XSYD `0x18`/`0x2A`; every other board uses the
+        // HERO68/HERO84 `0x09` encoder.
+        const bool xsydBoard = device && device->xsyd;
+        const auto encoded = xsydBoard
+            ? rhythm::encodeXsyd(frame, xsydRhythmKeys, xsydRhythmPrimed)
+            : rhythm::encode(frame, hero84Rhythm);
         const double encodedAt = rhythm::clockMs();
         bool okay = true;
         for (const auto& p : encoded.packets) {
@@ -930,6 +939,9 @@ struct BridgeSession {
         rhythmTelemetry = {};
         output.queue.clear(ipc::Channel::RhythmFrame);
         nextFrame = rhythm::clockMs();
+        // A new XSYD session must rewrite `0x18` mode 0x15 before the first
+        // batch; the old keys are not a valid "already sent" baseline.
+        xsydRhythmPrimed = false;
       }
       rhythmActive = true;
       emitLine("rhythm-ready");
@@ -1375,6 +1387,18 @@ struct BridgeSession {
       capture.stop();
       engine.reset();
       output.queue.clear(ipc::Channel::RhythmFrame);
+      // Leaving XSYD Per-key Color behind would freeze the last rhythm frame on
+      // the board; switch it back to its Static onboard effect.
+      if (device && device->xsyd && xsydRhythmPrimed) {
+        std::vector<uint8_t> onboard(0x2c, 0);
+        onboard[0] = 0x01;
+        onboard[37] = 0x01;
+        onboard[38] = 4;
+        onboard[39] = 0x00;
+        onboard[41] = 0x02;
+        writeReport(rhythm::xsydReport(rhythm::xsydRgbOpcode, onboard));
+        xsydRhythmPrimed = false;
+      }
       emitLine("rhythm-stopped");
       return;
     }

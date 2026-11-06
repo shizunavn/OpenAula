@@ -614,6 +614,116 @@ inline Encoded encode(const Frame& f, bool hero84 = false) {
   return out;
 }
 
+// --- WIN 68 HE MAX (XSYD 0x5C) -------------------------------------------------
+// Same rendered 68-key frame, different wire format: `0x18` puts the board in
+// Per-key Color (mode 0x15) at full brightness, then `0x2A` carries colours.
+// Layouts: docs/xsyd-protocol.md §8.1 / §8.2. Not validated on a physical board.
+constexpr uint8_t xsydMagic = 0x5c;
+constexpr uint8_t xsydRgbOpcode = 0x18;
+constexpr uint8_t xsydPerKeyOpcode = 0x2a;
+constexpr uint8_t xsydPerKeyMode = 0x15;
+constexpr size_t xsydPerKeySlots = 14;
+
+// UI key ids of the 68-key WIN 68 HE MAX layout in drawing order. Mirrors
+// HERO68_LAYOUT in src/keyboard/hero68Layout.ts.
+// clang-format off
+constexpr std::array<const char*, 68> xsydLayoutIds = {{
+  "Escape","Digit1","Digit2","Digit3","Digit4","Digit5","Digit6","Digit7","Digit8","Digit9","Digit0","Minus","Equal","Backspace","Insert",
+  "Tab","KeyQ","KeyW","KeyE","KeyR","KeyT","KeyY","KeyU","KeyI","KeyO","KeyP","BracketLeft","BracketRight","Backslash","Delete",
+  "CapsLock","KeyA","KeyS","KeyD","KeyF","KeyG","KeyH","KeyJ","KeyK","KeyL","Semicolon","Quote","Enter","PageUp",
+  "ShiftLeft","KeyZ","KeyX","KeyC","KeyV","KeyB","KeyN","KeyM","Comma","Period","Slash","ShiftRight","ArrowUp","PageDown",
+  "ControlLeft","MetaLeft","AltLeft","Space","AltRight","Fn","ControlRight","ArrowLeft","ArrowDown","ArrowRight"
+}};
+// Same order as `xsydLayoutIds`; `usage & 0xff` from src/protocol/xsyd/keymap.ts.
+constexpr std::array<uint8_t, 68> xsydLayoutUsage = {{
+  41,30,31,32,33,34,35,36,37,38,39,45,46,42,73,
+  43,20,26,8,21,23,28,24,12,18,19,47,48,49,76,
+  57,4,22,7,9,10,11,13,14,15,51,52,40,75,
+  225,29,27,6,25,5,17,16,54,55,56,229,82,78,
+  224,227,226,44,230,1,228,80,81,79
+}};
+// clang-format on
+
+inline Report xsydReport(uint8_t opcode, const std::vector<uint8_t>& payload) {
+  if (payload.empty() || payload.size() > 60) {
+    throw std::runtime_error("XSYD payload must be 1..60 bytes");
+  }
+  Report p{};
+  p[0] = xsydMagic;
+  p[1] = uint8_t(payload.size());
+  p[2] = opcode;
+  std::copy(payload.begin(), payload.end(), p.begin() + 4);
+  p[3] = uint8_t(xsydMagic + payload.size() + opcode + 0x35 + payload.back());
+  return p;
+}
+
+// `0x18` write: switch to Per-key Color at full brightness. `brightness` is a
+// level (0..4), every other field is the stock value from the captures.
+inline Report xsydPerKeyModeReport(uint8_t brightness = 4) {
+  std::vector<uint8_t> payload(0x2c, 0);
+  payload[0] = 0x01;
+  const std::array<std::array<uint8_t, 4>, 7> palette = {{{0x00, 0x00, 0xff, 0xff},
+                                                          {0x00, 0xff, 0x00, 0xff},
+                                                          {0x00, 0xff, 0xff, 0xff},
+                                                          {0xff, 0x00, 0x00, 0xff},
+                                                          {0xff, 0x00, 0xff, 0xff},
+                                                          {0xff, 0xff, 0x00, 0xff},
+                                                          {0x7f, 0x7f, 0x7f, 0xff}}};
+  for (size_t i = 0; i < palette.size(); ++i) {
+    std::copy(palette[i].begin(), palette[i].end(), payload.begin() + 5 + i * 4);
+  }
+  payload[37] = 0x01; // Reverse off
+  payload[38] = uint8_t(std::min<int>(4, std::max<int>(0, brightness)));
+  payload[39] = xsydPerKeyMode;
+  payload[40] = 0x03;
+  payload[41] = 0x02;
+  payload[43] = 0x00;
+  return xsydReport(xsydRgbOpcode, payload);
+}
+
+// `0x2A` batch write, 14 slots of `01 <keyValue> <R> <G> <B>`, padded with
+// `ff 00 00 00` for unused slots.
+inline Report xsydPerKeyBatchReport(uint8_t first, const std::array<Color, 68>& keys) {
+  std::vector<uint8_t> payload(1 + 4 * xsydPerKeySlots, 0);
+  payload[0] = 0x01;
+  for (size_t slot = 0; slot < xsydPerKeySlots; ++slot) {
+    const size_t index = first + slot;
+    uint8_t* p = payload.data() + 1 + slot * 4;
+    if (index >= xsydLayoutUsage.size()) {
+      p[0] = 0xff;
+      continue;
+    }
+    p[0] = xsydLayoutUsage[index];
+    p[1] = keys[index][0];
+    p[2] = keys[index][1];
+    p[3] = keys[index][2];
+  }
+  return xsydReport(xsydPerKeyOpcode, payload);
+}
+
+// Frames whose colours did not change are skipped entirely; a frame that did
+// change still sends all five `0x2A` batches so the board never keeps a stale
+// key from an earlier batch boundary.
+inline Encoded encodeXsyd(const Frame& f, std::array<Color, 68>& previous, bool& primed) {
+  Encoded out;
+  out.keys = f.keys;
+  const bool changed = !primed || f.keys != previous;
+  if (!changed) {
+    return out;
+  }
+  if (!primed) {
+    out.packets.push_back(xsydPerKeyModeReport());
+    primed = true;
+  }
+  for (uint8_t first = 0; first < 68; first += uint8_t(xsydPerKeySlots)) {
+    out.packets.push_back(xsydPerKeyBatchReport(first, f.keys));
+  }
+  // Comparing against the sent colours means an unchanged frame costs no USB
+  // traffic at all; the next change resends every batch.
+  previous = f.keys;
+  return out;
+}
+
 inline std::vector<Report> encodeSide(const Frame& f, int mode) {
   if (mode == 500) {
     return {};

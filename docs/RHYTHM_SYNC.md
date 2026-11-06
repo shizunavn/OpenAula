@@ -45,8 +45,28 @@ are removed. Saved Beat Pulse presets/drafts migrate to Dynamic Spectrum
 The remaining modes use the existing loudness/spectrum pipeline and 14-field
 native configuration. Custom Tempo Pulse (manual BPM) is a separate effect.
 
-## Native pipeline
+## WIN 68 HE MAX (XSYD)
 
+The capture, DSP and renderer are the same 68-key frame; only the wire format
+differs. The helper recognises the board itself (`VID_1CA2`/`PID_1901`), so the
+`rhythm:` command string is unchanged:
+
+- `0x18` write with mode `0x15` (Per-key Color) at full brightness, written once
+  when a session starts, before the first colour batch.
+- `0x2A` batch writes of 14 keys each (`01 <keyValue> <R> <G> <B>`, unused slots
+  `ff 00 00 00`), so one frame is five reports. A frame whose colours did not
+  change sends nothing.
+- `rhythm-stop` writes `0x18` with mode `0x00` (Static) so the board does not
+  freeze on the last rhythm frame.
+- Layout and checksum: `docs/xsyd-protocol.md` sections 1, 8.1 and 8.2. The key
+  order and `usage & 0xff` values are pinned by
+  `tests/rhythm-xsyd-service.test.mjs`.
+
+**Not validated on a physical WIN 68 HE MAX**: the captures in the repository
+come from the official driver, not from this service, and the 20–60 FPS budget
+over five `0x2A` reports per frame has not been measured on the board.
+
+## Native pipeline
 Windows 10 1703+/11 shared-mode event-driven WASAPI loopback captures the default
 playback endpoint or a fixed endpoint. Capture, sliding PCM window, DSP, rhythm
 rendering, encoding and HID writes run in the native helper. Node handles
