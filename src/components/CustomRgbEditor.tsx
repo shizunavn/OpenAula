@@ -99,6 +99,7 @@ export default function CustomRgbEditor({
   });
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [synced, setSynced] = useState(false);
+  const [mergedLayers, setMergedLayers] = useState<number | null>(null);
   const engineRef = useRef<CustomRgbEngine | null>(null);
   const streamerRef = useRef<XsydCustomRgbStreamer | null>(null);
   const streamingBusyRef = useRef(false);
@@ -119,6 +120,13 @@ export default function CustomRgbEditor({
   const live = applied && !demo;
   const disabled = busy || playback.busy;
   const layer = config.layers.find(l => l.id === active);
+  useEffect(() => {
+    if (mergedLayers === null) {
+      return;
+    }
+    const timer = setTimeout(() => setMergedLayers(null), 6000);
+    return () => clearTimeout(timer);
+  }, [mergedLayers]);
   const definition = layer ? CUSTOM_RGB_EFFECTS.find(e => e.id === layer.effect) : undefined;
   const metadata = layer ? RGB_EFFECT_METADATA[layer.effect] : undefined;
   const baseCatalog = isWin68 ? WIN68_KEY_RGB_MODES : KEY_RGB_MODES;
@@ -261,8 +269,76 @@ export default function CustomRgbEditor({
       layers
     });
   }
+  function mergePreset() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) {
+        return;
+      }
+      void file.text().then(text => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          input.value = '';
+          return;
+        }
+        const source = parsed && typeof parsed === 'object' && 'custom' in parsed ? (parsed as RgbProfile).custom : undefined;
+        // The export stamps the source board; a preset from the other keyboard
+        // merges its layers (key ids are filtered below) but not its base effect.
+        const sameModel = !!parsed && typeof parsed === 'object' && (parsed as { model?: unknown }).model === model;
+        // Onboard effects are device state, not part of a custom preset: only
+        // Custom Effects (the base effect and its layers) is merged. A preset from
+        // another keyboard model cannot contribute a base effect (onboard modes
+        // are model-specific), so only its layers are merged.
+        const incoming = restoreCustomRgb(source, value);
+        const seen = new Set<string>();
+        const keyIds = isWin68 ? heroLayout(model).keyIds : HERO68_KEY_IDS;
+        const normalized = (layer: CustomRgbLayer): CustomRgbLayer => ({
+          ...layer,
+          keys: layer.keys.filter(id => keyIds.includes(id))
+        });
+        const signature = (layer: CustomRgbLayer) => JSON.stringify({
+          ...layer,
+          id: '',
+          keys: [...layer.keys].sort()
+        });
+        for (const layer of config.layers) {
+          seen.add(signature(layer));
+        }
+        const added = incoming.layers.flatMap(layer => {
+          const next = normalized(layer);
+          if (seen.has(signature(next))) {
+            return [];
+          }
+          seen.add(signature(next));
+          return [{
+            ...next,
+            id: crypto.randomUUID()
+          }];
+        });
+        // Same model: adopt the incoming base effect so nothing in its Custom
+        // Effects is left behind. Other models: keep ours, their onboard mode
+        // does not exist here.
+        if (added.length || sameModel) {
+          change({
+            ...config,
+            baseEffect: sameModel ? incoming.baseEffect : config.baseEffect,
+            layers: [...config.layers, ...added].slice(0, MAX_RGB_LAYERS)
+          });
+        }
+        setMergedLayers(added.length);
+        input.value = '';
+      });
+    };
+    input.click();
+  }
   function exportPreset() {
     const blob = new Blob([JSON.stringify({
+      model,
       ...value,
       custom: config
     }, null, 2)], {
@@ -514,6 +590,10 @@ export default function CustomRgbEditor({
       {(status?.enabled || (isWin68 && applied)) && <button className="secondary-button" title={tr('Return to onboard')} disabled={disabled} onClick={() => void playback.onboard()}><Square size={14} />{tr('Back to onboard')}</button>}
     </RgbToolbarSlot>
     <RgbToolbarSlot visible={visible} notice>
+      {mergedLayers !== null && <div className="rgb-draft-recovery">
+        <span>{mergedLayers ? tr(`Merged ${mergedLayers} effect layer${mergedLayers === 1 ? '' : 's'}.`) : tr('Nothing merged: those effects are already here.')}</span>
+        <button className="secondary-button" onClick={() => setMergedLayers(null)}>{tr('Dismiss')}</button>
+      </div>}
       {playback.backup && <div className="rgb-draft-recovery">
         <span>{tr(playback.conflict ? 'Changes paused · restore your draft to continue' : 'Your previous draft is available.')}</span>
         <button className="secondary-button" disabled={disabled} onClick={playback.restoreDraft}>{tr('Restore draft')}</button>
@@ -611,6 +691,7 @@ export default function CustomRgbEditor({
               <div className="custom-rgb-actions">
                 {!adding && !choosing && <button className="secondary-button" disabled={disabled} onClick={() => setChoosing(true)}>{tr('Change effect')}</button>}
                 <button className="secondary-button" disabled={disabled} onClick={exportPreset} title={tr('Export')} aria-label={tr('Export')}><Download size={15} /></button>
+                <button className="secondary-button" disabled={disabled} onClick={mergePreset} title={tr('Merge effects from another preset')} aria-label={tr('Merge preset')}><Layers size={15} /></button>
               </div>
             </div>
           {(adding || choosing) && <section className="custom-rgb-selection">
@@ -672,11 +753,12 @@ export default function CustomRgbEditor({
                           multicolor: true
                         })}>{tr('Palette')}</button>
                       </div>
-                    </div>{layer.multicolor && <div className="custom-palette-options">{Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => <button key={id} disabled={disabled} aria-pressed={(layer.palette ?? metadata.defaults?.palette ?? 'aurora') === id} onClick={() => patchLayer({
+                    </div><div className="custom-palette-options">{Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => <button key={id} disabled={disabled || !layer.multicolor} aria-pressed={layer.multicolor && (layer.palette ?? metadata.defaults?.palette ?? 'aurora') === id} onClick={() => patchLayer({
+                        multicolor: true,
                         palette: (id as RgbGradientPalette)
                       })}><span style={{
                           background: `linear-gradient(90deg,${palette.colors.join(',')})`
-                        }} />{tr(palette.name)}</button>)}</div>}</> : <label className="custom-rgb-check"><input type="checkbox" checked={layer.multicolor} disabled={disabled} onChange={e => patchLayer({
+                        }} />{tr(palette.name)}</button>)}</div></> : <label className="custom-rgb-check"><input type="checkbox" checked={layer.multicolor} disabled={disabled} onChange={e => patchLayer({
                       multicolor: e.target.checked
                     })} /> {tr('Multicolor')}</label>}{(!metadata.gradient || !layer.multicolor) && <label className="custom-rgb-color">{tr('Effect color')}<RgbColorPicker label={tr('Layer color')} value={hex(layer.color)} disabled={disabled} onChange={v => patchLayer({
                       color: rgb(v)

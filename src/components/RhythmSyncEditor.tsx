@@ -306,7 +306,9 @@ export default function RhythmSyncEditor({
       publishRgbServiceStatus(result);
       setSession(result.sessionId ?? null);
       setDemo(false);
-      if (result.connected) {
+      // The service already drives WIN 68 HE MAX over the XSYD protocol and
+      // publishes its frames; only the HERO68 path needs the WebHID handoff.
+      if (result.connected && result.deviceModel !== 'win68HeMax' && result.deviceModel !== 'win68') {
         await hero68DeviceManager.connectViaService();
       }
     } catch (e) {

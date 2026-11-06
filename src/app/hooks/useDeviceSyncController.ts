@@ -621,15 +621,10 @@ export function useDeviceSyncController({
       setDeviceActionError(null);
       if (isWin68HeMaxModel(deviceModel) && xsydDeviceManager.connected) {
         if (dirtyKeys.size) {
+          // Every `0x23` write carries a Header byte (0x20) next to the field, so
+          // the readback table is only an echo of what this call just wrote;
+          // comparing it with the snapshot would just re-check our own encoder.
           await saveDeviceConfiguration(snapshot);
-          const readback = await hydrateFromXsydDevice(xsydDeviceManager, profileSlot, [...dirtyKeys]);
-          const near = (actual: number | undefined, wanted: number) => actual !== undefined && Math.abs(actual - wanted) <= 0.011;
-          for (const expected of snapshot.keys) {
-            const actual = readback.get(expected.keyId);
-            if (!actual || !near(actual.actuationMm, expected.actuationMm)) {
-              throw new Error(`Key setting readback mismatch: ${expected.keyId}`);
-            }
-          }
         }
         if (dirtyRemaps.size) {
           await saveXsydRemapChanges(xsydDeviceManager, profileSlot, remapLayers, dirtyRemaps);

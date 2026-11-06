@@ -200,7 +200,9 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
       publishRgbServiceStatus(result);
       queue.current?.observe(result);
       demo(false);
-      if (result.connected) {
+      // WIN 68 HE MAX keeps streaming straight to XSYD; the WebHID handoff
+      // would probe for a HERO68 UUID the device does not have.
+      if (result.connected && !xsydDeviceManager.connected && result.deviceModel !== 'win68HeMax' && result.deviceModel !== 'win68') {
         await hero68DeviceManager.connectViaService();
       }
       return token === action.current;
