@@ -6,9 +6,7 @@ import { hero68ProtocolEncoder } from './hero68Encoder';
 import { reportTrace } from './reportTrace';
 import type { DecodedReport } from './types';
 import { rgbService } from '../rgbService';
-import { detectHeroDeviceModelFromProductName, detectHeroDeviceModelFromUuid, HERO_PRODUCT_IDS, HERO_VENDOR_ID, heroDeviceModel, type HeroDeviceModelId } from '../../keyboard/devices';
-const HERO68_VENDOR_ID = HERO_VENDOR_ID;
-const HERO68_USAGE_PAGE = 0xff60;
+import { detectHeroDeviceFamily, detectHeroDeviceModelFromProductName, detectHeroDeviceModelFromUuid, HERO_USB_FILTERS, heroDeviceModel, type HeroDeviceModelId } from '../../keyboard/devices';
 const HERO68_USAGE = 0x0061;
 const HERO68_REPORT_ID = 0x09;
 interface HIDReportInfoLike {
@@ -101,21 +99,31 @@ function getHid(): NavigatorHIDLike | undefined {
     hid?: NavigatorHIDLike;
   }).hid;
 }
-function collectionMatches(collection: HIDCollectionInfoLike): boolean {
-  if (collection.usagePage === HERO68_USAGE_PAGE && collection.usage === HERO68_USAGE) {
+function collectionMatches(collection: HIDCollectionInfoLike, usagePages: readonly number[]): boolean {
+  if (usagePages.includes(collection.usagePage ?? -1) && collection.usage === HERO68_USAGE) {
     return true;
   }
-  return collection.children?.some(collectionMatches) ?? false;
+  return collection.children?.some(child => collectionMatches(child, usagePages)) ?? false;
 }
 function isHero68ControlDevice(device: HIDDeviceLike): boolean {
-  if (device.vendorId !== HERO68_VENDOR_ID || !HERO_PRODUCT_IDS.includes((device.productId as typeof HERO_PRODUCT_IDS[number]))) {
+  const filters = HERO_USB_FILTERS.filter(filter => filter.vendorId === device.vendorId && filter.productId === device.productId);
+  if (filters.length === 0) {
     return false;
   }
   if (!device.collections?.length) {
     return true;
   }
-  return device.collections.some(collectionMatches);
+  const usagePages = filters.map(filter => filter.usagePage);
+  return device.collections.some(collection => collectionMatches(collection, usagePages));
 }
+/**
+ * The WIN 68 HE MAX shares the HERO HID surface but not its command set, so it
+ * may be opened for identification and must never receive a report.
+ */
+function isUnsupportedCommandSet(device: HIDDeviceLike): boolean {
+  return detectHeroDeviceFamily(device.productName, device.vendorId, device.productId) === 'win68HeMax';
+}
+const MAX_HE_UNSUPPORTED_MESSAGE = 'AULA WIN 68 HE MAX detected: this board is not the HERO68 and OpenAula does not know its HID command set yet, so no settings were read or written.';
 function inferModelFromHidDevice(device: HIDDeviceLike): HeroDeviceModelId | null {
   const byName = detectHeroDeviceModelFromProductName(device.productName);
   if (byName) {
@@ -222,10 +230,11 @@ export class Hero68DeviceManager implements Hero68Transport {
       }
       if (devices.length === 0 && requestPermission) {
         const requested = await hid.requestDevice({
-          // Official AULA HUB asks by VID/PID (0x372e:0x103e wired + 0x372e:0x1000 2.4G receiver).
-          filters: HERO_PRODUCT_IDS.map(productId => ({
-            vendorId: HERO68_VENDOR_ID,
-            productId
+          // Official AULA HUB asks by VID/PID (0x372e:0x103e wired + 0x372e:0x1000 2.4G receiver),
+          // and the WIN 68 HE MAX by 0x1c4f:0xee88 / 0x1ca2:0x1901.
+          filters: HERO_USB_FILTERS.map(filter => ({
+            vendorId: filter.vendorId,
+            productId: filter.productId
           }))
         });
         devices = requested.filter(isHero68ControlDevice);
@@ -234,6 +243,11 @@ export class Hero68DeviceManager implements Hero68Transport {
         throw new Error(`Expected one authorized HERO68 control interface, found ${devices.length}.`);
       }
       const device = devices[0];
+      // Refuse before opening anything: the MAX speaks a different command set,
+      // so neither reading its UUID nor restoring defaults would be safe.
+      if (isUnsupportedCommandSet(device)) {
+        throw new Error(MAX_HE_UNSUPPORTED_MESSAGE);
+      }
       if (typeof location !== 'undefined' && location.protocol.startsWith('http')) {
         const service = await rgbService.status().catch(() => null);
         if (service?.enabled) {
@@ -425,11 +439,14 @@ export class Hero68DeviceManager implements Hero68Transport {
   }
   async send(report: Uint8Array): Promise<void> {
     reportTrace.add('out', report[0] ?? 0, report);
+    const device = this.#device;
+    if (!this.#viaService && device && isUnsupportedCommandSet(device)) {
+      throw new Error(MAX_HE_UNSUPPORTED_MESSAGE);
+    }
     if (this.#viaService) {
       await rgbService.deviceRequest(report);
       return;
     }
-    const device = this.#device;
     if (!device?.opened) {
       throw new Error('HERO68 is not connected');
     }

@@ -6,10 +6,12 @@ import hero84Thumb from '../../assets/hero84.png'
 const BUILTIN_THUMBNAILS: Readonly<Record<string, string>> = {
   hero68: hero68Thumb,
   hero84: hero84Thumb,
+  win68HeMax: hero68Thumb,
+  win68: hero68Thumb,
 }
 import { AppSelect } from './AppSelect'
 import { useT } from '../../i18n'
-import { HERO_DEVICE_MODELS, type HeroDeviceModel, type HeroDeviceModelId } from '../../keyboard/devices'
+import { ALL_DEVICE_MODELS, type HeroDeviceModel, type HeroDeviceModelId } from '../../keyboard/devices'
 import type { Hero68ConnectionState } from '../../protocol/hero68/webhid'
 import type { ProfileSlot } from '../../protocol/hero68/types'
 
@@ -59,10 +61,10 @@ export function DeviceConnectionPanel({
     ?? (deviceReadState === 'success' ? tr('Profile {slot} loaded from keyboard.', { slot: profileSlot }) : null)
 
   const deviceModelOptions = useMemo(
-    () => HERO_DEVICE_MODELS.map((option) => ({ value: option.id, label: option.label, meta: option.layout })),
+    () => ALL_DEVICE_MODELS.map((option) => ({ value: option.id, label: option.label, meta: option.layout })),
     [],
   )
-  // A connected keyboard decides the model by its UUID. Letting the selector
+  // A connected keyboard decides the model by its UUID or handshake. Letting the selector
   // switch it would write another model's key tables into this board.
   const modelLocked = deviceConnected || deviceConnectionState === 'connecting'
 
@@ -77,7 +79,7 @@ export function DeviceConnectionPanel({
           <AppSelect<HeroDeviceModelId>
             className="device-model-select"
             label={tr('Keyboard model')}
-            value={deviceModel}
+            value={deviceModel === 'win68' ? 'win68HeMax' : deviceModel}
             onChange={onSelectDeviceModel}
             options={deviceModelOptions}
             disabled={modelLocked}

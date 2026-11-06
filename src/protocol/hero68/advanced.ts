@@ -1,8 +1,9 @@
 import { advancedDelete, advancedDks, advancedEnd, advancedModTap, advancedMpt, advancedSocd, advancedTgl, readAdvancedKey, readAdvancedKeyPositions, selectProfile } from './commands';
-import { getBoard, type HeroDeviceModelId } from '../../keyboard/registry';
+import { getBoard, isWin68HeMaxModel, type HeroDeviceModelId } from '../../keyboard/registry';
 import { keyIdToPos, posToKeyId } from './keyPositions';
 import type { Hero68Requester } from './hero68Encoder';
 import type { DecodedReport, ProfileSlot } from './types';
+import { encodeXsydAdvancedBinding, saveXsydAdvancedBindings, validateXsydAdvanced, type XsydRequester } from '../xsyd/device';
 export type AdvancedKind = 'SOCD' | 'DKS' | 'MT' | 'TGL' | 'MPT' | 'END';
 export type AdvancedBinding = {
   id: string;
@@ -22,7 +23,8 @@ export const ADVANCED_KINDS: AdvancedKind[] = ['SOCD', 'DKS', 'MT', 'TGL', 'MPT'
 export const ADVANCED_LIMIT = 40;
 const u16 = (d: Uint8Array, i: number) => d[i] << 8 | d[i + 1];
 const u32 = (d: Uint8Array, i: number) => d[i] * 0x1000000 + (d[i + 1] << 16) + (d[i + 2] << 8) + d[i + 3] >>> 0;
-export function newAdvanced(kind: AdvancedKind, keys: string[]): AdvancedBinding {
+export function newAdvanced(kind: AdvancedKind, keys: string[], model?: HeroDeviceModelId): AdvancedBinding {
+  const isMax = isWin68HeMaxModel(model);
   return {
     id: keys[0],
     kind,
@@ -30,11 +32,15 @@ export function newAdvanced(kind: AdvancedKind, keys: string[]): AdvancedBinding
     actions: kind === 'DKS' ? [4, 22, 7, 9] : kind === 'MPT' ? [4, 22, 7] : kind === 'MT' ? [4, 22] : [4],
     thresholds: kind === 'MPT' ? [1, 2, 3] : [1, 3, 3, 1],
     states: [[10, 0, 0, 0], [0, 10, 0, 0], [0, 0, 10, 0], [0, 0, 0, 10]],
-    delay: 300,
-    mode: 1
+    delay: 200,
+    mode: isMax && kind === 'SOCD' ? 0 : 1
   };
 }
 export function validateAdvanced(bindings: AdvancedBinding[], model?: HeroDeviceModelId) {
+  if (isWin68HeMaxModel(model)) {
+    validateXsydAdvanced(bindings);
+    return;
+  }
   const limit = model ? getBoard(model).capabilities.maxAdvancedBindings : ADVANCED_LIMIT;
   const maxTravel = model ? getBoard(model).capabilities.maxTravelMm : 3.4;
   if (bindings.length > limit) {
@@ -91,6 +97,9 @@ export function validateAdvanced(bindings: AdvancedBinding[], model?: HeroDevice
   }
 }
 export function advancedPacket(b: AdvancedBinding, model?: HeroDeviceModelId): Uint8Array {
+  if (isWin68HeMaxModel(model)) {
+    return encodeXsydAdvancedBinding(b);
+  }
   validateAdvanced([b], model);
   const pos = keyIdToPos(b.keys[0], model);
   const depths = b.thresholds.map(v => Math.round(v * 100));
@@ -250,10 +259,14 @@ export function mergeAdvanced(fresh: AdvancedBinding[], draft?: AdvancedBinding[
   return result;
 }
 /** Read before writing; preserve unedited/unknown bindings and verify final readback. */
-export async function saveAdvancedBindings(requester: Hero68Requester, slot: ProfileSlot, draft: AdvancedBinding[], baseline: AdvancedBinding[], model?: HeroDeviceModelId) {
+export async function saveAdvancedBindings(requester: Hero68Requester | XsydRequester, slot: ProfileSlot, draft: AdvancedBinding[], baseline: AdvancedBinding[], model?: HeroDeviceModelId) {
+  if (isWin68HeMaxModel(model)) {
+    return saveXsydAdvancedBindings(requester as XsydRequester, slot, draft, baseline);
+  }
+  const heroRequester = requester as Hero68Requester;
   validateAdvanced(draft, model);
-  await requester.request(selectProfile(slot), 0x10, 0);
-  const fresh = await readAdvancedBindings(requester, model);
+  await heroRequester.request(selectProfile(slot), 0x10, 0);
+  const fresh = await readAdvancedBindings(heroRequester, model);
   if (!advancedEqual(fresh, baseline)) {
     throw new Error('Advanced Keys changed on the keyboard. Read this profile again before saving.');
   }
@@ -263,16 +276,16 @@ export async function saveAdvancedBindings(requester: Hero68Requester, slot: Pro
         throw new Error('Unknown firmware bindings cannot be removed here.');
       }
       for (const key of old.keys) {
-        await requester.request(advancedDelete(0, keyIdToPos(key, model)), 0x12, 0, 1000);
+        await heroRequester.request(advancedDelete(0, keyIdToPos(key, model)), 0x12, 0, 1000);
       }
     }
   }
   for (const b of draft) {
     if (!baseline.some(old => signature(old) === signature(b))) {
-      await requester.request(advancedPacket(b, model), 0x12, 0, 1000);
+      await heroRequester.request(advancedPacket(b, model), 0x12, 0, 1000);
     }
   }
-  const verified = await readAdvancedBindings(requester, model);
+  const verified = await readAdvancedBindings(heroRequester, model);
   if (!advancedEqual(verified, draft)) {
     throw new Error('Advanced Keys readback did not match. Read the profile before retrying.');
   }
