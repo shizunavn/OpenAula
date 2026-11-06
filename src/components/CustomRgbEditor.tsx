@@ -134,6 +134,14 @@ export default function CustomRgbEditor({
   const auroraBase = config.baseEffect?.effect === 'aurora';
   const perKey = active === 'base' && !adding && !auroraBase && (isWin68 ? isWin68PerKeyMode(config.base.mode) : config.base.mode === 19);
   const selectable = !adding && (perKey || !!layer);
+  // Cross-check the board we drive against the other board's catalog: per-key
+  // modes are key-map specific, so they never cross over.
+  const otherKeyModes: readonly { name: string; perKey?: boolean }[] = isWin68 ? KEY_RGB_MODES : WIN68_KEY_RGB_MODES;
+  const boardKeyModes: readonly { name: string }[] = isWin68 ? WIN68_KEY_RGB_MODES : KEY_RGB_MODES;
+  const foreignEffects = otherKeyModes
+    .filter(item => !item.perKey)
+    .map(item => item.name)
+    .filter(name => !boardKeyModes.some(mine => mine.name === name));
   const samplePreview = !auroraBase && mode.reactive || config.layers.some(layer => layer.enabled && ['pressure-wave', 'jelly', 'ripple', 'touch', 'reaction', 'aoe', 'mixing', 'trail', 'rt', 'afterglow'].includes(layer.effect));
   const effectiveBaseBrightness = isWin68 ? normalizeXsydBrightness(config.base.brightness) : config.base.brightness;
   const darkReason = auroraBase
@@ -703,6 +711,12 @@ export default function CustomRgbEditor({
                 }}>{tr('Cancel')}</button>
               </div>
               <div className="custom-rgb-effect-grid">{active === 'base' && !adding ? <><button disabled={disabled} aria-pressed={auroraBase} onClick={() => chooseBase('aurora')}><Sparkles size={15} />{tr('Aurora')}</button>{baseCatalog.map(item => <button key={item.id} disabled={disabled} aria-pressed={!auroraBase && config.base.mode === item.id} onClick={() => chooseBase(item.id)}><Waves size={15} />{tr(item.name)}</button>)}</> : CUSTOM_RGB_EFFECTS.filter(effect => effect.id !== 'aurora' || layer?.effect === 'aurora' && !adding).map(effect => <button key={effect.id} disabled={disabled} aria-pressed={!adding && layer?.effect === effect.id} onClick={() => choose(effect.id)}><Sparkles size={15} />{tr(effect.name)}</button>)}</div>
+            </section>}
+          {(adding || choosing) && !adding && active === 'base' && foreignEffects.length > 0 && <section className="custom-rgb-selection">
+              <div className="custom-inspector-heading">
+                <h3>{tr('Only on the other board')}</h3>
+              </div>              <p className="custom-rgb-description">{tr('Wonder which effect is missing? These belong to the other board firmware and cannot be added to this one.')}</p>
+              <div className="custom-rgb-effect-grid">{foreignEffects.map(name => <button key={name} disabled title={tr('Belongs to the other board')}><Waves size={15} />{tr(name)}</button>)}</div>
             </section>}
           {!adding && !choosing && <div className="custom-rgb-parameters"><h3>{active === 'base' ? tr('Base parameters') : tr('Effect parameters')}</h3>{active === 'base' ? <><Slider label="Brightness" value={isWin68 ? effectiveBaseBrightness * 25 : config.base.brightness * 5} min={0} max={100} step={isWin68 ? 25 : 5} unit="%" disabled={disabled} onChange={v => base({
                   brightness: isWin68 ? v / 25 : v / 5

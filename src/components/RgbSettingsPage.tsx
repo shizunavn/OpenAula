@@ -495,16 +495,15 @@ function ActiveRgbSettingsPage({
                     aria-pressed={selectedSlot}
                     title={tr(slotInfo.name)}
                     onClick={() => {
-                      if (slotInfo.index === 0) {
-                        change({ mix: true, colorIndex: 0 });
-                      } else {
-                        const nextRgb = xsydRgbForColorIndex(slotInfo.index, win68Palette);
-                        change({
-                          mix: false,
-                          colorIndex: slotInfo.index,
-                          rgb: nextRgb,
-                        });
-                      }
+                      // `0x18` keeps the last single color in the zone it last
+                      // held, so a single-color draft must reset to Multicolor
+                      // explicitly; leaving the stale flags plus colorIndex 0
+                      // writes a black slot and the LEDs go dark.
+                      change({
+                        mix: true,
+                        colorIndex: 0,
+                        rgb: [...XSYD_COLOR_SLOTS[0].rgb] as RgbColor
+                      });
                     }}
                   >
                     {slotRgb ? (
