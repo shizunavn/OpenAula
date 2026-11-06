@@ -616,7 +616,11 @@ function ActiveRgbSettingsPage({
                     title={tr(slotInfo.name)}
                     onClick={() => {
                       if (slotInfo.index === 0) {
-                        change({ mix: true, colorIndex: 0 });
+                        // `0x18` keeps the last single color in the zone it last
+                        // held, so a draft switched to a single color must reset
+                        // to Multicolor explicitly; leaving the stale flags plus
+                        // colorIndex 0 writes that color into slot 0 (LEDs off).
+                        change({ mix: true, colorIndex: 0, rgb: [...XSYD_COLOR_SLOTS[0].rgb] as RgbColor });
                       } else {
                         const nextRgb = xsydRgbForColorIndex(slotInfo.index, paletteSlots);
                         change({

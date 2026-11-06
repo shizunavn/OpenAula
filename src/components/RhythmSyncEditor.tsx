@@ -14,11 +14,59 @@ import { BRAND } from '../brand';
 import { hero68DeviceManager } from '../protocol/hero68/webhid';
 import { xsydDeviceManager, XsydCustomRgbStreamer } from '../protocol/xsyd/device';
 import { hero68HallStream } from '../protocol/hero68/hallStream';
+import { acceptsRgbPreviewKey } from '../keyboard/rgbPreviewInput';
+import { publishLightingFrame, type LightingFrame } from '../keyboard/lightingPreviewBus';
 import { useI18n } from '../i18n';
 import { AppSelect } from '../app/components/AppSelect';
 import './RhythmSyncEditor.css';
 const draftKey = `${BRAND.storagePrefix}:rhythm-draft:v1`;
 const darkKeys = Object.fromEntries(heroLayout('hero84').keyIds.map(id => [id, '#161a1e']));
+
+// WIN 68 HE MAX never reaches the native rhythm DSP: the service answers
+// `unsupported` for every XSYD command it does not implement. Its lighting
+// does go over WebHID (`0x2A` per-key colour), so the editor renders Rhythm on
+// this side and streams the frames through the same path as Custom RGB.
+// Frame rate is capped because `0x2A` writes the whole key map per frame.
+const XSYD_RHYTHM_FPS = 20;
+
+function useXsydRhythmStream(active: boolean, config: RhythmConfiguration, onFrame: (frame: LightingFrame) => void) {
+  const configRef = useRef(config);
+  configRef.current = config;
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const streamer = new XsydCustomRgbStreamer();
+    let running = true;
+    let busy = false;
+    let last = 0;
+    const startedAt = performance.now();
+    async function tick() {
+      if (!running) {
+        return;
+      }
+      const now = performance.now();
+      if (now - last >= 1000 / XSYD_RHYTHM_FPS) {
+        last = now;
+        const frame = rhythmDemo(configRef.current, now - startedAt, 'win68HeMax').keys;
+        onFrame(frame);
+        if (!busy && xsydDeviceManager.connected) {
+          busy = true;
+          await streamer.pushFrameDelta(xsydDeviceManager, frame).catch(() => {});
+          busy = false;
+        }
+      }
+      if (running) {
+        requestAnimationFrame(() => void tick());
+      }
+    }
+    void tick();
+    return () => {
+      running = false;
+    };
+  }, [active, onFrame]);
+}
+
 function readDraft() {
   try {
     return restoreRhythm(JSON.parse(localStorage.getItem(draftKey) ?? 'null'));
@@ -43,7 +91,8 @@ function RhythmPreview({
   live,
   paused,
   sessionId,
-  advancedBindings
+  advancedBindings,
+  xsydRhythm = false
 }: {
   configuration: RhythmConfiguration;
   demo: boolean;
@@ -51,6 +100,7 @@ function RhythmPreview({
   paused: boolean;
   sessionId?: string;
   advancedBindings: AdvancedBinding[];
+  xsydRhythm?: boolean;
 }) {
   const {
     tr
@@ -63,7 +113,7 @@ function RhythmPreview({
   const latest = useRef<RgbServiceFrame | null>(null);
   const currentConfig = useRef(configuration);
   currentConfig.current = configuration;
-  const simulate = demo || !live;
+  const simulate = (demo || !live) && !xsydRhythm;
   useEffect(() => {
     let handle = 0;
     let close: (() => void) | undefined;
@@ -76,7 +126,16 @@ function RhythmPreview({
         return;
       }
       if (!document.hidden) {
-        if (simulate) {
+        if (xsydRhythm) {
+          const sample = rhythmDemo(currentConfig.current, reduced.matches ? 0 : now - start, 'win68HeMax');
+          setFrame({
+            enabled: true,
+            connected: xsydDeviceManager.connected,
+            keys: sample.keys,
+            side: sample.side,
+            audioLevel: sample.level
+          });
+        } else if (simulate) {
           const sample = rhythmDemo(currentConfig.current, reduced.matches ? 0 : now - start);
           setFrame({
             enabled: false,
@@ -110,14 +169,14 @@ function RhythmPreview({
         }
       });
     }
-    if (!simulate) {
+    if (!simulate && !xsydRhythm) {
       setFrame({
         enabled: false,
         connected: false,
         keys: darkKeys
       });
     }
-    if (!paused && (simulate || live)) {
+    if (!paused && (simulate || live || xsydRhythm)) {
       handle = requestAnimationFrame(render);
     }
     return () => {
@@ -126,8 +185,8 @@ function RhythmPreview({
       close?.();
       latest.current = null;
     };
-  }, [simulate, live, paused, sessionId]);
-  return <RgbPreviewPanel source={tr(demo ? 'Simulation' : live ? 'Live · USB output' : 'Draft preview')} hint={tr(live ? frame.connected ? 'Keyboard connected' : 'Waiting for keyboard' : 'Side LEDs retain onboard lighting')} footer={<div className="rhythm-meter">
+  }, [simulate, live, paused, sessionId, xsydRhythm]);
+  return <RgbPreviewPanel source={tr(xsydRhythm ? 'Live · USB output' : demo ? 'Simulation' : live ? 'Live · USB output' : 'Draft preview')} hint={tr(live || xsydRhythm ? frame.connected ? 'Keyboard connected' : 'Waiting for keyboard' : 'Side LEDs retain onboard lighting')} footer={<div className="rhythm-meter">
       <AudioLines size={16} />
       <meter aria-label={tr('Audio level')} min={0} max={1} value={Math.min(1, frame.audioLevel ?? 0)} />
       <span>{Math.round((frame.audioLevel ?? 0) * 100)}%</span>
@@ -156,22 +215,32 @@ export default function RhythmSyncEditor({
     checking,
     reconnecting
   } = useRgbServiceState();
+  const previewStream = useRef<LightingFrame | null>(null);
   const [config, setConfig] = useState<RhythmConfiguration>(readDraft);
   const [demo, setDemo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [endpoints, setEndpoints] = useState<AudioEndpoint[]>([]);
   const [session, setSession] = useState<string | null>(null);
+  // WIN 68 HE MAX has no native rhythm DSP: the frames are rendered here and
+  // written over WebHID, so its "session" is local and has no service id.
+  const [xsydRhythm, setXsydRhythm] = useState(false);
   const action = useRef(0);
   const current = useRef(config);
   const queue = useRef<ReturnType<typeof latestUpdates<RhythmConfiguration>> | null>(null);
   current.current = config;
   const compatible = !!status && (status.apiVersion ?? 0) >= 5 && status.supportedModes?.includes('rhythm');
-  const locked = !demo && (checking || !compatible);
+  const locked = !demo && !xsydRhythm && (checking || !compatible);
   const live = status?.mode === 'rhythm' && status.enabled;
-  const applied = !!session && status?.sessionId === session && live;
+  const applied = xsydRhythm || !!session && status?.sessionId === session && live;
   const sideSupported = config.sideMode === 500 || !!status?.supportedRhythmSideModes?.includes(config.sideMode);
   const keySupported = status?.supportedRhythmModes?.includes(config.keyMode) ?? true;
+  // One render loop for both ends of the wire: the preview and the frames the
+  // streamer writes are the same samples.
+  useXsydRhythmStream(xsydRhythm, config, next => {
+    previewStream.current = next;
+    publishLightingFrame(next);
+  });
   // Rejoin the service's current configuration. Merely opening this editor never
   // writes the old local draft or restarts audio capture.
   useEffect(() => {
@@ -216,7 +285,7 @@ export default function RhythmSyncEditor({
     };
   }, [compatible]);
   useEffect(() => {
-    if (!applied || demo) {
+    if (!applied || demo || xsydRhythm) {
       queue.current?.close();
       queue.current = null;
       return;
@@ -245,7 +314,7 @@ export default function RhythmSyncEditor({
         queue.current = null;
       }
     };
-  }, [applied, session, demo]);
+  }, [applied, session, demo, xsydRhythm]);
   useEffect(() => () => {
     action.current++;
     queue.current?.close();
@@ -272,6 +341,32 @@ export default function RhythmSyncEditor({
   }
   async function apply() {
     if (busy) {
+      return;
+    }
+    // WIN 68 HE MAX: no native rhythm command exists for XSYD, so the service
+    // would answer `unsupported`. Render here and stream over WebHID instead.
+    if (xsydDeviceManager.connected) {
+      const token = ++action.current;
+      setBusy(true);
+      setError(null);
+      queue.current?.close();
+      setSession(null);
+      setDemo(false);
+      setXsydRhythm(true);
+      try {
+        await rgbService.stop().then(publishRgbServiceStatus).catch(() => {});
+        if (hero68DeviceManager.connected && !hero68DeviceManager.viaService) {
+          await hero68DeviceManager.disconnect();
+        }
+      } catch (e) {
+        if (token === action.current) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (token === action.current) {
+          setBusy(false);
+        }
+      }
       return;
     }
     if (!compatible) {
@@ -315,13 +410,10 @@ export default function RhythmSyncEditor({
       publishRgbServiceStatus(result);
       setSession(result.sessionId ?? null);
       setDemo(false);
-      if (result.connected && !xsydDeviceManager.connected) {
-        if (await xsydDeviceManager.hasAuthorizedDevice()) {
-          await xsydDeviceManager.connect(false).catch(() => {});
-        }
-        if (!xsydDeviceManager.connected) {
-          await hero68DeviceManager.connectViaService();
-        }
+      // The service already drives WIN 68 HE MAX over the XSYD protocol and
+      // publishes its frames; only the HERO68 path needs the WebHID handoff.
+      if (result.connected && result.deviceModel !== 'win68HeMax' && result.deviceModel !== 'win68' && !xsydDeviceManager.connected) {
+        await hero68DeviceManager.connectViaService();
       }
     } catch (e) {
       if (token === action.current) {
@@ -342,6 +434,7 @@ export default function RhythmSyncEditor({
     setError(null);
     queue.current?.close();
     setSession(null);
+    setXsydRhythm(false);
     try {
       const result = await rgbService.stop();
       if (token === action.current) {
@@ -360,9 +453,9 @@ export default function RhythmSyncEditor({
   const selected = RHYTHM_MODES.find(mode => mode.id === config.keyMode)!;
   return <div className="custom-rgb-gate" hidden={!visible}>
     <RgbToolbarSlot visible={visible}>
-      <span className="rgb-sync-note" data-attention={reconnecting || !applied && live || undefined} role="status">{reconnecting ? tr('Reconnecting to background app…') : applied ? tr('Auto sync') : live ? tr('Joining running Rhythm…') : demo ? tr('Simulation') : null}</span>
+      <span className="rgb-sync-note" data-attention={reconnecting || !applied && live || undefined} role="status">{reconnecting ? tr('Reconnecting to background app…') : xsydRhythm ? tr('Live · USB output') : applied ? tr('Auto sync') : live ? tr('Joining running Rhythm…') : demo ? tr('Simulation') : null}</span>
       {!applied && <button type="button" className="apply-button" onClick={() => void apply()} disabled={busy || checking || locked || compatible && (!sideSupported || !keySupported)}><Play size={15} />{busy ? tr('Working…') : tr('Start Rhythm')}</button>}
-      {status?.enabled && <button type="button" className="secondary-button" title={tr('Return to onboard')} disabled={busy} onClick={() => void stop()}><Square size={14} /> {tr('Back to onboard')}</button>}
+      {(status?.enabled || xsydRhythm) && <button type="button" className="secondary-button" title={tr('Return to onboard')} disabled={busy} onClick={() => void stop()}><Square size={14} /> {tr('Back to onboard')}</button>}
     </RgbToolbarSlot>
     <RgbToolbarSlot visible={visible} notice>
       {live && status?.configurationBusy && <p className="rgb-inline-note" role="status">{tr('Saving keyboard configuration · lighting paused')}</p>}
@@ -372,7 +465,7 @@ export default function RhythmSyncEditor({
       {live && status?.audioError && <p className="stream-error" role="alert">{status.audioError}</p>}
     </RgbToolbarSlot>
     <section className={`rhythm-editor custom-rgb-content${locked ? ' is-locked' : ''}`} inert={locked} aria-label="Rhythm Sync">
-    <RhythmPreview configuration={config} demo={demo} live={!!live} paused={locked || !visible} sessionId={status?.sessionId} advancedBindings={advancedBindings} />
+    <RhythmPreview configuration={config} demo={demo} live={!!live} xsydRhythm={xsydRhythm} paused={locked || !visible} sessionId={status?.sessionId} advancedBindings={advancedBindings} />
     <div className="rhythm-layout"><div className="settings-card rhythm-modes"><h3>{tr('Key rhythm')}</h3><div className="rhythm-mode-grid">{RHYTHM_MODES.map(mode => <button type="button" key={mode.id} className={config.keyMode === mode.id ? 'active' : ''} aria-pressed={config.keyMode === mode.id} onClick={() => change({
               keyMode: mode.id
             })} disabled={busy || !demo && !(status?.supportedRhythmModes?.includes(mode.id) ?? true)} title={!demo && !(status?.supportedRhythmModes?.includes(mode.id) ?? true) ? tr('Update the background app to use this rhythm mode.') : undefined}><Thumbnail shape={mode.shape} /><strong>{tr(mode.name)}</strong><span>{tr(mode.description)}</span></button>)}</div>
