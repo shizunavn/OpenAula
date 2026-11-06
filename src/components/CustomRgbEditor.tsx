@@ -6,9 +6,10 @@ import RgbKeyPaintTools, { RgbKeySelectionTools } from './RgbKeyPaintTools';
 import { RgbPreviewPanel, RgbToolbarSlot } from './RgbWorkspace';
 import { CUSTOM_RGB_EFFECTS, CustomRgbEngine, MAX_RGB_LAYERS, RGB_EFFECT_METADATA, RGB_GRADIENT_PALETTES, createRgbLayer, restoreCustomRgb, type CustomRgbConfiguration, type CustomRgbEffect, type CustomRgbLayer, type RgbGradientPalette } from '../keyboard/customRgb';
 import { HERO68_KEY_IDS } from '../keyboard/hero68Layout';
+import { isWin68HeMaxModel } from '../keyboard/devices';
 import { heroLayout } from '../keyboard/layout';
 import { DeviceModelContext } from '../app/DeviceModelContext';
-import { KEY_RGB_MODES } from '../keyboard/rgbCatalog';
+import { isWin68PerKeyMode, KEY_RGB_MODES, WIN68_KEY_RGB_MODES } from '../keyboard/rgbCatalog';
 import { acceptsRgbPreviewKey } from '../keyboard/rgbPreviewInput';
 import { rgbPreviewDarkReason } from '../keyboard/rgbPreviewDefaults';
 import type { LightingFrame } from '../keyboard/lightingPreviewBus';
@@ -16,6 +17,7 @@ import type { RgbColor, RgbProfile } from '../protocol/hero68/rgb';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import { rgbService } from '../protocol/rgbService';
 import { refreshRgbService } from '../protocol/rgbServiceState';
+import { normalizeXsydBrightness, useXsydDevice, xsydDeviceManager, XsydCustomRgbStreamer } from '../protocol/xsyd/device';
 import type { useCustomRgbPlayback } from './useCustomRgbPlayback';
 import { useI18n } from '../i18n';
 const hex = (color: RgbColor) => '#' + color.map(c => c.toString(16).padStart(2, '0')).join('');
@@ -76,6 +78,9 @@ export default function CustomRgbEditor({
     tr
   } = useI18n();
   const model = useContext(DeviceModelContext);
+  const isWin68 = isWin68HeMaxModel(model);
+  const xsydSnap = useXsydDevice();
+  const xsydConnected = isWin68 && xsydSnap.state === 'connected';
   const modelKeyIds = useMemo(() => heroLayout(model).keyIds, [model]);
   const config = restoreCustomRgb(value.custom, value);
   const [active, setActive] = useState('base');
@@ -95,6 +100,8 @@ export default function CustomRgbEditor({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [synced, setSynced] = useState(false);
   const engineRef = useRef<CustomRgbEngine | null>(null);
+  const streamerRef = useRef<XsydCustomRgbStreamer | null>(null);
+  const streamingBusyRef = useRef(false);
   const replayRef = useRef(-1);
   const {
     status,
@@ -107,19 +114,31 @@ export default function CustomRgbEditor({
     playback.demo(enabled);
     setDemo(enabled);
   }
-  const locked = !demo && (checking || !status);
+  const locked = !isWin68 && !demo && (checking || !status);
   const paused = !visible || locked;
   const live = applied && !demo;
   const disabled = busy || playback.busy;
   const layer = config.layers.find(l => l.id === active);
   const definition = layer ? CUSTOM_RGB_EFFECTS.find(e => e.id === layer.effect) : undefined;
   const metadata = layer ? RGB_EFFECT_METADATA[layer.effect] : undefined;
-  const mode = KEY_RGB_MODES.find(m => m.id === config.base.mode)!;
+  const baseCatalog = isWin68 ? WIN68_KEY_RGB_MODES : KEY_RGB_MODES;
+  const mode = baseCatalog.find(m => m.id === config.base.mode) ?? baseCatalog[0]!;
   const auroraBase = config.baseEffect?.effect === 'aurora';
-  const perKey = active === 'base' && !adding && !auroraBase && config.base.mode === 19;
+  const perKey = active === 'base' && !adding && !auroraBase && (isWin68 ? isWin68PerKeyMode(config.base.mode) : config.base.mode === 19);
   const selectable = !adding && (perKey || !!layer);
   const samplePreview = !auroraBase && mode.reactive || config.layers.some(layer => layer.enabled && ['pressure-wave', 'jelly', 'ripple', 'touch', 'reaction', 'aoe', 'mixing', 'trail', 'rt', 'afterglow'].includes(layer.effect));
-  const darkReason = auroraBase ? config.base.brightness === 0 ? 'Brightness is 0%.' : !config.base.mix && config.base.rgb.every(c => c === 0) ? 'Single color is black (#000000).' : null : rgbPreviewDarkReason(config.base);
+  const effectiveBaseBrightness = isWin68 ? normalizeXsydBrightness(config.base.brightness) : config.base.brightness;
+  const darkReason = auroraBase
+    ? effectiveBaseBrightness === 0
+      ? 'Brightness is 0%.'
+      : !config.base.mix && config.base.rgb.every(c => c === 0)
+        ? 'Single color is black (#000000).'
+        : null
+    : rgbPreviewDarkReason(
+        isWin68 ? { ...config.base, brightness: effectiveBaseBrightness } : config.base,
+        false,
+        isWin68
+      );
   function animation(patch: Partial<NonNullable<CustomRgbConfiguration['baseEffect']>>) {
     if (config.baseEffect) {
       change({
@@ -217,7 +236,7 @@ export default function CustomRgbEditor({
         ...config.base,
         rgb: layer.color,
         mix: layer.multicolor,
-        brightness: Math.round(layer.opacity / 5)
+        brightness: isWin68 ? Math.round(layer.opacity / 25) : Math.round(layer.opacity / 5)
       },
       baseEffect: {
         effect: 'aurora',
@@ -252,16 +271,16 @@ export default function CustomRgbEditor({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'hero68-custom-rgb.json';
+    link.download = isWin68 ? 'win68-custom-rgb.json' : 'hero68-custom-rgb.json';
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   useEffect(() => {
     engineRef.current?.configure(value);
-    if (engineRef.current && !live && !paused) {
+    if (engineRef.current && (!live || isWin68) && !paused) {
       setFrame(engineRef.current.frame());
     }
-  }, [value, live, paused]);
+  }, [value, live, paused, isWin68]);
   useEffect(() => {
     if (active !== 'base' && !config.layers.some(l => l.id === active)) {
       setActive('base');
@@ -277,6 +296,10 @@ export default function CustomRgbEditor({
     }
   }, [visible, live, sampleSignature]);
   useEffect(() => {
+    if (isWin68) {
+      setSynced(Boolean(live && xsydConnected));
+      return;
+    }
     setSynced(false);
     if (!live || !visible) {
       return;
@@ -311,15 +334,18 @@ export default function CustomRgbEditor({
       disposed = true;
       close();
     };
-  }, [live, session, visible]);
+  }, [live, session, visible, isWin68, xsydConnected]);
   useEffect(() => {
-    if (paused || live) {
+    if (paused || (live && !isWin68)) {
       return;
     }
-    const engine = replayRef.current === replay && engineRef.current ? engineRef.current : new CustomRgbEngine(value);
+    const engine = replayRef.current === replay && engineRef.current ? engineRef.current : new CustomRgbEngine(value, model);
     replayRef.current = replay;
     engineRef.current = engine;
     engine.configure(value);
+    if (isWin68 && !streamerRef.current) {
+      streamerRef.current = new XsydCustomRgbStreamer();
+    }
     let handle = 0;
     let previous = 0;
     let elapsed = Math.max(110, engine.milliseconds);
@@ -332,7 +358,8 @@ export default function CustomRgbEditor({
       id: string;
       at: number;
     }[] = [];
-    const sampleKeys = [...new Set([...HERO68_KEY_IDS.slice(17, 22), ...config.layers.filter(layer => layer.enabled).flatMap(layer => layer.effect === 'mixing' ? layer.keys.filter(id => ['ArrowLeft', 'ArrowDown', 'ArrowRight'].includes(id)) : layer.keys.slice(0, 1))])].slice(0, 13);
+    const baseSampleKeys = isWin68 ? modelKeyIds : HERO68_KEY_IDS;
+    const sampleKeys = [...new Set([...baseSampleKeys.slice(17, 22), ...config.layers.filter(layer => layer.enabled).flatMap(layer => layer.effect === 'mixing' ? layer.keys.filter(id => ['ArrowLeft', 'ArrowDown', 'ArrowRight'].includes(id)) : layer.keys.slice(0, 1))])].slice(0, 13);
     const samples = replay > 0 ? sampleKeys.flatMap((id, i) => [{
       id,
       at: elapsed + 150 + i * 140,
@@ -347,7 +374,17 @@ export default function CustomRgbEditor({
     const render = () => {
       try {
         engine.advance(elapsed);
-        setFrame(engine.frame());
+        const nextFrame = engine.frame();
+        setFrame(nextFrame);
+        if (isWin68 && live && xsydDeviceManager.connected && !streamingBusyRef.current) {
+          streamingBusyRef.current = true;
+          void streamerRef.current
+            ?.pushFrameDelta(xsydDeviceManager, nextFrame.keys)
+            .catch(() => {})
+            .finally(() => {
+              streamingBusyRef.current = false;
+            });
+        }
       } catch (reason) {
         setPreviewError(String(reason));
       }
@@ -451,7 +488,7 @@ export default function CustomRgbEditor({
       document.removeEventListener('visibilitychange', resume);
       reduced.removeEventListener('change', resume);
     };
-  }, [replay, paused, live]);
+  }, [replay, paused, live, isWin68, model, modelKeyIds]);
   function toggle(id: string) {
     if (locked || !selectable) {
       return;
@@ -469,12 +506,12 @@ export default function CustomRgbEditor({
   return <div className="custom-rgb-gate" hidden={!visible}>
     <RgbToolbarSlot visible={visible}>
       <span className="rgb-sync-note" data-attention={playback.reconnecting || playback.conflict || !applied && status?.mode === 'custom' || undefined} role="status">{playback.reconnecting ? tr('Reconnecting to background app…') : playback.conflict ? tr('Changes paused') : applied ? tr(playback.syncing ? 'Syncing changes…' : 'Auto sync') : status?.mode === 'custom' ? tr('Joining running Custom…') : demo ? tr('Simulation') : null}</span>
-      {!applied && <button className="apply-button" disabled={disabled || checking || locked} onClick={() => void playback.start().then(ok => {
+      {!applied && <button className="apply-button" disabled={disabled || (!isWin68 && (checking || locked))} onClick={() => void playback.start().then(ok => {
         if (ok) {
           previewDemo(false);
         }
-      })}><Play size={15} />{playback.busy ? tr('Working…') : updateRequired ? tr('Update app') : tr('Start Custom')}</button>}
-      {status?.enabled && <button className="secondary-button" title={tr('Return to onboard')} disabled={disabled} onClick={() => void playback.onboard()}><Square size={14} />{tr('Back to onboard')}</button>}
+      })}><Play size={15} />{playback.busy ? tr('Working…') : !isWin68 && updateRequired ? tr('Update app') : tr('Start Custom')}</button>}
+      {(status?.enabled || (isWin68 && applied)) && <button className="secondary-button" title={tr('Return to onboard')} disabled={disabled} onClick={() => void playback.onboard()}><Square size={14} />{tr('Back to onboard')}</button>}
     </RgbToolbarSlot>
     <RgbToolbarSlot visible={visible} notice>
       {playback.backup && <div className="rgb-draft-recovery">
@@ -511,10 +548,10 @@ export default function CustomRgbEditor({
           </div>
         </div> : undefined}>
         <Hero68Preview advancedBindings={advancedBindings} showAdvancedIcons={false} selectedKeys={selectable ? selected : new Set()} onToggleKey={toggle} lightingFrame={frame.keys} lightingSource="local" selectionEnabled={selectable} />
-        <div className="rgb-side-preview" aria-label={tr('18 side light positions')}>{(frame.side.length ? frame.side : Array(18).fill('#35393b')).map((color, i) => <span key={i} style={{
+        {!isWin68 && <div className="rgb-side-preview" aria-label={tr('18 side light positions')}>{(frame.side.length ? frame.side : Array(18).fill('#35393b')).map((color, i) => <span key={i} style={{
             background: color,
             color
-          }} />)}</div>
+          }} />)}</div>}
       </RgbPreviewPanel>
       <section className="rgb-custom-editor">
         {darkReason && <div className="rgb-dark-preview-note" role="status">
@@ -522,7 +559,8 @@ export default function CustomRgbEditor({
           <button type="button" className="secondary-button" disabled={disabled} onClick={() => {
             base({
               mix: true,
-              brightness: config.base.brightness || 20
+              colorIndex: isWin68 ? 0 : undefined,
+              brightness: effectiveBaseBrightness || (isWin68 ? 4 : 20)
             });
             setReplay(n => n + 1);
           }}>{tr('Use Multicolor')}</button>
@@ -583,10 +621,10 @@ export default function CustomRgbEditor({
                   setChoosing(false);
                 }}>{tr('Cancel')}</button>
               </div>
-              <div className="custom-rgb-effect-grid">{active === 'base' && !adding ? <><button disabled={disabled} aria-pressed={auroraBase} onClick={() => chooseBase('aurora')}><Sparkles size={15} />{tr('Aurora')}</button>{KEY_RGB_MODES.map(item => <button key={item.id} disabled={disabled} aria-pressed={!auroraBase && config.base.mode === item.id} onClick={() => chooseBase(item.id)}><Waves size={15} />{tr(item.name)}</button>)}</> : CUSTOM_RGB_EFFECTS.filter(effect => effect.id !== 'aurora' || layer?.effect === 'aurora' && !adding).map(effect => <button key={effect.id} disabled={disabled} aria-pressed={!adding && layer?.effect === effect.id} onClick={() => choose(effect.id)}><Sparkles size={15} />{tr(effect.name)}</button>)}</div>
+              <div className="custom-rgb-effect-grid">{active === 'base' && !adding ? <><button disabled={disabled} aria-pressed={auroraBase} onClick={() => chooseBase('aurora')}><Sparkles size={15} />{tr('Aurora')}</button>{baseCatalog.map(item => <button key={item.id} disabled={disabled} aria-pressed={!auroraBase && config.base.mode === item.id} onClick={() => chooseBase(item.id)}><Waves size={15} />{tr(item.name)}</button>)}</> : CUSTOM_RGB_EFFECTS.filter(effect => effect.id !== 'aurora' || layer?.effect === 'aurora' && !adding).map(effect => <button key={effect.id} disabled={disabled} aria-pressed={!adding && layer?.effect === effect.id} onClick={() => choose(effect.id)}><Sparkles size={15} />{tr(effect.name)}</button>)}</div>
             </section>}
-          {!adding && !choosing && <div className="custom-rgb-parameters"><h3>{active === 'base' ? tr('Base parameters') : tr('Effect parameters')}</h3>{active === 'base' ? <><Slider label="Brightness" value={config.base.brightness * 5} min={0} max={100} step={5} unit="%" disabled={disabled} onChange={v => base({
-                  brightness: v / 5
+          {!adding && !choosing && <div className="custom-rgb-parameters"><h3>{active === 'base' ? tr('Base parameters') : tr('Effect parameters')}</h3>{active === 'base' ? <><Slider label="Brightness" value={isWin68 ? effectiveBaseBrightness * 25 : config.base.brightness * 5} min={0} max={100} step={isWin68 ? 25 : 5} unit="%" disabled={disabled} onChange={v => base({
+                  brightness: isWin68 ? v / 25 : v / 5
                 })} />{auroraBase && config.baseEffect ? <>
             <p className="custom-rgb-description">{tr('Soft color curtains across all keys. Add FX layers for key reactions.')}</p>
             <div className="custom-slider-grid">
@@ -680,16 +718,18 @@ export default function CustomRgbEditor({
         <details className="service-details">
           <summary>{tr('Details')}</summary>
           <div>
-            <p>{status ? `${status.fps.toFixed(1)} FPS · ${status.connected ? tr('Keyboard connected') : tr('Waiting for keyboard')} · ${synced ? tr('Preview synced') : tr('Local preview or waiting for frames')}` : tr('The background service is not responding.')}</p>
+            <p>{isWin68
+              ? `${xsydConnected ? tr('Keyboard connected (WebHID XSYD 0x2A)') : tr('Local preview · connect WIN 68 HE MAX to stream live')} · ${live ? tr('Streaming Custom RGB') : tr('Draft preview')}`
+              : status ? `${status.fps.toFixed(1)} FPS · ${status.connected ? tr('Keyboard connected') : tr('Waiting for keyboard')} · ${synced ? tr('Preview synced') : tr('Local preview or waiting for frames')}` : tr('The background service is not responding.')}</p>
             {status?.lastError && <p>{status.lastError}</p>}
-            <div className="custom-rgb-actions">
+            {!isWin68 && <div className="custom-rgb-actions">
               <button className="secondary-button" onClick={onSetup}>{tr('Setup / Update')}</button>
               {status && <a className="secondary-button" href="http://127.0.0.1:16868/" target="_blank" rel="noreferrer">{tr('Service panel')}</a>}
               <button className="secondary-button" onClick={() => void refreshRgbService()}>{tr('Check again')}</button>
-            </div>
+            </div>}
           </div>
         </details>
-        <p className="rgb-preview-note">{tr('Side lights keep their onboard effect.')} {demo ? tr('Demo only changes the preview.') : tr('Custom runs in the background; changes sync automatically.')}</p>
+        <p className="rgb-preview-note">{!isWin68 && `${tr('Side lights keep their onboard effect.')} `}{demo ? tr('Demo only changes the preview.') : tr('Custom runs in the background; changes sync automatically.')}</p>
       </section>
     </div>
     {locked && <div className="custom-rgb-lock-overlay"><div className="custom-rgb-lock-card" role="status">

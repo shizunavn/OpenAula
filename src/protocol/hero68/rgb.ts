@@ -11,6 +11,12 @@ export type RgbZone = {
   rgb: RgbColor;
   brightness: number;
   speed: number;
+  /** XSYD (`0x18`) reverse animation direction flag (`payload[37] = 0x03` vs `0x01`). */
+  reverse?: boolean;
+  /** XSYD (`0x18`) palette slot index (`payload[43]`: `0` = Multicolor, `1..7` = Palette slots 1..7). */
+  colorIndex?: number;
+  /** XSYD (`0x18`) 7-slot RGB palette (`payload[5..32]`). */
+  palette?: RgbColor[];
 };
 export type RgbProfile = {
   keys: RgbZone;
@@ -64,7 +70,16 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const wireMix = (value: RgbZone) => value.mixValue ?? (value.mix ? 7 : 0);
 export function sameRgbZone(a: RgbZone, b: RgbZone) {
   const mix = wireMix(a);
-  return a.mode === b.mode && mix === wireMix(b) && a.brightness === b.brightness && a.speed === b.speed && (mix === 7 || same(a.rgb, b.rgb));
+  return (
+    a.mode === b.mode &&
+    mix === wireMix(b) &&
+    a.brightness === b.brightness &&
+    a.speed === b.speed &&
+    Boolean(a.reverse) === Boolean(b.reverse) &&
+    (a.colorIndex ?? -1) === (b.colorIndex ?? -1) &&
+    same(a.palette ?? null, b.palette ?? null) &&
+    (mix === 7 || same(a.rgb, b.rgb))
+  );
 }
 export function rgbChanges(draft: RgbProfile, baseline: RgbProfile, keyIds?: readonly string[], model?: HeroDeviceModelId): RgbDirty {
   const validPosTable = model ? getBoard(model).keyIdToPos : allRegisteredKeyPositions();

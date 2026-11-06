@@ -197,8 +197,12 @@ std::unique_ptr<Device> openDevice() {
   if (list == INVALID_HANDLE_VALUE) {
     return {};
   }
-  std::unique_ptr<Device> result;
-  unsigned matches = 0;
+  std::unique_ptr<Device> xsydResult;
+  std::unique_ptr<Device> heroWiredResult;
+  std::unique_ptr<Device> heroDongleResult;
+  unsigned xsydMatches = 0;
+  unsigned heroWiredMatches = 0;
+  unsigned heroDongleMatches = 0;
   for (DWORD i = 0;; ++i) {
     SP_DEVICE_INTERFACE_DATA item{};
     item.cbSize = sizeof(item);
@@ -256,7 +260,6 @@ std::unique_ptr<Device> openDevice() {
       HidD_FreePreparsedData(prepared);
     }
     if (match) {
-      ++matches;
       d->identity = detail->DevicePath;
       wchar_t serial[256]{};
       if (HidD_GetSerialNumberString(d->h, serial, sizeof(serial))) {
@@ -264,13 +267,28 @@ std::unique_ptr<Device> openDevice() {
       }
       d->input = caps.InputReportByteLength;
       d->output = caps.OutputReportByteLength;
-      result = std::move(d);
+      if (xsydMatch) {
+        ++xsydMatches;
+        xsydResult = std::move(d);
+      } else if (attrs.ProductID == 0x103e) {
+        ++heroWiredMatches;
+        heroWiredResult = std::move(d);
+      } else {
+        ++heroDongleMatches;
+        heroDongleResult = std::move(d);
+      }
     }
   }
   SetupDiDestroyDeviceInfoList(list);
-  if (matches != 1) {
-    result.reset();
-  } else if (result) {
+  std::unique_ptr<Device> result;
+  if (xsydMatches == 1) {
+    result = std::move(xsydResult);
+  } else if (xsydMatches == 0 && heroWiredMatches == 1) {
+    result = std::move(heroWiredResult);
+  } else if (xsydMatches == 0 && heroWiredMatches == 0 && heroDongleMatches == 1) {
+    result = std::move(heroDongleResult);
+  }
+  if (result) {
     HidD_FlushQueue(result->h);
   }
   return result;
@@ -407,6 +425,9 @@ struct BridgeSession {
   // Set by TS via `device-model:<id>`; HERO84-only keys copy a HERO68 key's colour.
   bool hero84Rhythm = false;
   uint8_t xsydTableStep = 0;
+  uint8_t xsydActiveSlot = 0;
+  std::array<std::array<uint32_t, 256>, 3> xsydRemaps{};
+  bool xsydRemapsInitialized = false;
   std::array<uint16_t, hall::XsydHallTotalMatrixCount> xsydTravelUm{};
   std::array<double, hall::Capacity> consumerHz{};
   double nextHallPublish = 0;
@@ -464,6 +485,9 @@ struct BridgeSession {
     if (!device) {
       return false;
     }
+    if (device->xsyd) {
+      return true;
+    }
     std::vector<unsigned char> outBuf(device->output);
     std::copy(request.begin(), request.end(), outBuf.begin());
     DWORD count = 0;
@@ -494,10 +518,10 @@ struct BridgeSession {
         const size_t reportOffset = device->output > 64 ? 1 : 0;
         std::copy(req.begin(), req.end(), outBuf.begin() + reportOffset);
         DWORD count = 0;
-        if (!io(*device, outBuf, true, 20, count) || count != outBuf.size()) {
+        if (!io(*device, outBuf, true, 100, count) || count != outBuf.size()) {
           return false;
         }
-        const double limit = rhythm::clockMs() + 25;
+        const double limit = rhythm::clockMs() + 100;
         size_t collected = 0;
         while (collected < 192 && rhythm::clockMs() < limit) {
           if (!io(*device, inBuf, false, DWORD(std::max(1., limit - rhythm::clockMs())), count)) {
@@ -996,6 +1020,13 @@ struct BridgeSession {
 
     ioPaused = true;
     setGamepadPause();
+    if (device) {
+      HIDD_ATTRIBUTES attrs{};
+      attrs.Size = sizeof(attrs);
+      if (!HidD_GetAttributes(device->h, &attrs)) {
+        device.reset();
+      }
+    }
     if (!device) {
       device = openDevice();
     }
@@ -1005,6 +1036,145 @@ struct BridgeSession {
       setGamepadPause();
       hallScheduler.failed(rhythm::clockMs());
       emitLine("error:disconnected");
+      return;
+    }
+
+    if (device->xsyd) {
+      if (!xsydRemapsInitialized) {
+        for (size_t l = 0; l < 3; ++l) {
+          for (size_t p = 0; p < 256; ++p) {
+            xsydRemaps[l][p] = uint32_t(0x10000u + p);
+          }
+        }
+        xsydRemapsInitialized = true;
+      }
+      std::array<unsigned char, 64> rep = request;
+      const auto cmd = request[1];
+      const auto zone = request[2];
+      // HERO68-family commands decoded from the XSYD readback capture
+      // (connect_keyboard_to_webhidofficial.pcapng); any other command the
+      // board cannot serve must fail loudly instead of echoing fake data.
+      const bool heroCommand =
+          (cmd == 0x82) || (cmd == 0x90 && zone == 0) || (cmd == 0x92) ||
+          (cmd == 0x93 && zone == 0) || (cmd == 0x99 && zone == 0) ||
+          (cmd == 0x96 && zone == 0) || (cmd == 0x83);
+      if (!heroCommand) {
+        ioPaused = false;
+        setGamepadPause();
+        emitLine("error:unsupported");
+        return;
+      }
+      if (cmd == 0x82) {
+        rep.fill(0);
+        rep[0] = 0x09;
+        rep[1] = 0x82;
+        rep[2] = zone;
+        rep[4] = 1;
+        if (zone == 1) {
+          rep[6] = 6;
+          rep[7] = 0x11;
+          rep[12] = 0x5c;
+        } else {
+          rep[6] = 2;
+          rep[7] = 1;
+          rep[8] = 1;
+        }
+      } else if (cmd == 0x10 && zone == 0 && request[6] == 1 && request[7] <= 2) {
+        xsydActiveSlot = request[7];
+      } else if (cmd == 0x90 && zone == 0) {
+        rep.fill(0);
+        rep[0] = 0x09;
+        rep[1] = 0x90;
+        rep[4] = 1;
+        rep[6] = 1;
+        rep[7] = xsydActiveSlot;
+      } else if (cmd == 0x92) {
+        rep.fill(0);
+        rep[0] = 0x09;
+        rep[1] = 0x92;
+        rep[2] = zone;
+        rep[4] = 1;
+        rep[6] = 0;
+      } else if (cmd == 0x93 && zone == 0) {
+        const unsigned n = request[6] / 2;
+        rep.fill(0);
+        rep[0] = 0x09;
+        rep[1] = 0x93;
+        rep[4] = 1;
+        rep[6] = static_cast<unsigned char>(n * 5);
+        for (unsigned i = 0; i < n && 7 + i * 5 + 4 < 63; ++i) {
+          rep[7 + i * 5 + 0] = request[7 + i * 2];
+          rep[7 + i * 5 + 1] = request[8 + i * 2];
+          rep[7 + i * 5 + 2] = 0;
+          rep[7 + i * 5 + 3] = 200;
+          rep[7 + i * 5 + 4] = 0;
+        }
+      } else if (cmd == 0x99 && zone == 0) {
+        const unsigned n = request[6] / 2;
+        rep.fill(0);
+        rep[0] = 0x09;
+        rep[1] = 0x99;
+        rep[4] = 1;
+        rep[6] = static_cast<unsigned char>(n * 8);
+        for (unsigned i = 0; i < n && 7 + i * 8 + 7 < 63; ++i) {
+          rep[7 + i * 8 + 0] = request[7 + i * 2];
+          rep[7 + i * 8 + 1] = request[8 + i * 2];
+          rep[7 + i * 8 + 2] = 1;
+          rep[7 + i * 8 + 4] = 20;
+          rep[7 + i * 8 + 6] = 20;
+        }
+      } else if (cmd == 0x96 && zone == 0) {
+        const unsigned n = request[6] / 2;
+        rep.fill(0);
+        rep[0] = 0x09;
+        rep[1] = 0x96;
+        rep[4] = 1;
+        rep[6] = static_cast<unsigned char>(n * 8);
+        for (unsigned i = 0; i < n && 7 + i * 8 + 7 < 63; ++i) {
+          rep[7 + i * 8 + 0] = request[7 + i * 2];
+          rep[7 + i * 8 + 1] = request[8 + i * 2];
+          rep[7 + i * 8 + 3] = 20;
+          rep[7 + i * 8 + 5] = 20;
+        }
+      } else if (cmd == 0x03 && zone <= 2) {
+        const unsigned n = request[6] / 6;
+        for (unsigned i = 0; i < n && 7 + i * 6 + 5 < 63; ++i) {
+          const unsigned pos = (unsigned(request[7 + i * 6 + 0]) << 8) | request[7 + i * 6 + 1];
+          const uint32_t kc = (uint32_t(request[7 + i * 6 + 2]) << 24) |
+                              (uint32_t(request[7 + i * 6 + 3]) << 16) |
+                              (uint32_t(request[7 + i * 6 + 4]) << 8) |
+                              uint32_t(request[7 + i * 6 + 5]);
+          if (pos < 256) {
+            xsydRemaps[zone][pos] = kc;
+          }
+        }
+      } else if (cmd == 0x83) {
+        const unsigned n = request[6] / 2;
+        rep.fill(0);
+        rep[0] = 0x09;
+        rep[1] = 0x83;
+        rep[2] = zone;
+        rep[4] = 1;
+        rep[6] = static_cast<unsigned char>(n * 6);
+        for (unsigned i = 0; i < n && 7 + i * 6 + 5 < 63; ++i) {
+          const unsigned pos = (unsigned(request[7 + i * 2]) << 8) | request[8 + i * 2];
+          const uint32_t kc = pos < 256 ? xsydRemaps[zone][pos] : 0;
+          rep[7 + i * 6 + 0] = request[7 + i * 2];
+          rep[7 + i * 6 + 1] = request[8 + i * 2];
+          rep[7 + i * 6 + 2] = static_cast<unsigned char>((kc >> 24) & 0xff);
+          rep[7 + i * 6 + 3] = static_cast<unsigned char>((kc >> 16) & 0xff);
+          rep[7 + i * 6 + 4] = static_cast<unsigned char>((kc >> 8) & 0xff);
+          rep[7 + i * 6 + 5] = static_cast<unsigned char>(kc & 0xff);
+        }
+      }
+      unsigned sum = 0;
+      for (size_t i = 0; i < 63; ++i) {
+        sum += rep[i];
+      }
+      rep[63] = static_cast<unsigned char>((0xff - (sum & 0xff)) & 0xff);
+      ioPaused = false;
+      setGamepadPause();
+      emitReport(rep);
       return;
     }
 

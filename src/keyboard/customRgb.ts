@@ -1,6 +1,8 @@
 import { HERO68_KEY_IDS } from './hero68Layout';
+import { isWin68HeMaxModel } from './devices';
 import { getBoard, type HeroDeviceModelId } from './registry';
 import { FirmwareRgbPreview } from './rgbPreview';
+import { XsydFirmwareRgbPreview } from './xsydRgbPreview';
 import type { RgbColor, RgbProfile } from '../protocol/hero68/rgb';
 import { restoreCustomRgb, RGB_EFFECT_METADATA, RGB_GRADIENT_PALETTES, type CustomRgbConfiguration, type CustomRgbLayer } from './customRgbModel';
 import { pickCustomRgbColor, blendCustomRgbColor, sampleCustomRgbSpectrum, customRgbContrastPalette } from './customRgbColors';
@@ -120,7 +122,7 @@ function aurora(layer: CustomRgbLayer, x: number, y: number, seconds: number, bo
   };
 }
 export class CustomRgbEngine {
-  private base: FirmwareRgbPreview;
+  private base: FirmwareRgbPreview | XsydFirmwareRgbPreview;
   private time = 0;
   private events: Press[] = [];
   private held = new Set<string>();
@@ -169,7 +171,9 @@ export class CustomRgbEngine {
     this.keyIndex = model ? Object.fromEntries(board.keyIds.map((id, i) => [id, i])) : KEY_INDEX;
     this.bounds = model ? computeBounds(this.coordinates) : defaultBounds;
     this.config = restoreCustomRgb(profile.custom, profile);
-    this.base = new FirmwareRgbPreview(this.baseProfile());
+    this.base = isWin68HeMaxModel(model)
+      ? new XsydFirmwareRgbPreview(this.baseProfile())
+      : new FirmwareRgbPreview(this.baseProfile());
     this.configureColorPalettes();
   }
   private configureColorPalettes() {
@@ -202,6 +206,16 @@ export class CustomRgbEngine {
     }
   }
   private baseProfile(): RgbProfile {
+    if (isWin68HeMaxModel(this.model)) {
+      return {
+        ...this.profile,
+        keys: this.config.baseEffect ? {
+          ...this.config.base,
+          mode: 0,
+          brightness: 0
+        } : this.config.base
+      };
+    }
     return {
       ...this.profile,
       keys: this.config.baseEffect ? {
@@ -432,13 +446,16 @@ export class CustomRgbEngine {
         multicolor: this.config.base.mix,
         color: this.config.base.rgb
       } as CustomRgbLayer);
+      const brightnessScale = isWin68HeMaxModel(this.model)
+        ? Math.min(4, Math.max(0, this.config.base.brightness > 4 ? Math.round(this.config.base.brightness / 5) : this.config.base.brightness)) / 4
+        : this.config.base.brightness / 20;
       for (const id of this.keyIds) {
         const [x, y] = this.coordinates[id];
         const {
           strength,
           tint
         } = aurora(layer, x, y, this.time / 1000, this.bounds);
-        frame.keys[id] = '#' + tint.map(c => Math.round(c * strength * this.config.base.brightness / 20).toString(16).padStart(2, '0')).join('');
+        frame.keys[id] = '#' + tint.map(c => Math.round(c * strength * brightnessScale).toString(16).padStart(2, '0')).join('');
       }
     }
     const baseColors = Object.fromEntries(Object.entries(frame.keys).map(([id, hex]) => [id, ([1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as RgbColor)]));

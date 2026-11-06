@@ -241,7 +241,40 @@ Every key's `matrixIndex` (`0..125`, i.e. `row * 21 + col`) is the exact `index`
 
 ---
 
-## 8. What is still unknown
+## 8. Global RGB (`0x18` → `0x98`) & Per-key RGB (`0x2A` → `0xAA`)
+
+Verified on `tideflux_softripple_snippingstorm_brightness0-4-3-1-2-0_speed1-2-3-4-0_reverseon-off_colorchangetosmoothflow(multicolor-red-blue).pcapng`, `Q(green)-E(red)_-Z(yellow)-P(Pink).txt`, and firmware disassembly (`VA 0x0AA10`, `0x10DE4`, `0x1D2A0`).
+
+### 8.1 Global RGB (`0x18` → `0x98`)
+
+- **Read request (`LEN = 0x2B = 43`):** `5C 2B 18 D4 | 00 00 00 00 00 <28B palette or FF> 00×10`
+- **Write request (`LEN = 0x2C = 44`):** `5C 2C 18 <CK> | 01 00 00 00 00 <28B BGR palette> 00 00 00 00 <flags> <brightness> <mode> <speed> 02 00 <colorIndex>`
+- **Reply (`LEN = 0x2D = 45`):** `5C 2D 98 <CK> | 00 00 00 00 00 <28B BGR palette> 00 00 00 00 <flags> <brightness> <mode> <speed> 02 00 <colorIndex> 00`
+
+| Payload offset | Field | Values |
+|---|---|---|
+| `payload[0]` | Read/Write flag | `0x00` = Read, `0x01` = Write |
+| `payload[5..32]` | 7-slot preset palette | `7 × [B, G, R, 0xFF]` (`Red, Green, Yellow, Blue, Purple, Cyan, White`) |
+| `payload[37]` | Direction flags | `0x01` = Reverse OFF, `0x03` = Reverse ON (`bit 1`) |
+| `payload[38]` | Brightness | `0x00..0x04` (`0%, 25%, 50%, 75%, 100%`) |
+| `payload[39]` | External Mode ID | `0x00..0x1A` (`0..26`, mapped via `EXT_TO_INT_ROM` at `VA 0x1D2A0` to internal modes `1..27`) |
+| `payload[40]` | Speed | `0x00..0x04` (`SPEED_ROM_TABLE = [0, 37, 53, 79, 143]` at `VA 0x1DA34`) |
+| `payload[43]` | Color slot index | `0x00` = Multicolor, `0x01..0x07` = Palette slots 1..7 |
+
+### 8.2 Per-Key RGB (`0x2A` → `0xAA`)
+
+- **Single-key write (`LEN = 0x05`):** `5C 05 2A <CK> | 01 <keyValue> <R> <G> <B>`
+  - `Q` (`0x14`, Green `#07FF00`): `5C 05 2A C0 | 01 14 07 FF 00`
+  - `E` (`0x08`, Red `#FF0000`): `5C 05 2A C0 | 01 08 FF 00 00`
+  - `Z` (`0x1D`, Yellow `#E8FF00`): `5C 05 2A C0 | 01 1D E8 FF 00`
+  - `P` (`0x13`, Pink `#FF00CE`): `5C 05 2A 8E | 01 13 FF 00 CE`
+- **Batch read/write (`LEN = 0x39 = 57`):** `5C 39 2A <CK> | <00=read | 01=write> + 14 × [keyValue, R, G, B]` (unused slots padded with `FF 00 00 00`).
+
+See `src/protocol/xsyd/rgb.ts` and `src/keyboard/xsydRgbPreview.ts`.
+
+---
+
+## 9. What is still unknown
 
 | item | why it is unknown |
 |---|---|
@@ -251,7 +284,6 @@ Every key's `matrixIndex` (`0..125`, i.e. `row * 21 + col`) is the exact `index`
 | SOCD mode/type/delay | all zero in the single capture |
 | RS | no capture |
 | DDKS (`0x29`) | `0x29` carries a static config read (`d0 07`) across all captures (including `4k_to_2k_to_1k.pcapng`), while polling rate is `0x00` subcmd `0x50` |
-| RGB (`0x30`) | need a capture switching RGB modes/colors/brightness on `magnet.aulastar.com` |
 
 Record-only evidence for every row lives in the external research notes
 (`E:\hero68_he_max-re\docs\KNOWN_STATE.md`); this file is limited to what the

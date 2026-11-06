@@ -3,6 +3,8 @@ import { ArrowDownToLine, ArrowRight, Check, ChevronRight, CircleHelp, Cpu, Exte
 import { RGB_SERVICE_DOWNLOAD, refreshRgbService, useRgbServiceState } from '../protocol/rgbServiceState';
 import { gamepadService, VIGEMBUS_DOWNLOAD, VIGEMBUS_RELEASE } from '../protocol/gamepadService';
 import { useLocalServiceAccess } from '../protocol/localServiceAccess';
+import { useHero68Device } from '../protocol/hero68/webhid';
+import { useXsydDevice } from '../protocol/xsyd/device';
 import { useI18n } from '../i18n';
 import { useServiceUpdate, updateMessage } from '../protocol/serviceUpdates';
 import '../components/RgbSettingsPage.css';
@@ -65,6 +67,8 @@ export default function BackgroundServicePage({
     status,
     reconnecting
   } = useRgbServiceState();
+  const heroDevice = useHero68Device();
+  const xsydDevice = useXsydDevice();
   const {
     permission
   } = useLocalServiceAccess();
@@ -73,6 +77,18 @@ export default function BackgroundServicePage({
   const serviceUpdate = useServiceUpdate(status?.supportsFullUpdate === true);
   const online = !!status && !reconnecting;
   const blocked = permission === 'denied';
+  const xsydConnected = xsydDevice.state === 'connected';
+  const heroConnected = heroDevice.state === 'connected';
+  const keyboardConnected = (online && !!status?.connected) || xsydConnected || heroConnected;
+  const activeModel = xsydConnected
+    ? 'win68HeMax'
+    : status?.deviceModel ?? heroDevice.detectedModel;
+  const keyboardName =
+    activeModel === 'win68HeMax'
+      ? 'WIN 68 HE MAX'
+      : activeModel === 'hero84'
+        ? 'HERO84'
+        : 'HERO68';
   useEffect(() => {
     if (!online) {
       setDriver('unknown');
@@ -117,9 +133,9 @@ export default function BackgroundServicePage({
     ready: online && !blocked
   }, {
     icon: Keyboard,
-    name: 'HERO68',
-    value: t(online && status?.connected ? 'Connected' : 'Not connected'),
-    ready: online && !!status?.connected
+    name: keyboardName,
+    value: t(keyboardConnected ? 'Connected' : 'Not connected'),
+    ready: keyboardConnected
   }, {
     icon: Gamepad2,
     name: 'ViGEmBus',
@@ -149,7 +165,7 @@ export default function BackgroundServicePage({
           <span><strong>{name}</strong><small><i />{value}</small></span>
           {ready && <Check className="bs-check" size={16} />}
         </div>)}</div>
-      <p className={`bs-connection-note ${blocked ? 'is-warning' : ''}`} role="status">{t(blocked ? 'Allow local app access in your browser’s site permissions, then check again.' : checkingConnection ? 'Checking the service and driver…' : !online ? 'Open the Windows app to connect.' : !status?.connected ? 'Connect HERO68 to your computer.' : 'Service and keyboard are ready.')}</p>
+      <p className={`bs-connection-note ${blocked ? 'is-warning' : ''}`} role="status">{t(blocked ? 'Allow local app access in your browser’s site permissions, then check again.' : checkingConnection ? 'Checking the service and driver…' : !online ? 'Open the Windows app to connect.' : !keyboardConnected ? 'Connect HERO68 to your computer.' : 'Service and keyboard are ready.')}</p>
     </section>
     <div className="bs-install-grid">
       <section className="bs-install-card">
@@ -194,7 +210,7 @@ export default function BackgroundServicePage({
     </section>
     <div className="bs-actions">
       <button className="secondary-button" disabled={!online} onClick={onOpenCustom}>{tr('Open Custom Effects')}<ArrowRight size={15} /></button>
-      <button className="secondary-button" disabled={!online || driver !== 'ready'} onClick={onOpenGamepad}>{t('Open Gamepad')}<ArrowRight size={15} /></button>
+      <button className="secondary-button" disabled={(!online || driver !== 'ready') && !xsydConnected} onClick={onOpenGamepad}>{t('Open Gamepad')}<ArrowRight size={15} /></button>
       {online && <a className="bs-text-button" href="http://127.0.0.1:16868/" target="_blank" rel="noreferrer">{tr('Service panel')}<ExternalLink size={13} /></a>}
     </div>
     <details className="bs-help">

@@ -3,6 +3,13 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.3.0 — WIN 68 HE MAX lighting, Gamepad connection fix
+
+- WIN 68 HE MAX lighting runs on the XSYD (`0x5C`) stack: global zone `0x18` (effect, brightness, speed, direction, seven-slot palette) and per-key colour `0x2A` (single-key writes and the five-frame 68-key readback). Frames were checked against `connect_keyboard_to_webhidofficial.pcapng`, `profile_1_2_3_4.pcapng` and `Q(green)-E(red) -Z(yellow)-P(Pink).pcapng`; the 27 effect modes come from firmware table `EXT_TO_INT_ROM` (`VA 0x1D2A0`).
+- The Custom Effects editor and live preview render the WIN 68 HE MAX layout while editing.
+- Gamepad no longer times out on WIN 68 HE MAX when OpenAulaService is already running. WebHID is preferred whenever the board is connected, the handoff to the service is skipped for an XSYD board (it was sending HERO68's `0x82` request, which the board never answers), and Hall demand follows the native output state instead of a mirror that is still `false` during startup.
+- XSYD commands the service cannot serve now fail with `error:unsupported` instead of waiting for a reply.
+
 ## 1.2.1 — WIN 68 HE MAX Hall stream, reply matching fix
 
 - The Windows service reads WIN 68 HE MAX analogue travel and pressed state over `0x12`/`0x92`: a 63-entry `u16` micrometre table polled twice for the 126 matrix positions, plus one pressed byte per position, mapped onto the 68 physical keys by an explicit table. Verified against `travel_test_press_randomkey.pcapng`, not on a physical board.

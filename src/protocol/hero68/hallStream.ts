@@ -435,7 +435,7 @@ class Hero68HallStream {
     let stepIndex = 0;
 
     while (generation === this.#pollGeneration && xsydDeviceManager.connected) {
-      const tableId = tables[stepIndex % tables.length]!;
+      const pollTables = stepIndex === 0 && tables.length > 1 ? tables : [tables[stepIndex % tables.length]!];
       stepIndex += 1;
 
       const pressedReply = await xsydDeviceManager.request(buildXsydHallPressedFrame(), 650);
@@ -444,13 +444,16 @@ class Hero68HallStream {
       }
       const pressedByMatrixIndex = decodeXsydHallPressedReply(pressedReply);
 
-      const travelReply = await xsydDeviceManager.request(buildXsydHallTravelFrame(tableId), 650);
-      if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
-        return;
-      }
-      const tableTravel = decodeXsydHallTravelReply(travelReply, tableId);
-      for (const [idx, um] of tableTravel) {
-        travelCache.set(idx, um);
+      let tableTravel = travelCache;
+      for (const tableId of pollTables) {
+        const travelReply = await xsydDeviceManager.request(buildXsydHallTravelFrame(tableId), 650);
+        if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
+          return;
+        }
+        tableTravel = decodeXsydHallTravelReply(travelReply, tableId);
+        for (const [idx, um] of tableTravel) {
+          travelCache.set(idx, um);
+        }
       }
 
       const samples = mergeXsydHallSamples({

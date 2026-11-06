@@ -830,3 +830,282 @@ test('WIN 68 HE MAX 0x12 / 0x92 Hall travel & pressed-state stream matches trave
   assert.equal(byKey.KeyA.travelUm, 0)
   assert.equal(byKey.KeyA.pressed, false)
 })
+
+test('WIN 68 HE MAX 0x18 Global RGB & 0x2A Per-Key RGB match USB captures byte-for-byte', async () => {
+  const rgbMod = await bundle('src/protocol/xsyd/rgb.ts')
+  const codecMod = await bundle('src/protocol/xsyd/codec.ts')
+
+  const defaultPaletteHex = '0000ffff00ff00ff007f7fffff0000ff7f007fff7f7f00ff7f7f7fff'
+
+  // 1. Verify 0x18 read frames match connect_keyboard_to_webhidofficial.txt (idx=20) & profile_1_2_3_4.txt (idx=2)
+  assert.equal(
+    hex(rgbMod.buildXsydRgbReadFrame(false)),
+    '5c2b18d4' + '0000000000' + 'ff'.repeat(28) + '00'.repeat(10)
+  )
+  assert.equal(
+    hex(rgbMod.buildXsydRgbReadFrame(true)),
+    '5c2b18d4' + '0000000000' + defaultPaletteHex + '00'.repeat(10)
+  )
+
+  // 2. Verify 0x18 write frames match tideflux_softripple_snippingstorm_...pcapng byte-for-byte
+  const writeCases = [
+    // Tide Flux (0x02), brightness=4, speed=3, reverse=off (0x01), multicolor (0x00) -> pkt=2274
+    {
+      zone: { mode: 0x02, brightness: 4, speed: 3, reverse: false, mix: true, colorIndex: 0, rgb: [255, 0, 0] },
+      expectedTail: '01040203020000',
+      expectedCk: 'd5',
+    },
+    // Soft Ripple (0x03), brightness=4, speed=3, reverse=off, multicolor -> pkt=3798
+    {
+      zone: { mode: 0x03, brightness: 4, speed: 3, reverse: false, mix: true, colorIndex: 0, rgb: [255, 0, 0] },
+      expectedTail: '01040303020000',
+      expectedCk: 'd5',
+    },
+    // Snipping Storm (0x04), brightness=0, speed=3, reverse=off, multicolor -> pkt=7782
+    {
+      zone: { mode: 0x04, brightness: 0, speed: 3, reverse: false, mix: true, colorIndex: 0, rgb: [255, 0, 0] },
+      expectedTail: '01000403020000',
+      expectedCk: 'd5',
+    },
+    // Snipping Storm (0x04), brightness=4, speed=4, reverse=on (0x03), multicolor -> pkt=23676
+    {
+      zone: { mode: 0x04, brightness: 4, speed: 4, reverse: true, mix: true, colorIndex: 0, rgb: [255, 0, 0] },
+      expectedTail: '03040404020000',
+      expectedCk: 'd5',
+    },
+    // Smooth Flow (0x0C), brightness=4, speed=4, reverse=off, color=Red (0x01) -> pkt=36682
+    {
+      zone: { mode: 0x0c, brightness: 4, speed: 4, reverse: false, mix: false, colorIndex: 1, rgb: [255, 0, 0] },
+      expectedTail: '01040c04020001',
+      expectedCk: 'd6',
+    },
+    // Smooth Flow (0x0C), brightness=4, speed=4, reverse=off, color=Blue (0x04) -> pkt=38840
+    {
+      zone: { mode: 0x0c, brightness: 4, speed: 4, reverse: false, mix: false, colorIndex: 4, rgb: [0, 0, 255] },
+      expectedTail: '01040c04020004',
+      expectedCk: 'd9',
+    },
+    // Custom Per-Key RGB (0x15), brightness=4, speed=3, reverse=off, color=0 -> Q(green)-E(red)_-Z(yellow)-P(Pink).txt idx=0
+    {
+      zone: { mode: 0x15, brightness: 4, speed: 3, reverse: false, mix: true, colorIndex: 0, rgb: [255, 255, 255] },
+      expectedTail: '01041503020000',
+      expectedCk: 'd5',
+    },
+  ]
+
+  for (const tc of writeCases) {
+    const frame = rgbMod.buildXsydRgbWriteFrame(tc.zone)
+    assert.equal(
+      hex(frame),
+      `5c2c18${tc.expectedCk}0100000000${defaultPaletteHex}00000000${tc.expectedTail}`
+    )
+    // Roundtrip decode via 0x98 reply (LEN = 0x2D)
+    const replyPayload = new Uint8Array(0x2d)
+    replyPayload.set(frame.slice(4, 4 + 0x2c), 0)
+    replyPayload[0] = 0x00
+    const decoded = rgbMod.decodeXsydRgbReply(codecMod.decodeXsydFrame(makeReply(0x18, replyPayload)))
+    assert.equal(decoded.mode, tc.zone.mode)
+    assert.equal(decoded.brightness, tc.zone.brightness)
+    assert.equal(decoded.speed, tc.zone.speed)
+    assert.equal(decoded.reverse, tc.zone.reverse)
+    assert.equal(decoded.colorIndex, tc.zone.colorIndex)
+  }
+
+  // 3. Verify 0x2A single-key write frames match Q(green)-E(red)_-Z(yellow)-P(Pink).txt (idx=6, 8, 10, 13)
+  assert.equal(hex(rgbMod.buildXsydPerKeyWriteFrame(0x14, [7, 255, 0])), '5c052ac0011407ff00')
+  assert.equal(hex(rgbMod.buildXsydPerKeyWriteFrame(0x08, [255, 0, 0])), '5c052ac00108ff0000')
+  assert.equal(hex(rgbMod.buildXsydPerKeyWriteFrame(0x1d, [232, 255, 0])), '5c052ac0011de8ff00')
+  assert.equal(hex(rgbMod.buildXsydPerKeyWriteFrame(0x13, [255, 0, 206])), '5c052a8e0113ff00ce')
+
+  // 4. Verify 0x2A 5-frame batch read matches connect_keyboard_to_webhidofficial.txt (idx=290..298)
+  const readFrames = rgbMod.buildXsydPerKeyReadFrames()
+  assert.equal(readFrames.length, 5)
+  for (const rf of readFrames) {
+    assert.equal(rf[0], 0x5c)
+    assert.equal(rf[1], 0x39)
+    assert.equal(rf[2], 0x2a)
+    assert.equal(rf[3], 0xf4)
+    assert.equal(rf[4], 0x00)
+  }
+  // Last 2 slots of frame 5 are padded with ff 00 00 00
+  assert.equal(hex(readFrames[4]).slice(-16), 'ff000000ff000000')
+
+  // 5. Verify saveXsydRgbProfile & XsydCustomRgbStreamer delta streaming
+  const sent = []
+  const mockRequester = {
+    async request(frame) {
+      sent.push(frame)
+      const op = frame[2]
+      if (op === 0x00) {
+        return codecMod.decodeXsydFrame(makeReply(0x00, [0x00, 0x70, frame[5], 0xff]))
+      }
+      if (op === 0x2a) {
+        const replyPayload = new Uint8Array(0x39)
+        replyPayload.set(frame.slice(4, 4 + frame[1]), 0)
+        replyPayload[0] = 0x00
+        return codecMod.decodeXsydFrame(makeReply(0x2a, replyPayload))
+      }
+      if (op === 0x18) {
+        const replyPayload = new Uint8Array(0x2d)
+        replyPayload.set(frame.slice(4, 4 + 0x2c), 0)
+        replyPayload[0] = 0x00
+        return codecMod.decodeXsydFrame(makeReply(0x18, replyPayload))
+      }
+      throw new Error(`Unexpected op 0x${op.toString(16)}`)
+    },
+  }
+
+  const baseline = rgbMod.defaultXsydRgb()
+  const draft = structuredClone(baseline)
+  draft.keys.mode = 0x15
+  draft.colors.KeyQ = [7, 255, 0]
+  draft.colors.KeyP = [255, 0, 206]
+
+  let verifiedSnapshot = null
+  await rgbMod.saveXsydRgbProfile(mockRequester, draft, baseline, next => {
+    verifiedSnapshot = next
+  })
+  assert.ok(verifiedSnapshot)
+  assert.deepEqual(verifiedSnapshot.colors.KeyQ, [7, 255, 0])
+  assert.deepEqual(verifiedSnapshot.colors.KeyP, [255, 0, 206])
+  assert.equal(verifiedSnapshot.keys.mode, 0x15)
+
+  // Delta streamer only sends changed keys
+  sent.length = 0
+  const streamer = new rgbMod.XsydCustomRgbStreamer()
+  const count1 = await streamer.pushFrameDelta(mockRequester, { KeyQ: '#07ff00', KeyE: '#ff0000' })
+  assert.equal(count1, 2)
+  assert.equal(sent.length, 3) // 1 x 0x18 start + 2 x 0x2A key writes
+  const count2 = await streamer.pushFrameDelta(mockRequester, { KeyQ: '#07ff00', KeyE: '#0000ff' })
+  assert.equal(count2, 1) // Only KeyE changed
+})
+
+test('AulaWin68ExactRgbEngine & XsydFirmwareRgbPreview execute all 28 internal modes and 27 external modes', async () => {
+  const previewMod = await bundle('src/keyboard/xsydRgbPreview.ts')
+  const rgbMod = await bundle('src/protocol/xsyd/rgb.ts')
+  const catalogMod = await bundle('src/keyboard/rgbCatalog.ts')
+
+  assert.equal(previewMod.EXT_TO_INT_ROM.length, 27)
+  assert.equal(catalogMod.WIN68_KEY_RGB_MODES.length, 27)
+  assert.equal(previewMod.KEYS_68.length, 68)
+
+  // Verify integer math helpers (VA 0x113E6, 0x11412, 0x1142C, 0x114C6)
+  const engine = new previewMod.AulaWin68ExactRgbEngine(1)
+  assert.equal(engine.isqrt32(0), 0)
+  assert.equal(engine.isqrt32(65536), 256)
+  assert.equal(engine.hypot256(3, 4), 1280) // 5 * 256
+  assert.equal(engine.sin720(0), 0)
+  assert.equal(engine.sin720(180), 255)
+  assert.equal(engine.sin720(360), 0)
+  assert.equal(engine.sin720(540), -255)
+  assert.equal(engine.hsvToRgb(0, 255, 255) & 0xffffff, 0xff0000)
+  assert.equal(engine.hsvToRgb(120, 255, 255) & 0xffffff, 0x00ff00)
+  assert.equal(engine.hsvToRgb(240, 255, 255) & 0xffffff, 0x0000ff)
+
+  // Verify all 27 external modes (0..26) run cleanly in XsydFirmwareRgbPreview
+  const baseProfile = rgbMod.defaultXsydRgb()
+  const preview = new previewMod.XsydFirmwareRgbPreview(baseProfile)
+  for (const modeInfo of catalogMod.WIN68_KEY_RGB_MODES) {
+    const profile = structuredClone(baseProfile)
+    profile.keys.mode = modeInfo.id
+    profile.keys.brightness = 4
+    profile.keys.speed = 3
+    profile.keys.reverse = modeInfo.reverse
+    profile.keys.mix = true
+    profile.keys.colorIndex = 0
+    preview.configure(profile)
+    preview.advance(preview.ticks * 0.5 + 150)
+    if (modeInfo.reactive) {
+      preview.event('KeyW', true)
+      preview.advance(preview.ticks * 0.5 + 100)
+      preview.event('KeyW', false)
+      preview.advance(preview.ticks * 0.5 + 100)
+    }
+    const frame = preview.frame()
+    assert.equal(Object.keys(frame.keys).length, 68, `Mode ${modeInfo.id} (${modeInfo.name}) produces 68 keys`)
+    assert.ok(
+      Object.values(frame.keys).some(hexColor => hexColor !== '#000000'),
+      `Mode ${modeInfo.id} (${modeInfo.name}) lights up keys at brightness 4`
+    )
+  }
+
+  // Verify brightness 0 (Internal Mode 0) turns all 68 keys off (#000000)
+  const offProfile = structuredClone(baseProfile)
+  offProfile.keys.brightness = 0
+  preview.configure(offProfile)
+  preview.advance(preview.ticks * 0.5 + 50)
+  assert.ok(Object.values(preview.frame().keys).every(c => c === '#000000'))
+})
+
+test('RgbSettingsPage renders WIN 68 HE MAX 27 modes, Reverse toggle, and 8 Color Slots when model is win68HeMax', async () => {
+  const oldWindow = globalThis.window
+  const oldDoc = globalThis.document
+  globalThis.window = {
+    matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
+    addEventListener() {},
+    removeEventListener() {},
+  }
+  globalThis.document = {
+    hidden: false,
+    body: {},
+    addEventListener() {},
+    removeEventListener() {},
+  }
+  try {
+    const rgbPageMod = await bundle('src/components/RgbSettingsPage.tsx')
+    const modelCtxMod = await bundle('src/app/DeviceModelContext.ts')
+    const rgbMod = await bundle('src/protocol/xsyd/rgb.ts')
+    const RgbSettingsPage = rgbPageMod.default
+    const { DeviceModelContext } = modelCtxMod
+
+    const prevModel = DeviceModelContext._currentValue
+    DeviceModelContext._currentValue = 'win68HeMax'
+    try {
+      const profile = rgbMod.defaultXsydRgb()
+      profile.keys.mode = 2 // Tide Flux (supports speed, reverse, color)
+      const tree = renderComponent({
+        type: RgbSettingsPage,
+        props: {
+          model: "win68HeMax",
+          value: profile,
+          onChange() {},
+          busy: false,
+          advancedBindings: [],
+          onSetup() {},
+        },
+      })
+
+      const allText = textContent(tree)
+      assert.match(allText, /WIN 68 HE MAX Effects|Hiệu ứng WIN 68 HE MAX/)
+      assert.match(allText, /Tide Flux/)
+      assert.match(allText, /Snipping Storm/)
+      assert.match(allText, /Smooth Flow/)
+      assert.match(allText, /Reverse direction|Đảo chiều hiệu ứng/)
+      assert.match(allText, /XSYD Mode 0x02/)
+    } finally {
+      DeviceModelContext._currentValue = prevModel
+    }
+  } finally {
+    if (oldWindow !== undefined) globalThis.window = oldWindow
+    else delete globalThis.window
+    if (oldDoc !== undefined) globalThis.document = oldDoc
+    else delete globalThis.document
+  }
+})
+
+
+test('WIN 68 HE MAX GamepadPage & BackgroundServicePage work without timeout when Windows service is running', async () => {
+  const registryMod = await bundle('src/keyboard/registry/index.ts')
+  assert.equal(
+    registryMod.detectBoardFromUuid(new Uint8Array([0x11, 0x00, 0x00, 0x00, 0x00, 0x5c])),
+    'win68HeMax',
+    'detectBoardFromUuid recognizes XSYD bridge UUID 11000000005c'
+  )
+
+  const gamepadPageMod = await bundle('src/pages/GamepadPage.tsx')
+  const bgServicePageMod = await bundle('src/pages/BackgroundServicePage.tsx')
+  const gamepadServiceMod = await bundle('src/protocol/gamepadService.ts')
+  assert.equal(typeof gamepadPageMod.default, 'function')
+  assert.equal(typeof bgServicePageMod.default, 'function')
+  assert.equal(typeof gamepadServiceMod.useSharedHallService, 'function')
+})

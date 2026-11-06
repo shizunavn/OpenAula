@@ -20,6 +20,7 @@ import { gamepadAccess } from '../protocol/gamepadAccess';
 import { GamepadAutoApply, type GamepadSaveState } from '../protocol/gamepadAutoApply';
 import { GamepadLiveStore } from '../protocol/gamepadLive';
 import { hero68HallStream, useHero68HallStream } from '../protocol/hero68/hallStream';
+import { HERO84_KEY_POSITIONS } from '../protocol/hero68/keyPositions';
 import { useXsydDevice } from '../protocol/xsyd/device';
 import {
   gamepadService,
@@ -83,13 +84,20 @@ export default function GamepadPage({
   const keyboard = useRef<HTMLDivElement>(null);
   const autoApply = useRef<GamepadAutoApply<GamepadStatus> | null>(null);
 
-  const xsydWebHidMode = xsydDevice.state === 'connected' && !serviceConnected;
+  const xsydWebHidMode = xsydDevice.state === 'connected';
   const access = gamepadAccess(status, loading, serviceConnected);
   const locked = !xsydWebHidMode && access !== 'ready';
   // Keep controls inert while checking, without flashing the missing-service
   // overlay on every mount. A retry keeps an already confirmed gate visible.
   const showGate = locked && (access !== 'checking' || connectionAttempt > 0);
   const disabled = busy || profileBusy || locked;
+
+  useEffect(() => {
+    if (xsydWebHidMode) {
+      setError('');
+      setSaveState('saved');
+    }
+  }, [xsydWebHidMode]);
 
   function patch(next: Partial<GamepadConfiguration>) {
     restoreFromService.current = false;
@@ -162,20 +170,31 @@ export default function GamepadPage({
       return;
     }
     if (xsydWebHidMode) {
+      setBusy(true);
       setError('');
-      if (start) {
-        setDemo(false);
-        setXsydEnabled(true);
-        if (!hallStream.active && !hallStream.starting) {
-          await hero68HallStream.start(
-            config.bindings.map((b) => b.keyId),
-            'direct-poll',
-          );
+      try {
+        if (start) {
+          setDemo(false);
+          setXsydEnabled(true);
+          if (!hallStream.active && !hallStream.starting) {
+            await hero68HallStream.start(
+              config.bindings.map((b) => b.keyId),
+              'direct-poll',
+            );
+          }
+        } else {
+          setXsydEnabled(false);
+          if (tab !== 'tester' && (hallStream.active || hallStream.starting)) {
+            await hero68HallStream.stop();
+          }
         }
-      } else {
-        setXsydEnabled(false);
-        if (tab !== 'tester' && (hallStream.active || hallStream.starting)) {
-          await hero68HallStream.stop();
+      } catch (err) {
+        if (mounted.current) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      } finally {
+        if (mounted.current) {
+          setBusy(false);
         }
       }
       return;
@@ -213,7 +232,7 @@ export default function GamepadPage({
       disabled,
       locked,
       profileBusy,
-      statusEnabled: status?.enabled,
+      statusEnabled: xsydWebHidMode ? xsydEnabled : status?.enabled,
       busy,
       onPatch: patch,
       onToggleHotkey: (nextEnabled) => void runServiceAction(nextEnabled, 'hotkey'),
@@ -316,16 +335,18 @@ export default function GamepadPage({
   }, [slot]);
 
   useEffect(() => {
-    autoApply.current?.setAvailable(!locked && !profileBusy && !curveDragging);
-    autoApply.current?.update(config, status?.slot === slot ? status.configuration : undefined);
-  }, [config, locked, profileBusy, slot, curveDragging]);
+    autoApply.current?.setAvailable(!locked && !profileBusy && !curveDragging && !xsydWebHidMode);
+    if (!xsydWebHidMode) {
+      autoApply.current?.update(config, status?.slot === slot ? status.configuration : undefined);
+    }
+  }, [config, locked, profileBusy, slot, curveDragging, xsydWebHidMode, status]);
 
   // Hand off WebHID when a background toggle keybind is configured so the service can start Gamepad anytime.
   useEffect(() => {
-    if (!locked && config.toggleKeybind?.length) {
+    if (!locked && !xsydWebHidMode && config.toggleKeybind?.length) {
       void useSharedHallService().catch(() => {});
     }
-  }, [locked, config.toggleKeybind]);
+  }, [locked, xsydWebHidMode, config.toggleKeybind]);
 
   const liveStore = useMemo(() => new GamepadLiveStore(), []);
   useEffect(() => {
@@ -382,17 +403,18 @@ export default function GamepadPage({
       : status?.report ?? mapGamepad(config, {});
 
   const effectiveStatus = useMemo<GamepadStatus | null>(() => {
-    if (!xsydWebHidMode || status) {
+    if (!xsydWebHidMode) {
       return status;
     }
+    const active = xsydEnabled || (tab === 'tester' && hallStream.active);
     return {
-      enabled: xsydEnabled,
-      armed: xsydEnabled,
+      enabled: active,
+      armed: active,
       stale: false,
-      xinputVerified: false,
-      userIndex: 0,
-      outputHz: hallStream.telemetryHz ?? 0,
-      outputP99Ms: 0,
+      xinputVerified: Boolean(status?.enabled && status?.xinputVerified),
+      userIndex: status?.userIndex ?? 0,
+      outputHz: hallStream.telemetryHz ?? status?.outputHz ?? 0,
+      outputP99Ms: status?.outputP99Ms ?? 0,
       neutralCount: 0,
       error: hallStream.error ?? '',
       report,
@@ -404,11 +426,19 @@ export default function GamepadPage({
         keyboardSuppression: false,
       },
       hall: {
-        consumers: [],
+        consumers: active
+          ? [
+              {
+                id: 'web:xsyd-hall',
+                keys: config.bindings.map((b) => b.keyId),
+                hz: config.rate,
+              },
+            ]
+          : [],
         requests: hallStream.frameCount,
         timeouts: 0,
-        keys: Object.entries(hallStream.keyTelemetryHz).map(([keyId, hz]) => ({
-          pos: 0,
+        keys: Object.entries(hallStream.keyTelemetryHz).map(([keyId, hz], idx) => ({
+          pos: HERO84_KEY_POSITIONS[keyId] ?? idx + 1,
           keyId,
           requestedHz: config.rate,
           hz,
@@ -426,11 +456,11 @@ export default function GamepadPage({
         ageMs: 0,
       })),
     };
-  }, [xsydWebHidMode, status, xsydEnabled, hallStream, report, slot, config]);
+  }, [xsydWebHidMode, status, xsydEnabled, tab, hallStream, report, slot, config]);
 
   useEffect(() => {
     liveStore.configure(
-      tab === 'tester' && !locked,
+      (tab === 'tester' || (xsydWebHidMode && xsydEnabled)) && !locked,
       effectiveStatus,
       demo
         ? {
@@ -455,7 +485,7 @@ export default function GamepadPage({
             }
           : null
     );
-  }, [liveStore, tab, locked, effectiveStatus, xsydWebHidMode, report, demo, demoSamples, config]);
+  }, [liveStore, tab, locked, effectiveStatus, xsydWebHidMode, xsydEnabled, report, demo, demoSamples, config]);
 
   const labels = Object.fromEntries(config.bindings.map((b) => [b.keyId, actionLabel(b.action)]));
   const binding = config.bindings.find((b) => b.keyId === selected);
@@ -464,7 +494,9 @@ export default function GamepadPage({
   );
   const measuredHz = measuredKeys.length
     ? Math.min(...measuredKeys.map((k) => k.hz)).toFixed(1)
-    : '—';
+    : effectiveStatus?.outputHz
+      ? effectiveStatus.outputHz.toFixed(1)
+      : '—';
 
   const refreshConnection = () => {
     setLoading(true);
@@ -662,7 +694,7 @@ export default function GamepadPage({
                 removeBinding(id);
               }
             }}
-            overlayMode={tab === 'tester' ? 'stream' : 'none'}
+            overlayMode={tab === 'tester' || (xsydWebHidMode && xsydEnabled) ? 'stream' : 'none'}
             streamPreviewValues={Object.fromEntries(
               Object.entries(samples).map(([id, sample]) => [
                 id,

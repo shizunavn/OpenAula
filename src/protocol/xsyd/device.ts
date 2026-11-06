@@ -1283,6 +1283,9 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     }
     const payload = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength)
     reportTrace.add('in', event.reportId ?? XSYD_REPORT_ID, payload)
+    if (this.#waiters.size === 0) {
+      return
+    }
     const clearTimer =
       typeof window !== 'undefined' && window.clearTimeout ? window.clearTimeout.bind(window) : clearTimeout
     try {
@@ -1352,3 +1355,4 @@ export { isWin68HeMaxModel }
 export type { Hero68ConnectionState, Hero68DeviceSnapshot }
 
 export * from './hall'
+export * from './rgb'

@@ -87,12 +87,18 @@ export function detectBoardFromUuid(data?: ArrayLike<number> | null): HeroDevice
   const hex = Array.from({
     length: 6
   }, (_, index) => Number(data[index] ?? 0).toString(16).padStart(2, '0')).join('');
+  if (WIN68_HE_MAX_BOARD.usb.deviceUuids.includes(hex)) {
+    return 'win68HeMax';
+  }
   for (const board of REGISTRY.values()) {
     if (board.usb.deviceUuids.includes(hex)) {
       return board.id;
     }
   }
   if (data[0] === 0x11 || data[0] === 0x12) {
+    if (data[5] === 0x5c) {
+      return 'win68HeMax';
+    }
     if (data[5] === 0x05 || data[5] === 0x15) {
       return 'hero84';
     }

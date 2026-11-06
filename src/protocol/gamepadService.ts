@@ -3,6 +3,7 @@ import { GAMEPAD_TOGGLE_SERVICE_VERSION } from "../keyboard/gamepad";
 import { fetchLocalService } from "./localServiceAccess";
 import { hero68DeviceManager } from "./hero68/webhid";
 import { hero68HallStream } from "./hero68/hallStream";
+import { xsydDeviceManager } from "./xsyd/device";
 export type SharedHallSample = {
   keyId: string;
   pos: number;
@@ -101,6 +102,9 @@ export async function useSharedHallService() {
   }
   if (hero68HallStream.getSnapshot().active || hero68HallStream.getSnapshot().starting) {
     await hero68HallStream.stop();
+  }
+  if (xsydDeviceManager.connected && !hero68DeviceManager.connected) {
+    return;
   }
   await hero68DeviceManager.handoffToService();
 }

@@ -310,8 +310,14 @@ export class NativeBridge {
     });
   }
 
-  async request(packet: Uint8Array, sendOnly = false) {
-    return profileRequest(packet, nextPacket => this.requestOnce(nextPacket, sendOnly));
+  // The native bridge streams the authoritative gamepad state; the mirror in
+  // `ctx.gamepadState` lags behind it because a start stays paused until Hall
+  // sampling is armed.
+  gamepadEnabled() {
+    return this.ctx.gamepadState.enabled;
+  }
+
+  async request(packet: Uint8Array, sendOnly = false) {    return profileRequest(packet, nextPacket => this.requestOnce(nextPacket, sendOnly));
   }
 
   private async requestOnce(packet: Uint8Array, sendOnly = false) {

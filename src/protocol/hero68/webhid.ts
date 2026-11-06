@@ -200,8 +200,18 @@ export class Hero68DeviceManager implements Hero68Transport {
     if (typeof location !== 'undefined' && location.protocol.startsWith('http')) {
       const service = await rgbService.status().catch(() => null);
       if (service && ((service.apiVersion ?? 0) >= 3 || service.enabled && (service.apiVersion ?? 0) >= 2)) {
-        await this.connectViaService();
-        return true;
+        try {
+          await this.connectViaService();
+          return true;
+        } catch (error) {
+          if (!getHid()) {
+            throw error;
+          }
+          this.#setSnapshot({
+            state: 'disconnected',
+            error: null
+          });
+        }
       }
     }
     const hid = getHid();
@@ -387,7 +397,7 @@ export class Hero68DeviceManager implements Hero68Transport {
         zone: 1
       }));
       const detectedModel = detectHeroDeviceModelFromUuid(identity?.data);
-      if (!detectedModel) {
+      if (!detectedModel || detectedModel === 'win68HeMax' || detectedModel === 'win68') {
         throw new Error('This keyboard did not report a HERO68/HERO84 device UUID');
       }
       this.#viaService = true;

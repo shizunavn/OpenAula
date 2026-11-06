@@ -5,6 +5,7 @@ import { rgbService } from '../protocol/rgbService';
 import { publishRgbServiceStatus, refreshRgbService, unsupportedRgbEffects, useRgbServiceState } from '../protocol/rgbServiceState';
 import { hero68DeviceManager } from '../protocol/hero68/webhid';
 import { hero68HallStream } from '../protocol/hero68/hallStream';
+import { buildXsydRgbWriteFrame, XSYD_MAX_BRIGHTNESS, XSYD_PER_KEY_RGB_MODE, xsydDeviceManager } from '../protocol/xsyd/device';
 import { CustomRgbSession, customSignature, mergeRunningCustom, type CustomSessionState } from '../protocol/customRgbSession';
 import { BRAND } from '../brand';
 export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbProfile) => void, onSetup: () => void, slot = 0, editing = true) {
@@ -22,6 +23,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewOnly, setPreviewOnly] = useState(false);
+  const [xsydLive, setXsydLive] = useState(false);
   const [backup, setBackup] = useState<RgbProfile | null>(null);
   const current = useRef(value);
   current.current = value;
@@ -32,7 +34,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
   const config = restoreCustomRgb(value.custom, value);
   const unsupported = status ? unsupportedRgbEffects(config, status) : [];
   const updateRequired = !!status && ((status.apiVersion ?? 0) < 3 || status.customRevision === undefined || unsupported.length > 0);
-  const applied = !!state.session && status?.sessionId === state.session && status.enabled && status.mode === 'custom' && !previewOnly;
+  const applied = (xsydLive && xsydDeviceManager.connected && !previewOnly) || (!!state.session && status?.sessionId === state.session && status.enabled && status.mode === 'custom' && !previewOnly);
   const signature = customSignature(value);
   const previousSignature = useRef(signature);
   const previousEditing = useRef(false);
@@ -107,6 +109,49 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
     if (busy) {
       return false;
     }
+    if (xsydDeviceManager.connected) {
+      const token = ++action.current;
+      setBusy(true);
+      setError(null);
+      try {
+        await xsydDeviceManager.request(
+          buildXsydRgbWriteFrame({
+            mode: XSYD_PER_KEY_RGB_MODE,
+            mix: false,
+            rgb: [255, 255, 255],
+            brightness: XSYD_MAX_BRIGHTNESS,
+            speed: 3,
+            reverse: false,
+            colorIndex: 0,
+          })
+        );
+        if (token !== action.current) {
+          return false;
+        }
+        const profile = {
+          ...current.current,
+          custom: {
+            ...restoreCustomRgb(current.current.custom, current.current),
+            enabled: true
+          }
+        };
+        current.current = profile;
+        previousSignature.current = customSignature(profile);
+        callbacks.current(profile);
+        setXsydLive(true);
+        demo(false);
+        return true;
+      } catch (reason) {
+        if (token === action.current) {
+          setError(reason instanceof Error ? reason.message : String(reason));
+        }
+        return false;
+      } finally {
+        if (token === action.current) {
+          setBusy(false);
+        }
+      }
+    }
     if (!status || updateRequired) {
       onSetup();
       return false;
@@ -171,7 +216,38 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
     }
   }
   async function onboard() {
-    if (busy || !status) {
+    if (busy) {
+      return;
+    }
+    if (xsydLive && xsydDeviceManager.connected) {
+      const token = ++action.current;
+      setBusy(true);
+      setError(null);
+      try {
+        await xsydDeviceManager.request(buildXsydRgbWriteFrame(current.current.keys));
+        if (token !== action.current) {
+          return;
+        }
+        setXsydLive(false);
+        callbacks.current({
+          ...current.current,
+          custom: {
+            ...restoreCustomRgb(current.current.custom, current.current),
+            enabled: false
+          }
+        });
+      } catch (reason) {
+        if (token === action.current) {
+          setError(reason instanceof Error ? reason.message : String(reason));
+        }
+      } finally {
+        if (token === action.current) {
+          setBusy(false);
+        }
+      }
+      return;
+    }
+    if (!status) {
       return;
     }
     const token = ++action.current;

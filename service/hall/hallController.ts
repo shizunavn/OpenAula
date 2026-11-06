@@ -45,6 +45,9 @@ export function createHallController({
    * and evicts stale samples for unsubscribed keys.
    */
   async function syncHall() {
+    // Demand follows the native output only: `gamepadState.enabled` is still
+    // false while `startNativeGamepad` runs, and "pause" keeps samples flowing.
+    const sampling = getBridge().gamepadEnabled();
     ctx.hallBroker.update({
       id: 'rgb',
       keys: needsAnalogHall() ? rgbHallKeys(ctx.profile?.custom) : [],
@@ -56,7 +59,7 @@ export function createHallController({
     ] as const) {
       ctx.hallBroker.update({
         id: 'gamepad:' + suffix,
-        keys: ctx.gamepadState.enabled
+        keys: sampling
           ? ctx.gamepadConfigurations[ctx.gamepadSlot].bindings
               .filter(b => isAnalogAction(b.action) === analog)
               .map(b => b.keyId)

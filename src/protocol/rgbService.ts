@@ -4,6 +4,7 @@ import { fetchLocalService, LocalServicePermissionError } from './localServiceAc
 import type { RhythmConfiguration } from '../keyboard/rhythm';
 import { serviceHealth } from './serviceHealth';
 export type RgbServiceStatus = {
+  deviceModel?: 'hero68' | 'hero84' | 'win68HeMax' | 'win68';
   supportsFullUpdate?: boolean;
   coreVersion?: string;
   launcherVersion?: string;

@@ -11,10 +11,20 @@ import { hero68HallStream, type Hero68HallStreamState } from '../../protocol/her
 import { hydrateFromDevice, type HydratedKeySettings } from '../../protocol/hero68/hero68Encoder';
 import { syncHero68MacroLibrary } from '../../protocol/hero68/macroDevice';
 import { isMacroRemapValue, readOnboardProfileName, readRemapLayers, REMAP_LAYERS, saveOnboardProfileName, saveRemapChanges, type RemapLayer, type RemapLayers } from '../../protocol/hero68/remap';
-import { defaultRgb, mergeRgb, readRgbProfile, saveRgbProfile, type RgbChanges, type RgbProfile } from '../../protocol/hero68/rgb';
+import { mergeRgb, readRgbProfile, saveRgbProfile, type RgbChanges, type RgbProfile } from '../../protocol/hero68/rgb';
 import type { PollingRate, ProfileSlot } from '../../protocol/hero68/types';
 import { hero68DeviceManager, type Hero68ConnectionState } from '../../protocol/hero68/webhid';
-import { hydrateFromXsydDevice, readXsydProfileSlot, readXsydRemapLayers, saveXsydAdvancedBindings, saveXsydRemapChanges, xsydDeviceManager } from '../../protocol/xsyd/device';
+import {
+  defaultXsydRgb,
+  hydrateFromXsydDevice,
+  readXsydProfileSlot,
+  readXsydRemapLayers,
+  readXsydRgbProfile,
+  saveXsydAdvancedBindings,
+  saveXsydRemapChanges,
+  saveXsydRgbProfile,
+  xsydDeviceManager,
+} from '../../protocol/xsyd/device';
 import { rgbService } from '../../protocol/rgbService';
 import { publishRgbServiceStatus } from '../../protocol/rgbServiceState';
 import { BRAND } from '../../brand';
@@ -412,14 +422,16 @@ export function useDeviceSyncController({
       if (isWin68HeMaxModel(targetModel) && xsydDeviceManager.connected) {
         const hydrated = await hydrateFromXsydDevice(xsydDeviceManager, slot, activeKeyIds);
         const mappings = await readXsydRemapLayers(xsydDeviceManager, activeKeyIds);
-        const fallbackRgb = draft?.rgb ?? defaultRgb(activeKeyIds);
+        const freshRgb = await readXsydRgbProfile(xsydDeviceManager, activeKeyIds).catch(
+          () => draft?.rgb ?? defaultXsydRgb(activeKeyIds)
+        );
         setAdvancedHydratedSlot(slot);
         setAdvancedReadError(null);
         if (draft?.advancedBindings) {
           setAdvancedBindings(draft.advancedBindings);
         }
-        setRgbBaseline(fallbackRgb);
-        setRgb(fallbackRgb);
+        setRgbBaseline(freshRgb);
+        setRgb(mergeRgb(freshRgb, draft?.rgb, draft?.rgbDirty));
         setRgbHydratedSlot(slot);
         remapBaselineRef.current = structuredClone(mappings);
         applyHydratedPerformance(hydrated, draft);
@@ -570,6 +582,8 @@ export function useDeviceSyncController({
     }
     if (loadedProfileSlot !== profileSlot) {
       setDeviceActionError(`Profile ${profileSlot} has not been read from the keyboard yet. Read it before saving to avoid overwriting unknown per-key values.`);
+    }
+    if (loadedProfileSlot !== profileSlot) {
       return;
     }
     if (dirtyKeys.size === 0 && dirtyRemaps.size === 0 && rgbPending === 0 && !advancedPending) {
@@ -579,7 +593,7 @@ export function useDeviceSyncController({
       setDeviceActionError('Read Advanced Keys from this profile before saving. ' + (advancedReadError ?? ''));
       return;
     }
-    if (!isWin68HeMaxModel(deviceModel) && rgbHydratedSlot !== profileSlot) {
+    if (rgbHydratedSlot !== profileSlot) {
       setDeviceActionError('Read RGB from this profile before saving.');
       return;
     }
@@ -623,6 +637,16 @@ export function useDeviceSyncController({
         if (advancedPending) {
           const verified = await saveXsydAdvancedBindings(xsydDeviceManager, profileSlot, advancedBindings, advancedBaseline);
           setAdvancedBaseline(verified);
+        }
+        if (rgbPending && !tachyon) {
+          await saveXsydRgbProfile(
+            xsydDeviceManager,
+            rgb,
+            rgbBaseline,
+            setRgbBaseline,
+            modelKeyIds,
+            dirtyKeys.size === 0 && dirtyRemaps.size === 0 && !advancedPending ? profileSlot : undefined
+          );
         }
         if (dirtyKeys.size) {
           setDirtyKeys(new Set());
