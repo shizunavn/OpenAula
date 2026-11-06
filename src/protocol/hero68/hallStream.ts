@@ -14,6 +14,15 @@ import {
   posToKeyId,
 } from './keyPositions';
 import { hero68DeviceManager } from './webhid';
+import {
+  buildXsydHallPressedFrame,
+  buildXsydHallTravelFrame,
+  decodeXsydHallPressedReply,
+  decodeXsydHallTravelReply,
+  mergeXsydHallSamples,
+  xsydDeviceManager,
+  xsydTableIdsForKeys,
+} from '../xsyd/device';
 import { rgbService, type RgbServiceHallRecord } from '../rgbService';
 import { HERO68_DISTANCE_UNIT_MM } from './precision';
 import { runHallPolling } from './hallPolling';
@@ -265,6 +274,7 @@ class Hero68HallStream {
   #ingestRecords(
     records: readonly {
       keyId: number;
+      keyCode?: string;
       distanceUnits: number;
       adc: number;
       pressed: boolean;
@@ -283,7 +293,7 @@ class Hero68HallStream {
     };
     let added = 0;
     for (const record of records) {
-      const keyId = posToKeyId(record.keyId);
+      const keyId = record.keyCode ?? posToKeyId(record.keyId);
       if (!keyId) {
         continue;
       }
@@ -336,9 +346,11 @@ class Hero68HallStream {
     });
   }
 
-  #installDeviceWatcher() {
-    this.#unsubscribeDevice = hero68DeviceManager.subscribe(() => {
-      const snapshot = hero68DeviceManager.getSnapshot();
+  #installDeviceWatcher(useXsyd = false) {
+    const manager = useXsyd ? xsydDeviceManager : hero68DeviceManager;
+    const label = useXsyd ? 'WIN 68 HE MAX' : 'HERO68';
+    this.#unsubscribeDevice = manager.subscribe(() => {
+      const snapshot = manager.getSnapshot();
       if (snapshot.state === 'connected' || (!this.#state.active && !this.#state.starting)) {
         return;
       }
@@ -346,7 +358,7 @@ class Hero68HallStream {
       this.#cleanupListeners();
       const disconnectMessage =
         snapshot.state === 'disconnected'
-          ? `HERO68 USB interface disconnected during Hall Stream (${this.#stage}).`
+          ? `${label} USB interface disconnected during Hall Stream (${this.#stage}).`
           : snapshot.error;
       this.#setState({
         active: false,
@@ -416,6 +428,50 @@ class Hero68HallStream {
     });
   }
 
+  async #runXsydPolling(generation: number, requestedKeyIds: readonly string[]): Promise<void> {
+    const keyIdSet = requestedKeyIds.length > 0 ? new Set(requestedKeyIds) : undefined;
+    const tables = xsydTableIdsForKeys(requestedKeyIds);
+    const travelCache = new Map<number, number>();
+    let stepIndex = 0;
+
+    while (generation === this.#pollGeneration && xsydDeviceManager.connected) {
+      const tableId = tables[stepIndex % tables.length]!;
+      stepIndex += 1;
+
+      const pressedReply = await xsydDeviceManager.request(buildXsydHallPressedFrame(), 650);
+      if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
+        return;
+      }
+      const pressedByMatrixIndex = decodeXsydHallPressedReply(pressedReply);
+
+      const travelReply = await xsydDeviceManager.request(buildXsydHallTravelFrame(tableId), 650);
+      if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
+        return;
+      }
+      const tableTravel = decodeXsydHallTravelReply(travelReply, tableId);
+      for (const [idx, um] of tableTravel) {
+        travelCache.set(idx, um);
+      }
+
+      const samples = mergeXsydHallSamples({
+        travelByMatrixIndex: tables.length === 1 ? tableTravel : travelCache,
+        pressedByMatrixIndex,
+        keyIds: keyIdSet,
+      });
+      this.#ingestRecords(
+        samples.map(sample => ({
+          keyId: sample.pos,
+          keyCode: sample.keyId,
+          distanceUnits: sample.distanceUnits,
+          adc: sample.rawAdc,
+          pressed: sample.pressed,
+        })),
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 8));
+    }
+  }
+
   async start(
     preferredKeyIds: Iterable<string> = [],
     source: HallStreamSource = 'direct-poll',
@@ -430,7 +486,8 @@ class Hero68HallStream {
     if (this.#state.active || this.#state.starting) {
       return;
     }
-    if (!hero68DeviceManager.connected) {
+    const useXsyd = xsydDeviceManager.connected && !hero68DeviceManager.connected;
+    if (!hero68DeviceManager.connected && !useXsyd) {
       throw new Error('Connect HERO68 before starting Hall Stream');
     }
 
@@ -461,7 +518,7 @@ class Hero68HallStream {
 
     const pollingPositions =
       preferredPositions.length > 0 ? preferredPositions : Object.values(defaultPositionMap);
-    const viaService = hero68DeviceManager.viaService;
+    const viaService = !useXsyd && hero68DeviceManager.viaService;
     if (viaService) {
       const status = await rgbService.status();
       if ((status.apiVersion ?? 0) < 4) {
@@ -493,13 +550,13 @@ class Hero68HallStream {
       keyTelemetryHz: {},
     });
     this.#installHostKeyFallback();
-    this.#installDeviceWatcher();
-    if (!viaService) {
+    this.#installDeviceWatcher(useXsyd);
+    if (!viaService && !useXsyd) {
       this.#installDistanceReportHandler();
     }
 
     try {
-      if (source !== 'direct-poll' && !viaService) {
+      if (source !== 'direct-poll' && !viaService && !useXsyd) {
         this.#stage = 'read-auto-calibration';
         const autoCalibration = await hero68DeviceManager.request(
           readAutoCalibration(),
@@ -544,6 +601,24 @@ class Hero68HallStream {
             recovering: false,
             samples: this.#zeroVisualSamples(),
             error: 'Service Hall stream disconnected',
+            telemetryHz: null,
+            keyTelemetryHz: {},
+          });
+        });
+      } else if (useXsyd) {
+        const generation = ++this.#pollGeneration;
+        this.#pollPromise = this.#runXsydPolling(generation, requestedIds).catch(error => {
+          if (generation !== this.#pollGeneration) {
+            return;
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          this.#cleanupListeners();
+          this.#setState({
+            active: false,
+            starting: false,
+            recovering: false,
+            error: `Hall polling stopped: ${message}. Close other keyboard apps or tabs, reconnect WIN 68 HE MAX, then start again.`,
+            samples: this.#zeroVisualSamples(),
             telemetryHz: null,
             keyTelemetryHz: {},
           });

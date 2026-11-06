@@ -205,13 +205,27 @@ export default function Hero68Preview({
   }, [maxFontPx, rows]);
   useLayoutEffect(() => {
     const keyboardEl = previewRef.current?.querySelector<HTMLElement>('.hero68-case');
+    const layoutEl = previewRef.current?.querySelector<HTMLElement>('.hero68-layout');
     if (!keyboardEl || !onWidthChange) {
       return;
     }
+    const measureCaseWidth = (borderInlineSize?: number) => {
+      const measured = Math.round(
+        Math.max(
+          borderInlineSize ?? 0,
+          keyboardEl.offsetWidth,
+          keyboardEl.scrollWidth,
+          layoutEl?.scrollWidth ?? 0
+        )
+      );
+      if (measured >= 320) {
+        onWidthChange(measured);
+      }
+    };
     // Use layout pixels: getBoundingClientRect includes the app's CSS zoom.
-    onWidthChange(keyboardEl.offsetWidth);
+    measureCaseWidth();
     const observer = new ResizeObserver(([entry]) => {
-      onWidthChange(entry.borderBoxSize[0]?.inlineSize ?? keyboardEl.offsetWidth);
+      measureCaseWidth(entry?.borderBoxSize?.[0]?.inlineSize);
     });
     observer.observe(keyboardEl);
     return () => observer.disconnect();

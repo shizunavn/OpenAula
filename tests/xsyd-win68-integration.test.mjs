@@ -355,6 +355,12 @@ test('XsydDeviceManager connects without reopening an open handle, reassembles m
           } else if (op === 0x24) {
             const bad = makeReply(0x00, [0x00])
             for (const l of listeners) l({ reportId: 0, data: new DataView(bad.buffer) })
+          } else if (op === 0x25) {
+            // A late reply for a previous opcode arrives before the real one.
+            const stale = makeReply(0x00, [0x00, 0x70, 0x01, 0xff])
+            const real = makeReply(0x25, [0x00])
+            for (const l of listeners) l({ reportId: 0, data: new DataView(stale.buffer) })
+            for (const l of listeners) l({ reportId: 0, data: new DataView(real.buffer) })
           }
         }, 1)
       },
@@ -403,11 +409,20 @@ test('XsydDeviceManager connects without reopening an open handle, reassembles m
       '5c0400945007ffff',
     ])
 
-    // Mismatched reply opcode rejects clearly
+    // A reply for another opcode is discarded, not turned into a request failure:
+    // the mock answers 0x24 with opcode 0x80, so the request has to time out on
+    // its own opcode instead of rejecting with "Unexpected ... opcode".
+    const staleReplyStarted = Date.now()
     await assert.rejects(
-      () => mgr.request(xsydAdvanced.buildMtFrame({ key: 26, hold: 29, tap: 8, delayMs: 200 })),
-      /Unexpected XSYD reply opcode 0x80 \(expected 0xa4\)/
+      () => mgr.request(xsydAdvanced.buildMtFrame({ key: 26, hold: 29, tap: 8, delayMs: 200 }), 300),
+      /timed out \(opcode=0x24\)/
     )
+    assert.ok(Date.now() - staleReplyStarted >= 250, 'the mismatched reply must not settle the request early')
+
+    // A stale reply followed by the real one resolves with the real one.
+    const reply = await mgr.request(xsydCodec.buildXsydFrame(0x25, [0x00]), 500)
+    assert.equal(reply.opcode, 0xa5)
+    assert.equal(reply.checksumValid, true)
   } finally {
     await mgr.disconnect()
     if (oldNav) Object.defineProperty(globalThis, 'navigator', oldNav)
@@ -650,11 +665,9 @@ test('DKS unsupported modal and badges appear on win68/win68HeMax and never exis
     assert.equal(win68DksButton.props['aria-disabled'], 'true')
     assert.match(textContent(win68DksButton), /Unsupported|Chưa hỗ trợ/)
 
-    // RS and DDKS are also present and disabled on win68
-    const win68RsButton = win68Buttons.find(b => b.props['data-mode'] === 'RS')
-    const win68DdksButton = win68Buttons.find(b => b.props['data-mode'] === 'DDKS')
-    assert.equal(win68RsButton?.props?.disabled, true)
-    assert.equal(win68DdksButton?.props?.disabled, true)
+    // RS and DDKS have no card at all: their layouts are not part of this page.
+    assert.equal(win68Buttons.find(b => b.props['data-mode'] === 'RS'), undefined)
+    assert.equal(win68Buttons.find(b => b.props['data-mode'] === 'DDKS'), undefined)
 
     const win68Modals = collectNodes(
       win68Tree,
@@ -705,6 +718,7 @@ test('DKS unsupported modal and badges appear on win68/win68HeMax and never exis
       assert.equal(heroDksButton.props['data-unsupported'], undefined)
       assert.ok(!textContent(heroDksButton).includes('Unsupported'))
       assert.equal(heroButtons.find(b => b.props['data-mode'] === 'RS'), undefined)
+      assert.equal(heroButtons.find(b => b.props['data-mode'] === 'DDKS'), undefined)
 
       const heroModals = collectNodes(
         heroTree,
@@ -716,4 +730,103 @@ test('DKS unsupported modal and badges appear on win68/win68HeMax and never exis
     if (oldDoc !== undefined) globalThis.document = oldDoc
     else delete globalThis.document
   }
+})
+
+
+test('WIN 68 HE MAX 0x12 / 0x92 Hall travel & pressed-state stream matches travel_test_press_randomkey.pcapng', async () => {
+  const hallMod = await bundle('src/protocol/xsyd/hall.ts')
+  const deviceMod = await bundle('src/protocol/xsyd/device.ts')
+  const codecMod = await bundle('src/protocol/xsyd/codec.ts')
+
+  // 1. Verify request frames match travel_test_press_randomkey.pcapng byte for byte:
+  //    - 5c 04 12 a6 | 03 01 ff ff (pressed flags)
+  //    - 5c 04 12 a6 | 02 01 ff ff (travel table 1: matrix indices 0..62)
+  //    - 5c 04 12 a6 | 02 02 ff ff (travel table 2: matrix indices 63..125)
+  const pressedReq = hallMod.buildXsydHallPressedFrame()
+  const travel1Req = hallMod.buildXsydHallTravelFrame(1)
+  const travel2Req = hallMod.buildXsydHallTravelFrame(2)
+
+  assert.deepEqual([...pressedReq.slice(0, 8)], [0x5c, 0x04, 0x12, 0xa6, 0x03, 0x01, 0xff, 0xff])
+  assert.deepEqual([...travel1Req.slice(0, 8)], [0x5c, 0x04, 0x12, 0xa6, 0x02, 0x01, 0xff, 0xff])
+  assert.deepEqual([...travel2Req.slice(0, 8)], [0x5c, 0x04, 0x12, 0xa6, 0x02, 0x02, 0xff, 0xff])
+
+  // 2. Verify table routing for specific keys:
+  //    KeyW is at matrixIndex 44 (< 63 -> table 1); KeyS is at 65 and KeyM is at 92 (>= 63 -> table 2)
+  assert.deepEqual(hallMod.xsydTableIdsForKeys(['KeyW', 'KeyQ']), [1])
+  assert.deepEqual(hallMod.xsydTableIdsForKeys(['KeyS', 'KeyM']), [2])
+  assert.deepEqual(hallMod.xsydTableIdsForKeys(['KeyW', 'KeyS']), [1, 2])
+  assert.deepEqual(hallMod.xsydTableIdsForKeys([]), [1, 2])
+
+  // 3. Reconstruct exact capture replies from travel_test_press_randomkey.pcapng:
+  //    - pkt 4588 (KeyM bottomed out at 3400 um = 0x0D48 at table 2 slot 29 -> matrixIndex 92, pressed flag at body[92] = 2)
+  //    - pkt 16294 (KeyS pressed to 1783 um = 0x06F7 at table 2 slot 2 -> matrixIndex 65, pressed flag at body[65] = 2)
+  const pressedPayload = new Uint8Array(0x82)
+  pressedPayload[0] = 0x00
+  pressedPayload[1] = 0x03
+  pressedPayload[2 + 65] = 0x02 // KeyS actuated
+  pressedPayload[2 + 92] = 0x02 // KeyM actuated
+  pressedPayload[128] = 0xff
+  pressedPayload[129] = 0xff
+  const pressedReplyFrame = codecMod.buildXsydFrame(0x92, pressedPayload)
+
+  const travel2Payload = new Uint8Array(0x80)
+  travel2Payload[0] = 0x00
+  travel2Payload[1] = 0x02
+  // Slot 2 (matrixIndex 65 = KeyS): 1783 um (0x06F7 -> F7 06)
+  travel2Payload[2 + 2 * 2] = 247
+  travel2Payload[2 + 2 * 2 + 1] = 6
+  // Slot 29 (matrixIndex 92 = KeyM): 3400 um (0x0D48 -> 48 0D)
+  travel2Payload[2 + 29 * 2] = 72
+  travel2Payload[2 + 29 * 2 + 1] = 13
+  const travel2ReplyFrame = codecMod.buildXsydFrame(0x92, travel2Payload)
+
+  // Verify 3-report reassembly via XsydFrameAssembler
+  const assembler = new codecMod.XsydFrameAssembler()
+  const pReports = codecMod.xsydReports(pressedReplyFrame)
+  assert.equal(pReports.length, 3)
+  assert.equal(assembler.push(pReports[0]), null)
+  assert.equal(assembler.push(pReports[1]), null)
+  const decodedPressed = assembler.push(pReports[2])
+  assert.ok(decodedPressed && decodedPressed.checksumValid)
+
+  const tReports = codecMod.xsydReports(travel2ReplyFrame)
+  assert.equal(tReports.length, 3)
+  assert.equal(assembler.push(tReports[0]), null)
+  assert.equal(assembler.push(tReports[1]), null)
+  const decodedTravel2 = assembler.push(tReports[2])
+  assert.ok(decodedTravel2 && decodedTravel2.checksumValid)
+
+  // 4. Verify readXsydHallSnapshot end-to-end with a mock requester
+  const sentFrames = []
+  const samples = await deviceMod.readXsydHallSnapshot(
+    {
+      async request(frame) {
+        sentFrames.push(frame)
+        if (frame[4] === 0x03) return decodedPressed
+        if (frame[4] === 0x02 && frame[5] === 0x02) return decodedTravel2
+        throw new Error('Unexpected request frame')
+      },
+    },
+    { keyIds: ['KeyS', 'KeyM', 'KeyA'] }
+  )
+
+  assert.equal(sentFrames.length, 2, 'Only polls pressed (03 01) + lower half travel (02 02) for KeyS/KeyM/KeyA')
+  const byKey = Object.fromEntries(samples.map(s => [s.keyId, s]))
+  assert.equal(byKey.KeyS.matrixIndex, 65)
+  assert.equal(byKey.KeyS.pos, 0x16)
+  assert.equal(byKey.KeyS.travelUm, 1783)
+  assert.equal(byKey.KeyS.distanceMm, 1.783)
+  assert.equal(byKey.KeyS.distanceUnits, 178)
+  assert.equal(byKey.KeyS.pressed, true)
+
+  assert.equal(byKey.KeyM.matrixIndex, 92)
+  assert.equal(byKey.KeyM.pos, 0x10)
+  assert.equal(byKey.KeyM.travelUm, 3400)
+  assert.equal(byKey.KeyM.distanceMm, 3.4)
+  assert.equal(byKey.KeyM.distanceUnits, 340)
+  assert.equal(byKey.KeyM.pressed, true)
+
+  assert.equal(byKey.KeyA.matrixIndex, 64)
+  assert.equal(byKey.KeyA.travelUm, 0)
+  assert.equal(byKey.KeyA.pressed, false)
 })

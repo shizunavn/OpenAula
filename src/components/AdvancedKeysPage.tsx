@@ -81,15 +81,6 @@ const XSYD_SOCD_OPTIONS = [{
   title: 'Other SOCD modes (mode 1–3)',
   desc: 'Unverified — no USB capture with non-zero type/mode/delay yet.'
 }];
-const XSYD_UNVERIFIED_MODES = [{
-  id: 'RS',
-  title: 'Rappy Snappy (RS)',
-  description: 'Unverified on WIN 68 HE MAX — blocked until USB capture is available.'
-}, {
-  id: 'DDKS',
-  title: 'DDKS / Poll-rate (0x29)',
-  description: 'Unverified on WIN 68 HE MAX — blocked until USB capture is available.'
-}] as const;
 export const XSYD_DKS_DOC_URL = 'docs/xsyd-protocol.md#7-what-is-still-unknown';
 type Props = {
   model?: HeroDeviceModelId;
@@ -683,25 +674,6 @@ export default function AdvancedKeysPage({
                 </span>
               </button>;
             })}
-            {isWin68 && XSYD_UNVERIFIED_MODES.map(item => <button
-              key={item.id}
-              type="button"
-              data-mode={item.id}
-              data-unsupported="true"
-              disabled
-              aria-disabled="true"
-              title={tr('Unverified')}
-              className="is-disabled is-unsupported"
-            >
-              <AdvancedKeyIcon kind="UNKNOWN" />
-              <span>
-                <strong>
-                  {tr(item.title)}
-                  <span className="ak-unsupported-badge">{tr('Unsupported')}</span>
-                </strong>
-                <span>{tr(item.description)}</span>
-              </span>
-            </button>)}
           </div>
         </article>
         <article className="ak-card ak-current">

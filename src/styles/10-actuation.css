@@ -40,7 +40,7 @@
 .actuation-page .actuation-selection-instruction,
 .actuation-page .actuation-heading-row,
 .actuation-page .actuation-woot-grid {
-  width: min(100%, var(--actuation-preview-width, 790px));
+  width: min(100%, max(680px, var(--actuation-preview-width, 790px)));
   margin-inline: auto;
 }
 

@@ -63,7 +63,7 @@ export function useHallStreamViewModel({
     if (!showAdvancedPages && ['stream', 'gamepad'].includes(activePage)) {
       setActivePage('quick');
     }
-    if ((hallStream.active || hallStream.starting) && (activeRail !== 'keyboard' || !['stream', 'actuation'].includes(activePage))) {
+    if ((hallStream.active || hallStream.starting) && (activeRail !== 'keyboard' || !['stream', 'actuation', 'gamepad'].includes(activePage))) {
       void hero68HallStream.stop();
     }
     if ((hallStream.active || hallStream.starting) && activeRail === 'keyboard' && activePage === 'actuation' && selectedKeys.size === 0) {

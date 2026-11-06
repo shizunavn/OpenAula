@@ -1,6 +1,6 @@
 # OpenAula
 
-An open-source, browser-based configurator for **AULA HERO68 / HERO84** Hall-effect keyboards, plus an optional **Windows tray service** that keeps custom RGB, Rhythm Sync and analog Xbox gamepad output running after the browser is closed.
+An open-source, browser-based configurator for **AULA HERO68 / HERO84 / WIN 68 HE MAX** Hall-effect keyboards, plus an optional **Windows tray service** that keeps custom RGB, Rhythm Sync and analog Xbox gamepad output running after the browser is closed.
 
 Formerly OpenHero68; the rename reflects support for the wider AULA line. Existing installs upgrade in place and keep their settings.
 
@@ -15,7 +15,7 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 >
 > No coding needed. Share your exact model, firmware version, USB IDs and a layout photo; write **Unknown** if you need help. Protocol captures are optional. Owners who can test on real hardware are especially welcome.
 >
-> **Currently verified: AULA HERO68.** HERO84 and other models still need protocol and hardware validation. The Windows service has HERO84 code paths (84-key RGB frames, Hall stream, Rhythm), but they have not been tested on a real HERO84.
+> **Currently verified: AULA HERO68.** HERO84 and other models still need protocol and hardware validation. The Windows service has HERO84 code paths (84-key RGB frames, Hall stream, Rhythm), but they have not been tested on a real HERO84. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings and advanced keys are checked byte for byte against USB captures, but DKS, Rappy Snappy, DDKS and non-default SOCD modes stay disabled until a capture proves their layout.
 
 
 
@@ -41,11 +41,11 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 
 | Area | What you can do |
 | --- | --- |
-| Profiles | Switch between 3 on-board profile slots, read from and save to device; displays dynamic key counts and model names for recognized boards (e.g. HERO68, HERO84) |
+| Profiles | Switch between 3 on-board profile slots, read from and save to device; displays dynamic key counts and model names for recognized boards (e.g. HERO68, HERO84, WIN 68 HE MAX) |
 | Actuation Point | Per-key or multi-key actuation from 0.10 to 3.40 mm, with a live Hall test overlay on the keyboard |
 | Rapid Trigger | Rapid Trigger and deadzone settings |
 | Key Remap | Remap keys across layers, with a searchable icon catalog |
-| Advanced Keys | SOCD, DKS, Mod Tap, Toggle, MPT and END bindings (Main Layer) |
+| Advanced Keys | SOCD, DKS, Mod Tap, Toggle, MPT and END bindings (Main Layer). DKS, RS, DDKS and non-default SOCD are disabled on WIN 68 HE MAX until a USB capture proves their frame layout |
 | Macros | Macro editor with a local library synced to the keyboard |
 | RGB Settings | On-board effects for keys and side light, plus **Custom Effects** and **Rhythm Sync**; per-key painting tools sit directly below the keyboard preview |
 | Gamepad | Setup & Remap with automatic saves, analog response curves/travel, digital AP/RT, Snappy, circle/square, angle adjustment, live tester with XInput verification, and **custom toggle keybinding** to start/stop emulation in-game |
@@ -191,9 +191,10 @@ src/
   pages/             Feature pages (My Profile, Remap, Macros, RGB, Gamepad, Settings, …)
   components/        UI dialogs, banners, and feature components
   app/               Shared UI pieces, hooks (workspace, selection, sync state), helpers
-  keyboard/          Keyboard layout models, registry (HERO68, HERO84), and layout caching
+  keyboard/          Keyboard layout models, registry (HERO68, HERO84, WIN 68 HE MAX), and layout caching
   protocol/          WebHID transport and protocol implementations:
     bytetech/        Core Bytetech protocol engine (HERO68/HERO84)
+    xsyd/            XSYD 0x5C protocol (WIN 68 HE MAX)
     hero68/          Backward-compatible re-exports
   state/             Persisted app state, macros, remap presets
   i18n/              English / Vietnamese translations
@@ -219,12 +220,14 @@ docs/                Reverse-engineering notes, feature docs, release notes
 - [Gamepad and shared Hall](https://www.google.com/search?q=docs/GAMEPAD.md) · [Recorded validation results](https://www.google.com/search?q=docs/GAMEPAD_VALIDATION.md)
 - [Macros UI](https://www.google.com/search?q=docs/MACRO_UI.md) · [Advanced Keys UI](https://www.google.com/search?q=docs/ADVANCED_KEYS_UI.md)
 - [Protocol integration notes](https://www.google.com/search?q=src/protocol/README.md)
+- [WIN 68 HE MAX (XSYD 0x5C) protocol](docs/xsyd-protocol.md)
 - [All docs, including reverse-engineering notes](https://www.google.com/search?q=docs/README.md)
 - [Changelog](CHANGELOG.md) · [Service release notes](https://www.google.com/search?q=docs/releases/)
 
 ## Known limitations
 
 - **Gamepad v1** supports one HERO68 and one Xbox controller on Windows x64. Firmware blocking saves exact original remaps before writing zero and recovers them after service restart. Advanced Keys on assigned keys must be removed first. Windows hook fallback affects matching keys on other keyboards, may not block Raw Input, and displays an anti-cheat warning when selected. No suppression method guarantees anti-cheat approval. DirectInput, mouse-to-stick and kernel keyboard filters are outside v1.
+- **WIN 68 HE MAX** is a separate protocol stack, so Gamepad, RGB, Rhythm Sync and Hall Stream are HERO68/HERO84 features and do not apply to it yet. DKS, Rappy Snappy, DDKS and non-default SOCD modes are blocked until a USB capture proves their frame layout; the UI explains this instead of guessing.
 - **Rhythm side-light modes** work in the demo only. Live side output stays disabled until the HERO68 LED count, order and protocol are verified; side LEDs keep their on-board effect while key playback runs.
 - **Tachyon Mode** (8000 Hz polling) turns key and side lighting off to minimize latency. Custom Effects, Rhythm Sync and automatic Hall polling are paused while it is on, and your previous lighting is restored when you turn it off.
 - The tray service supports **Windows x64 only**. The web app needs a WebHID browser (Chrome or Edge).

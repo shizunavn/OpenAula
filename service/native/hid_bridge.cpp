@@ -83,9 +83,14 @@ bool heroKeyboard(HANDLE handle) {
   for (auto& ch : name) {
     ch = std::towupper(ch);
   }
-  return name.find(L"VID_372E") != std::wstring::npos &&
-         (name.find(L"PID_103E") != std::wstring::npos ||
-          name.find(L"PID_1000") != std::wstring::npos);
+  const bool hero = name.find(L"VID_372E") != std::wstring::npos &&
+                    (name.find(L"PID_103E") != std::wstring::npos ||
+                     name.find(L"PID_1000") != std::wstring::npos);
+  const bool xsyd = (name.find(L"VID_1CA2") != std::wstring::npos &&
+                     name.find(L"PID_1901") != std::wstring::npos) ||
+                    (name.find(L"VID_3554") != std::wstring::npos &&
+                     name.find(L"PID_FA09") != std::wstring::npos);
+  return hero || xsyd;
 }
 
 LRESULT CALLBACK rawWindow(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -176,6 +181,7 @@ struct Device {
   std::wstring identity;
   DWORD input = 64;
   DWORD output = 64;
+  bool xsyd = false;
   ~Device() {
     if (h != INVALID_HANDLE_VALUE) {
       CloseHandle(h);
@@ -226,16 +232,26 @@ std::unique_ptr<Device> openDevice() {
     attrs.Size = sizeof(attrs);
     PHIDP_PREPARSED_DATA prepared = nullptr;
     HIDP_CAPS caps{};
-    const bool match =
+    const bool hasAttrs =
         HidD_GetAttributes(d->h, &attrs) &&
-        attrs.VendorID == 0x372e &&
-        (attrs.ProductID == 0x103e || attrs.ProductID == 0x1000) &&
         HidD_GetPreparsedData(d->h, &prepared) &&
         HidP_GetCaps(prepared, &caps) == HIDP_STATUS_SUCCESS &&
-        caps.UsagePage == 0xff60 &&
-        caps.Usage == 0x61 &&
         caps.InputReportByteLength >= 64 &&
         caps.OutputReportByteLength >= 64;
+    const bool heroMatch =
+        hasAttrs &&
+        attrs.VendorID == 0x372e &&
+        (attrs.ProductID == 0x103e || attrs.ProductID == 0x1000) &&
+        caps.UsagePage == 0xff60 &&
+        caps.Usage == 0x61;
+    const bool xsydMatch =
+        hasAttrs &&
+        ((attrs.VendorID == 0x1ca2 && attrs.ProductID == 0x1901) ||
+         (attrs.VendorID == 0x3554 && attrs.ProductID == 0xfa09)) &&
+        caps.UsagePage == 0xffa0 &&
+        caps.Usage == 0x0001;
+    const bool match = heroMatch || xsydMatch;
+    d->xsyd = xsydMatch;
     if (prepared) {
       HidD_FreePreparsedData(prepared);
     }
@@ -390,6 +406,8 @@ struct BridgeSession {
   bool wasGamepadEnabled = false;
   // Set by TS via `device-model:<id>`; HERO84-only keys copy a HERO68 key's colour.
   bool hero84Rhythm = false;
+  uint8_t xsydTableStep = 0;
+  std::array<uint16_t, hall::XsydHallTotalMatrixCount> xsydTravelUm{};
   std::array<double, hall::Capacity> consumerHz{};
   double nextHallPublish = 0;
   double nextGamepadPublish = 0;
@@ -466,6 +484,72 @@ struct BridgeSession {
       hallFault = true;
       setGamepadPause();
       emitLine("hall-error:Device disconnected");
+      return;
+    }
+    if (device->xsyd) {
+      auto readXsydReply = [&](uint8_t subcmd, uint8_t tableId, std::array<uint8_t, 192>& frameOut) {
+        auto req = hall::buildXsydHallRequest(subcmd, tableId);
+        std::vector<unsigned char> outBuf(device->output, 0);
+        std::vector<unsigned char> inBuf(device->input, 0);
+        const size_t reportOffset = device->output > 64 ? 1 : 0;
+        std::copy(req.begin(), req.end(), outBuf.begin() + reportOffset);
+        DWORD count = 0;
+        if (!io(*device, outBuf, true, 20, count) || count != outBuf.size()) {
+          return false;
+        }
+        const double limit = rhythm::clockMs() + 25;
+        size_t collected = 0;
+        while (collected < 192 && rhythm::clockMs() < limit) {
+          if (!io(*device, inBuf, false, DWORD(std::max(1., limit - rhythm::clockMs())), count)) {
+            return false;
+          }
+          const size_t inOffset = count > 64 ? 1 : 0;
+          if (count < inOffset + 64) {
+            continue;
+          }
+          const unsigned char* chunk = inBuf.data() + inOffset;
+          if (collected == 0 && chunk[0] != hall::XsydMagic) {
+            continue;
+          }
+          std::copy(chunk, chunk + 64, frameOut.begin() + collected);
+          collected += 64;
+        }
+        return subcmd == hall::XsydHallSubcmdPressed
+                   ? hall::matchesXsydPressedReply(frameOut.data(), collected)
+                   : hall::matchesXsydTravelReply(frameOut.data(), collected);
+      };
+
+      std::array<uint8_t, 192> pressedFrame{};
+      const uint8_t tableId = (xsydTableStep++ & 1) ? 2 : 1;
+      std::array<uint8_t, 192> travelFrame{};
+      if (!readXsydReply(hall::XsydHallSubcmdPressed, 1, pressedFrame) ||
+          !readXsydReply(hall::XsydHallSubcmdTravel, tableId, travelFrame)) {
+        device.reset();
+        hallScheduler.failed(rhythm::clockMs());
+        hallFault = true;
+        setGamepadPause();
+        emitLine("hall-error:Hall request timed out");
+        return;
+      }
+      const size_t baseIndex = (tableId - 1) * hall::XsydHallHalfMatrixCount;
+      for (size_t i = 0; i < hall::XsydHallHalfMatrixCount; ++i) {
+        const uint16_t um = uint16_t(travelFrame[6 + i * 2] | (travelFrame[7 + i * 2] << 8));
+        xsydTravelUm[baseIndex + i] = std::min<uint16_t>(3400, um);
+      }
+      const double at = rhythm::clockMs();
+      hallFault = false;
+      setGamepadPause();
+      hallScheduler.success();
+      for (size_t idx = 0; idx < hall::XsydHallTotalMatrixCount; ++idx) {
+        const uint8_t heroPos = hall::XsydMatrixToHeroPos[idx];
+        if (!heroPos || hallScheduler.hz[heroPos] <= 0) {
+          continue;
+        }
+        const uint16_t distanceUnits = uint16_t((xsydTravelUm[idx] + 5) / 10);
+        const bool pressed = pressedFrame[6 + idx] != 0;
+        hallScheduler.received(heroPos, distanceUnits, 0, pressed, at);
+        gamepadOutput.sample(heroPos, hallScheduler.samples[heroPos]);
+      }
       return;
     }
     std::vector<uint8_t> positions;

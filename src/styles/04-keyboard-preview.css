@@ -64,23 +64,27 @@
 .hero68-layout {
   display: flex;
   flex-direction: column;
+  width: max-content;
   gap: var(--woot-gap);
 }
 
 .hero68-row {
   display: flex;
   align-items: stretch;
+  width: max-content;
   gap: var(--woot-gap);
   height: var(--woot-key-outer);
 }
 
 .hero-key-slot {
   --key-units: 1;
-  flex: 0 0 calc(
+  --slot-width: calc(
     var(--woot-key-outer) * var(--key-units) +
     var(--woot-gap) * (var(--key-units) - 1)
   );
-  min-width: 0;
+  flex: 0 0 var(--slot-width);
+  width: var(--slot-width);
+  min-width: var(--slot-width);
   height: var(--woot-key-outer);
 }
 

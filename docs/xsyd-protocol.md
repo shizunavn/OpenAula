@@ -226,7 +226,22 @@ Wire SOCD only with `type = mode = 0`, which is what the capture proves works.
 
 ---
 
-## 7. What is still unknown
+## 7. Hall travel & pressed-state stream (`0x12` → `0x92`)
+
+Verified on `travel_test_press_randomkey.pcapng` and firmware disassembly (`VA 0xA758`, `0xA77C`, `0xA7A8`, `0xA802`, `0xC6D8`, `0x12FE8`):
+
+| request (`0x12`, LEN 4) | reply (`0x92`) | payload layout | capture evidence (`travel_test_press_randomkey.pcapng`) |
+|---|---|---|---|
+| `5C 04 12 A6 \| 03 01 FF FF` | `5C 82 92 A4` (`LEN = 0x82 = 130` B across 3 HID reports) | `00 03 \| u8[126] \| FF FF` — per-key pressed/actuated state at `0x20006A48 + matrixIndex` (`0x00` = released, `0x02` = actuated) | `payload[2 + 92] = 0x02` while `KeyM` (HID `0x10`, `matrixIndex = 92`) is held; `payload[2 + 65] = 0x02` while `KeyS` (HID `0x16`, `matrixIndex = 65`) is held |
+| `5C 04 12 A6 \| 02 01 FF FF` | `5C 80 92 A3` (`LEN = 0x80 = 128` B across 3 HID reports) | `00 02 \| u16_le[63]` — travel in micrometres (`0..3400` µm) at `0x200041EC` for `matrixIndex = 0..62` (rows 0–2: `Escape`..`Delete`) | 175 upper-half polls |
+| `5C 04 12 A6 \| 02 02 FF FF` | `5C 80 92 A3` (`LEN = 0x80 = 128` B across 3 HID reports) | `00 02 \| u16_le[63]` — travel in micrometres (`0..3400` µm) at `0x2000426A` for `matrixIndex = 63..125` (rows 3–5: `CapsLock`..`ArrowRight`) | `KeyM` (`matrixIndex = 92 = 63 + 29`) ramps `u16_le[29]` from `0` → `3400` µm (`3.400 mm`); `KeyS` (`matrixIndex = 65 = 63 + 2`) ramps `u16_le[2]` from `0` → `1783` µm (`1.783 mm`) |
+| `5C 04 12 A6 \| 06 <01\|02> FF FF` | `5C 80 92 A3` (`LEN = 0x80 = 128` B across 3 HID reports) | `00 06 \| u16_le[63]` — filtered 12-bit Hall ADC (`0..4095`) at `0x200042E8` / `0x20004366` | `calibrate_all_keyboard.pcapng` |
+
+Every key's `matrixIndex` (`0..125`, i.e. `row * 21 + col`) is the exact `index` field in `src/protocol/xsyd/keymap.ts` (`XSYD_KEYS`). See `src/protocol/xsyd/hall.ts`.
+
+---
+
+## 8. What is still unknown
 
 | item | why it is unknown |
 |---|---|
@@ -236,8 +251,7 @@ Wire SOCD only with `type = mode = 0`, which is what the capture proves works.
 | SOCD mode/type/delay | all zero in the single capture |
 | RS | no capture |
 | DDKS (`0x29`) | `0x29` carries a static config read (`d0 07`) across all captures (including `4k_to_2k_to_1k.pcapng`), while polling rate is `0x00` subcmd `0x50` |
-| Hall channel → physical key | 30 channels, mapping unproven |
-| firmware handler addresses | the `0x5C` jump table at VA `0x1C994` points at functions that do not match their opcodes (`0x28` lands in RGB setup, `0x24`/`0x26` in an init stub), so the table is not a reliable source of handler identity |
+| RGB (`0x30`) | need a capture switching RGB modes/colors/brightness on `magnet.aulastar.com` |
 
 Record-only evidence for every row lives in the external research notes
 (`E:\hero68_he_max-re\docs\KNOWN_STATE.md`); this file is limited to what the

@@ -24,6 +24,65 @@ inline bool heroPosition(unsigned pos) {
   return (pos >= 1 && pos <= 77) || pos == 95 || (pos >= 98 && pos <= 103);
 }
 
+// AULA WIN 68 HE MAX (XSYD 0x5C protocol, op 0x12 / reply 0x92):
+// - subcmd 0x02 (travel in um, 63 x u16_le per table, LEN=0x80 across 3 x 64B reports)
+// - subcmd 0x03 (pressed flags, 126 x u8 in table 1, LEN=0x82 across 3 x 64B reports)
+constexpr uint8_t XsydMagic = 0x5c;
+constexpr uint8_t XsydHallOpcode = 0x12;
+constexpr uint8_t XsydHallReplyOpcode = 0x92;
+constexpr uint8_t XsydHallSubcmdTravel = 0x02;
+constexpr uint8_t XsydHallSubcmdPressed = 0x03;
+constexpr size_t XsydHallHalfMatrixCount = 63;
+constexpr size_t XsydHallTotalMatrixCount = 126;
+
+constexpr std::array<uint8_t, XsydHallTotalMatrixCount> XsydMatrixToHeroPos{{
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     1, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 98,  0,  0,  0,  0,  0,  0,
+    28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 99,  0,  0,  0,  0,  0,  0,
+    42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,  0, 54, 102,  0,  0,  0,  0,  0,  0,
+    55,  0, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 74, 103,  0,  0,  0,  0,  0,  0,
+    67, 68, 69,  0,  0,  0, 70,  0,  0, 71, 72, 73, 76, 75, 77,  0,  0,  0,  0,  0,  0,
+}};
+
+inline std::array<uint8_t, ReportByteLength> buildXsydHallRequest(uint8_t subcmd, uint8_t tableId) {
+  std::array<uint8_t, ReportByteLength> out{};
+  out[0] = XsydMagic;
+  out[1] = 0x04;
+  out[2] = XsydHallOpcode;
+  out[4] = subcmd;
+  out[5] = tableId;
+  out[6] = 0xff;
+  out[7] = 0xff;
+  out[3] = uint8_t((XsydMagic + 0x04 + XsydHallOpcode + 0x35 + 0xff) & 0xff);
+  return out;
+}
+
+inline bool matchesXsydTravelReply(const uint8_t* frame, size_t length) {
+  if (length < ReportByteLength * 3 ||
+      frame[0] != XsydMagic ||
+      frame[1] != 0x80 ||
+      frame[2] != XsydHallReplyOpcode ||
+      frame[4] != 0x00 ||
+      frame[5] != XsydHallSubcmdTravel) {
+    return false;
+  }
+  const uint8_t expectedCk = uint8_t((XsydMagic + 0x80 + XsydHallReplyOpcode + 0x35 + 0x00) & 0xff);
+  return frame[3] == expectedCk;
+}
+
+inline bool matchesXsydPressedReply(const uint8_t* frame, size_t length) {
+  if (length < ReportByteLength * 3 ||
+      frame[0] != XsydMagic ||
+      frame[1] != 0x82 ||
+      frame[2] != XsydHallReplyOpcode ||
+      frame[4] != 0x00 ||
+      frame[5] != XsydHallSubcmdPressed) {
+    return false;
+  }
+  const uint8_t expectedCk = uint8_t((XsydMagic + 0x82 + XsydHallReplyOpcode + 0x35 + 0xff) & 0xff);
+  return frame[3] == expectedCk;
+}
+
 struct Sample {
   uint16_t distance = 0;
   uint16_t adc = 0;

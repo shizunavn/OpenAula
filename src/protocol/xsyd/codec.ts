@@ -153,6 +153,21 @@ export class XsydFrameAssembler {
   }
 }
 
+/**
+ * Placeholder returned when a caller sends a frame without waiting for a reply.
+ * It has no checksum and an empty payload, so any decoder rejects it instead of
+ * reading a fabricated status.
+ */
+export const SILENT_REPLY: Readonly<XsydReply> = Object.freeze({
+  opcode: 0,
+  requestOpcode: 0,
+  length: 0,
+  checksumValid: false,
+  status: 0,
+  payload: new Uint8Array(0),
+  raw: new Uint8Array(0)
+})
+
 export function decodeXsydFrame(frame: Uint8Array): XsydReply {
   if (frame.length < HEADER_LENGTH || frame[0] !== XSYD_MAGIC) {
     throw new Error(`unexpected XSYD magic 0x${(frame[0] ?? 0).toString(16)}`);

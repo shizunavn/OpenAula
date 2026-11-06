@@ -19,6 +19,8 @@ import { WINDOWS_SCANS } from '../keyboard/windowsScans';
 import { gamepadAccess } from '../protocol/gamepadAccess';
 import { GamepadAutoApply, type GamepadSaveState } from '../protocol/gamepadAutoApply';
 import { GamepadLiveStore } from '../protocol/gamepadLive';
+import { hero68HallStream, useHero68HallStream } from '../protocol/hero68/hallStream';
+import { useXsydDevice } from '../protocol/xsyd/device';
 import {
   gamepadService,
   isToggleModifierConfigured,
@@ -70,6 +72,9 @@ export default function GamepadPage({
   const [demoSamples, setDemoSamples] = useState<
     Record<string, { distanceMm: number; pressed: boolean }>
   >({});
+  const xsydDevice = useXsydDevice();
+  const hallStream = useHero68HallStream();
+  const [xsydEnabled, setXsydEnabled] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mounted = useRef(true);
@@ -78,8 +83,9 @@ export default function GamepadPage({
   const keyboard = useRef<HTMLDivElement>(null);
   const autoApply = useRef<GamepadAutoApply<GamepadStatus> | null>(null);
 
+  const xsydWebHidMode = xsydDevice.state === 'connected' && !serviceConnected;
   const access = gamepadAccess(status, loading, serviceConnected);
-  const locked = access !== 'ready';
+  const locked = !xsydWebHidMode && access !== 'ready';
   // Keep controls inert while checking, without flashing the missing-service
   // overlay on every mount. A retry keeps an already confirmed gate visible.
   const showGate = locked && (access !== 'checking' || connectionAttempt > 0);
@@ -153,6 +159,25 @@ export default function GamepadPage({
 
   async function runServiceAction(start: boolean, source: 'hotkey' | 'ui' = 'ui') {
     if (locked || busy || profileBusy) {
+      return;
+    }
+    if (xsydWebHidMode) {
+      setError('');
+      if (start) {
+        setDemo(false);
+        setXsydEnabled(true);
+        if (!hallStream.active && !hallStream.starting) {
+          await hero68HallStream.start(
+            config.bindings.map((b) => b.keyId),
+            'direct-poll',
+          );
+        }
+      } else {
+        setXsydEnabled(false);
+        if (tab !== 'tester' && (hallStream.active || hallStream.starting)) {
+          await hero68HallStream.stop();
+        }
+      }
       return;
     }
     setBusy(true);
@@ -311,30 +336,102 @@ export default function GamepadPage({
     };
   }, [liveStore]);
 
+  useEffect(() => {
+    if (!xsydWebHidMode || demo) {
+      return;
+    }
+    if ((xsydEnabled || tab === 'tester') && !hallStream.active && !hallStream.starting) {
+      void hero68HallStream
+        .start(
+          config.bindings.map((b) => b.keyId),
+          'direct-poll',
+        )
+        .catch((err) => {
+          if (mounted.current) {
+            setError(err instanceof Error ? err.message : String(err));
+          }
+        });
+    }
+  }, [xsydWebHidMode, xsydEnabled, tab, demo, hallStream.active, hallStream.starting, config.bindings]);
+
   const samples = useMemo(
     () =>
       demo && tab === 'tester'
         ? demoSamples
-        : Object.fromEntries(
-            (status?.samples ?? [])
-              .filter((sample) => (sample.ageMs ?? 0) < 50)
-              .map((sample) => [
-                sample.keyId,
-                { distanceMm: sample.distanceUnits / 100, pressed: sample.pressed },
+        : xsydWebHidMode
+          ? Object.fromEntries(
+              Object.entries(hallStream.samples).map(([keyId, sample]) => [
+                keyId,
+                { distanceMm: sample.visualDistanceMm, pressed: sample.pressed },
               ])
-          ),
-    [demo, demoSamples, status, tab]
+            )
+          : Object.fromEntries(
+              (status?.samples ?? [])
+                .filter((sample) => (sample.ageMs ?? 0) < 50)
+                .map((sample) => [
+                  sample.keyId,
+                  { distanceMm: sample.distanceUnits / 100, pressed: sample.pressed },
+                ])
+            ),
+    [demo, demoSamples, xsydWebHidMode, hallStream.samples, status, tab]
   );
 
   const report =
-    demo && tab === 'tester'
+    (demo && tab === 'tester') || xsydWebHidMode
       ? mapGamepad(config, samples)
       : status?.report ?? mapGamepad(config, {});
+
+  const effectiveStatus = useMemo<GamepadStatus | null>(() => {
+    if (!xsydWebHidMode || status) {
+      return status;
+    }
+    return {
+      enabled: xsydEnabled,
+      armed: xsydEnabled,
+      stale: false,
+      xinputVerified: false,
+      userIndex: 0,
+      outputHz: hallStream.telemetryHz ?? 0,
+      outputP99Ms: 0,
+      neutralCount: 0,
+      error: hallStream.error ?? '',
+      report,
+      backend: 'vigem',
+      slot,
+      configuration: config,
+      capabilities: {
+        gamepad: true,
+        keyboardSuppression: false,
+      },
+      hall: {
+        consumers: [],
+        requests: hallStream.frameCount,
+        timeouts: 0,
+        keys: Object.entries(hallStream.keyTelemetryHz).map(([keyId, hz]) => ({
+          pos: 0,
+          keyId,
+          requestedHz: config.rate,
+          hz,
+          intervalP99Ms: 0,
+        })),
+      },
+      samples: Object.values(hallStream.samples).map((sample, idx) => ({
+        keyId: sample.keyId,
+        pos: sample.pos,
+        distanceUnits: sample.distanceUnits,
+        adc: sample.rawAdc,
+        pressed: sample.pressed,
+        timestampMs: sample.timestampMs,
+        sequence: idx + 1,
+        ageMs: 0,
+      })),
+    };
+  }, [xsydWebHidMode, status, xsydEnabled, hallStream, report, slot, config]);
 
   useEffect(() => {
     liveStore.configure(
       tab === 'tester' && !locked,
-      status,
+      effectiveStatus,
       demo
         ? {
             report,
@@ -350,13 +447,19 @@ export default function GamepadPage({
             })),
             source: 'demo',
           }
-        : null
+        : xsydWebHidMode
+          ? {
+              report,
+              samples: effectiveStatus?.samples ?? [],
+              source: 'browser',
+            }
+          : null
     );
-  }, [liveStore, tab, locked, status, demo, demoSamples, config]);
+  }, [liveStore, tab, locked, effectiveStatus, xsydWebHidMode, report, demo, demoSamples, config]);
 
   const labels = Object.fromEntries(config.bindings.map((b) => [b.keyId, actionLabel(b.action)]));
   const binding = config.bindings.find((b) => b.keyId === selected);
-  const measuredKeys = (status?.hall.keys ?? []).filter((k) =>
+  const measuredKeys = (effectiveStatus?.hall.keys ?? []).filter((k) =>
     config.bindings.some((b) => b.keyId === k.keyId && isAnalogAction(b.action))
   );
   const measuredHz = measuredKeys.length
@@ -574,17 +677,17 @@ export default function GamepadPage({
           </p>
         )}
         <div className="gp-status">
-          <span className={status?.enabled ? 'on' : ''}>
+          <span className={effectiveStatus?.enabled ? 'on' : ''}>
             {t(
               loading
                 ? 'Loading service'
                 : demo && tab === 'tester'
                   ? 'Demo'
-                  : status?.enabled
-                    ? status.armed
+                  : effectiveStatus?.enabled
+                    ? effectiveStatus.armed
                       ? 'Running'
                       : 'Waiting for all bound keys to rest'
-                    : status
+                    : effectiveStatus
                       ? 'Stopped'
                       : 'Service unavailable'
             )}
@@ -615,7 +718,7 @@ export default function GamepadPage({
         {tab === 'setup' && (
           <GamepadSetupTab
             config={config}
-            status={status}
+            status={effectiveStatus}
             disabled={disabled}
             loading={loading}
             selected={selected}
@@ -625,7 +728,7 @@ export default function GamepadPage({
             pendingKeybind={pendingKeybind}
             emptyDragImageRef={emptyDragImage}
             t={t}
-            onToggleEnabled={() => void runServiceAction(!status?.enabled)}
+            onToggleEnabled={() => void runServiceAction(!effectiveStatus?.enabled)}
             onPatch={patch}
             onStartRecordingKeybind={() => {
               setPendingKeybind([]);
@@ -646,7 +749,7 @@ export default function GamepadPage({
         {tab === 'configuration' && (
           <GamepadConfigTab
             config={config}
-            status={status}
+            status={effectiveStatus}
             disabled={disabled}
             point={point}
             curveSvgRef={curveSvg}
@@ -662,7 +765,7 @@ export default function GamepadPage({
         {tab === 'tester' && (
           <GamepadTesterTab
             config={config}
-            status={status}
+            status={effectiveStatus}
             demo={demo}
             demoSamples={demoSamples}
             liveStore={liveStore}

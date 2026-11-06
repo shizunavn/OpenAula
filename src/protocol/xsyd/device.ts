@@ -32,6 +32,7 @@ import {
 import {
   buildXsydFrame,
   decodeXsydFrame,
+  SILENT_REPLY,
   XsydFrameAssembler,
   xsydReports,
   XSYD_MAGIC,
@@ -52,6 +53,18 @@ import {
   XsydFeatureField,
   type XsydFieldWrite,
 } from './features'
+import {
+  buildXsydHallAdcFrame,
+  buildXsydHallPressedFrame,
+  buildXsydHallTravelFrame,
+  decodeXsydHallAdcReply,
+  decodeXsydHallPressedReply,
+  decodeXsydHallTravelReply,
+  mergeXsydHallSamples,
+  xsydTableIdsForKeys,
+  type XsydHallKeySample,
+  type XsydHallTableId,
+} from './hall'
 
 export const XSYD_REPORT_ID = 0x00
 
@@ -274,6 +287,60 @@ export function decodeXsydPollingRateReply(reply: XsydReply): PollingRate {
 export async function readXsydPollingRate(requester: XsydRequester): Promise<PollingRate> {
   const reply = await requester.request(buildXsydReadPollingRateFrame())
   return decodeXsydPollingRateReply(reply)
+}
+
+/**
+ * Poll live Hall travel (`0x12` subcmd `0x02`) and per-key pressed flags (`subcmd 0x03`)
+ * from a WIN 68 HE MAX, returning normalized `XsydHallKeySample[]`.
+ *
+ * Verified on `travel_test_press_randomkey.pcapng`:
+ * - `5C 04 12 A6 | 03 01 FF FF` -> `5C 82 92 27 | 00 03 <126 x u8> FF FF`
+ * - `5C 04 12 A6 | 02 01 FF FF` -> `5C 80 92 A6 | 00 02 <63 x u16_le>` (indices `0..62`)
+ * - `5C 04 12 A6 | 02 02 FF FF` -> `5C 80 92 A6 | 00 02 <63 x u16_le>` (indices `63..125`)
+ */
+export async function readXsydHallSnapshot(
+  requester: XsydRequester,
+  options: {
+    keyIds?: Iterable<string>
+    tableIds?: readonly XsydHallTableId[]
+    includeAdc?: boolean
+    timeoutMs?: number
+  } = {}
+): Promise<XsydHallKeySample[]> {
+  const timeoutMs = options.timeoutMs ?? 450
+  const keyIdSet = options.keyIds ? new Set(options.keyIds) : undefined
+  const tables = options.tableIds?.length
+    ? [...options.tableIds]
+    : xsydTableIdsForKeys(keyIdSet ?? [])
+
+  const pressedReply = await requester.request(buildXsydHallPressedFrame(), timeoutMs)
+  const pressedByMatrixIndex = decodeXsydHallPressedReply(pressedReply)
+
+  const travelByMatrixIndex = new Map<number, number>()
+  for (const tableId of tables) {
+    const travelReply = await requester.request(buildXsydHallTravelFrame(tableId), timeoutMs)
+    for (const [idx, um] of decodeXsydHallTravelReply(travelReply, tableId)) {
+      travelByMatrixIndex.set(idx, um)
+    }
+  }
+
+  let adcByMatrixIndex: Map<number, number> | undefined
+  if (options.includeAdc) {
+    adcByMatrixIndex = new Map<number, number>()
+    for (const tableId of tables) {
+      const adcReply = await requester.request(buildXsydHallAdcFrame(tableId), timeoutMs)
+      for (const [idx, adc] of decodeXsydHallAdcReply(adcReply, tableId)) {
+        adcByMatrixIndex.set(idx, adc)
+      }
+    }
+  }
+
+  return mergeXsydHallSamples({
+    travelByMatrixIndex,
+    pressedByMatrixIndex,
+    adcByMatrixIndex,
+    keyIds: keyIdSet,
+  })
 }
 
 export function decodeHandshakeVersionReply(reply: XsydReply): string {
@@ -831,7 +898,8 @@ function errorMessage(error: unknown): string {
  * - Uses `getDevices()` first and never re-calls `open()` on an already opened handle.
  * - Sends 64-byte chunks with report ID `0` (`sendReport(0, chunk)`).
  * - Reassembles multi-packet replies using `XsydFrameAssembler` (by `LEN` at byte 1).
- * - Verifies `reply.opcode === (requestOpcode | 0x80)` and `reply.checksumValid`.
+ * - Resolves the waiter whose `expectedOpcode` matches; a reply for another
+ *   request is discarded, so a late or unsolicited frame cannot fail the request.
  */
 export class XsydDeviceManager implements Hero68Transport, XsydRequester {
   #device: HIDDeviceLike | undefined
@@ -1016,7 +1084,9 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     let sendError: unknown = null
     try {
       try {
-        await this.request(frame, Math.min(350, Math.max(50, timeoutMs)))
+        // The board may not answer, or may answer only after the new interface
+        // enumerates: wait for the re-enumeration, not for a reply.
+        await this.request(frame, Math.min(350, Math.max(50, timeoutMs)), { expectReply: false })
       } catch (error) {
         sendError = error
       }
@@ -1083,6 +1153,17 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
    * Write a new polling rate via `0x00` subcmd `0x50`, wait for USB re-enumeration,
    * and verify the persisted rate with `0x00` subcmd `0x50` query `0x07`.
    */
+  async readHallSnapshot(
+    options: {
+      keyIds?: Iterable<string>
+      tableIds?: readonly XsydHallTableId[]
+      includeAdc?: boolean
+      timeoutMs?: number
+    } = {}
+  ): Promise<XsydHallKeySample[]> {
+    return readXsydHallSnapshot(this, options)
+  }
+
   async writePollingRate(rate: PollingRate, timeoutMs = 7000): Promise<PollingRate> {
     await this.sendReenumerating(buildXsydWritePollingRateFrame(rate), timeoutMs)
     const actual = await readXsydPollingRate(this)
@@ -1113,8 +1194,28 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     return next
   }
 
-  async request(frame: Uint8Array, timeoutMs = 800): Promise<XsydReply> {
-    return this.#queueControlOperation(() => this.#requestOnce(frame, timeoutMs))
+  /**
+   * Send one frame and wait for its reply.
+   *
+   * `expectReply: false` is for frames the firmware may answer with nothing (or
+   * only after the USB interface re-enumerates): the frame is written and the
+   * promise resolves once `sendReport` returns. The returned reply is a
+   * placeholder and must not be decoded.
+   */
+  async request(
+    frame: Uint8Array,
+    timeoutMs = 800,
+    options: { expectReply?: boolean } = {}
+  ): Promise<XsydReply> {
+    const expectReply = options.expectReply ?? true
+    return this.#queueControlOperation(async () => {
+      if (!expectReply) {
+        this.#assembler.reset()
+        await this.send(frame)
+        return SILENT_REPLY
+      }
+      return this.#requestOnce(frame, timeoutMs)
+    })
   }
 
   async #requestOnce(frame: Uint8Array, timeoutMs = 800): Promise<XsydReply> {
@@ -1146,7 +1247,6 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
           })
         }, Math.max(2000, timeoutMs)),
       }
-      this.#assembler.reset()
       this.#waiters.add(waiter)
       void this.send(frame)
         .then(() => {
@@ -1191,23 +1291,20 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
         return
       }
       for (const waiter of this.#waiters) {
+        if (reply.opcode !== waiter.expectedOpcode) {
+          // Another request's reply, or an unsolicited frame: never fail the
+          // request that is still waiting for its own opcode.
+          continue
+        }
         clearTimer(waiter.timer)
         this.#waiters.delete(waiter)
-        if (reply.opcode !== waiter.expectedOpcode) {
-          waiter.reject(
-            new Error(
-              `Unexpected XSYD reply opcode 0x${reply.opcode.toString(16).padStart(2, '0')} (expected 0x${waiter.expectedOpcode.toString(16).padStart(2, '0')})`
-            )
-          )
-          break
-        }
         if (!reply.checksumValid) {
           waiter.reject(
             new Error(`Invalid XSYD reply checksum for opcode 0x${reply.opcode.toString(16).padStart(2, '0')}`)
           )
-          break
+        } else {
+          waiter.resolve(reply)
         }
-        waiter.resolve(reply)
         break
       }
     } catch (error) {
@@ -1253,3 +1350,5 @@ export function useXsydDevice(): Hero68DeviceSnapshot {
 
 export { isWin68HeMaxModel }
 export type { Hero68ConnectionState, Hero68DeviceSnapshot }
+
+export * from './hall'

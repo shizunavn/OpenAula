@@ -60,5 +60,20 @@ int main(){
   for(const auto& payload:{"200;1;0;0;45;0,0|1,1;96,15,0.1,3.4","200;1;0;0;45;0,0|1,1;30,15,0.1,3.4|30,1,0.1,3.4","200;1;0;0;45;0,0|.5,.8|.7,.1|1,1;","200;1;0;0;45;0,0|1,1;30,15,0.1,4"}){bool rejected=false;try{gamepad::parse(payload);}catch(...){rejected=true;}assert(rejected);}
   assert(gamepad::parse("200;1;0;0;45;0,0|1,1;").bindings.empty());
   assert(gamepad::parse("200;1;0;0;45;0,0|1,1;30,15,0.1,0.11").bindings.size()==1);
+  // Verify XSYD 0x12 / 0x92 Hall helpers and matrix-to-HERO68 position mapping
+  assert(hall::XsydMatrixToHeroPos[44] == 30); // KeyW
+  assert(hall::XsydMatrixToHeroPos[64] == 43); // KeyA
+  assert(hall::XsydMatrixToHeroPos[65] == 44); // KeyS
+  assert(hall::XsydMatrixToHeroPos[66] == 45); // KeyD
+  assert(hall::XsydMatrixToHeroPos[92] == 62); // KeyM
+  assert(hall::XsydMatrixToHeroPos[111] == 70); // Space
+  auto xsydReq = hall::buildXsydHallRequest(hall::XsydHallSubcmdTravel, 2);
+  assert(xsydReq[0] == 0x5c && xsydReq[1] == 0x04 && xsydReq[2] == 0x12 && xsydReq[3] == 0xa6 && xsydReq[4] == 0x02 && xsydReq[5] == 0x02);
+  std::array<uint8_t, 192> xsydTravelReply{};
+  xsydTravelReply[0] = 0x5c; xsydTravelReply[1] = 0x80; xsydTravelReply[2] = 0x92; xsydTravelReply[3] = 0xa3; xsydTravelReply[4] = 0x00; xsydTravelReply[5] = 0x02;
+  assert(hall::matchesXsydTravelReply(xsydTravelReply.data(), xsydTravelReply.size()));
+  std::array<uint8_t, 192> xsydPressedReply{};
+  xsydPressedReply[0] = 0x5c; xsydPressedReply[1] = 0x82; xsydPressedReply[2] = 0x92; xsydPressedReply[3] = 0xa4; xsydPressedReply[4] = 0x00; xsydPressedReply[5] = 0x03;
+  assert(hall::matchesXsydPressedReply(xsydPressedReply.data(), xsydPressedReply.size()));
   std::cout<<"Native Hall scheduler and Gamepad mapping checks passed\n";
 }

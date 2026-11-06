@@ -75,8 +75,9 @@ function ActuationPage({
   const {
     tr
   } = useI18n();
+  const resolvedPreviewWidth = actuationPreviewWidth && actuationPreviewWidth >= 320 ? actuationPreviewWidth : undefined;
   return <div className="page quick-page actuation-page page-enter" style={({
-    '--actuation-preview-width': actuationPreviewWidth ? `${actuationPreviewWidth}px` : undefined
+    '--actuation-preview-width': resolvedPreviewWidth ? `${resolvedPreviewWidth}px` : undefined
   } as React.CSSProperties)}>
               <section className={`keyboard-stage actuation-keyboard-stage ${hallStream.active ? 'is-streaming' : ''}`}>
                 <Hero68Preview model={model} advancedBindings={advancedBindings} selectedKeys={selectedKeys} onToggleKey={toggleKey} overlayMode="actuation" actuationValues={actuationByKey} streamPreviewValues={hallStreamPreviewByKey} onWidthChange={setActuationPreviewWidth} />

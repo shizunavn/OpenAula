@@ -3,6 +3,13 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.2.1 — WIN 68 HE MAX Hall stream, reply matching fix
+
+- The Windows service reads WIN 68 HE MAX analogue travel and pressed state over `0x12`/`0x92`: a 63-entry `u16` micrometre table polled twice for the 126 matrix positions, plus one pressed byte per position, mapped onto the 68 physical keys by an explicit table. Verified against `travel_test_press_randomkey.pcapng`, not on a physical board.
+- An XSYD reply is now matched against the request that expects its opcode. A late or unsolicited frame is discarded instead of failing the waiting request with `Unexpected XSYD reply opcode`; frames that re-enumerate the board no longer wait for a reply.
+- Rappy Snappy and DDKS cards are removed from the WIN 68 HE MAX Advanced Keys page; no capture exists for either layout.
+- The keyboard preview no longer shrinks below its key widths on narrow layouts.
+
 ## 1.2.0 — AULA WIN 68 HE MAX (XSYD `0x5C`)
 
 - Add WIN 68 HE MAX support on its own protocol stack (`src/protocol/xsyd/`): 64-byte `0x5C` framing with the last-byte checksum the firmware computes, reply reassembly across `inputreport` events, and a key map for the 68-key Hall board. The board is registered as `win68HeMax` and is never driven by the HERO68/HERO84 `0x09` encoders.
