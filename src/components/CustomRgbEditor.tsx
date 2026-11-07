@@ -696,12 +696,14 @@ export default function CustomRgbEditor({
                     </div>
                     <label className="custom-rgb-color">{tr('Base color')}<RgbColorPicker label={tr('Base effect color')} value={hex(config.base.rgb)} disabled={disabled} onChange={v => base({
                       rgb: rgb(v),
-                      mix: false
+                      mix: false,
+                      colorIndex: closestXsydColorSlot(rgb(v))
                     })} /></label>
                     <label className="custom-rgb-check"><input type="checkbox" checked={config.base.mix} disabled={disabled} onChange={e => base({
-                      mix: e.target.checked
+                      mix: e.target.checked,
+                      colorIndex: e.target.checked ? 0 : closestXsydColorSlot(config.base.rgb)
                     })} /> {tr('Multicolor')}</label>
-                    <div className="rgb-zone-tabs" role="group" aria-label={tr('Color slot')}>
+                    {config.base.mix && <div className="rgb-zone-tabs" role="group" aria-label={tr('Color slot')}>
                       {XSYD_COLOR_SLOTS.map(slotInfo => {
                         const selectedSlot = (config.base.mix ? 0 : (config.base.colorIndex ?? closestXsydColorSlot(config.base.rgb))) === slotInfo.index;
                         return <button key={slotInfo.index} type="button" disabled={disabled} aria-pressed={selectedSlot} title={tr(slotInfo.name)} onClick={() => {
@@ -719,7 +721,7 @@ export default function CustomRgbEditor({
                           marginRight: 5
                         }} />}{tr(slotInfo.name)}</button>;
                       })}
-                    </div>
+                    </div>}
                   </>}</>}</> : layer && metadata && <><p className="custom-rgb-description">{tr(definition?.detail ?? '')}</p>{layer.effect === "aurora" && <div className="custom-rgb-base-migration">
                   <p>{tr('Aurora is now a Base effect. Move this layer to cover all keys and control its brightness directly.')}</p>
                   <button className="secondary-button" disabled={disabled} onClick={moveAuroraToBase}>{tr('Move Aurora to Base')}</button>
