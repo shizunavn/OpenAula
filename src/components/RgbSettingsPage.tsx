@@ -601,7 +601,7 @@ function ActiveRgbSettingsPage({
               />{' '}
               {tr('Multicolor')}
             </label>
-            <div className="rgb-zone-tabs" role="group" aria-label={tr('Color slot')}>
+            {config.mix && <div className="rgb-zone-tabs" role="group" aria-label={tr('Color slot')}>
               {XSYD_COLOR_SLOTS.map(slotInfo => {
                 const selectedSlot = (config.mix ? 0 : activeColorIndex) === slotInfo.index;
                 const slotRgb = slotInfo.index === 0
@@ -643,7 +643,7 @@ function ActiveRgbSettingsPage({
                   </button>
                 );
               })}
-            </div>
+            </div>}
           </div>
         )}
       </div>

@@ -699,28 +699,20 @@ export default function CustomRgbEditor({
                       mix: false,
                       colorIndex: closestXsydColorSlot(rgb(v))
                     })} /></label>
-                    <label className="custom-rgb-check"><input type="checkbox" checked={config.base.mix} disabled={disabled} onChange={e => base({
-                      mix: e.target.checked,
-                      colorIndex: e.target.checked ? 0 : closestXsydColorSlot(config.base.rgb)
-                    })} /> {tr('Multicolor')}</label>
+                    {config.base.mix && <label className="custom-rgb-check"><input type="checkbox" checked disabled={disabled} onChange={() => {}} /> {tr('Multicolor')}</label>}
                     {config.base.mix && <div className="rgb-zone-tabs" role="group" aria-label={tr('Color slot')}>
-                      {XSYD_COLOR_SLOTS.map(slotInfo => {
-                        const selectedSlot = (config.base.mix ? 0 : (config.base.colorIndex ?? closestXsydColorSlot(config.base.rgb))) === slotInfo.index;
-                        return <button key={slotInfo.index} type="button" disabled={disabled} aria-pressed={selectedSlot} title={tr(slotInfo.name)} onClick={() => {
-                          if (slotInfo.index === 0) {
-                            base({ mix: true, colorIndex: 0 });
-                          } else {
-                            base({ mix: false, colorIndex: slotInfo.index, rgb: [...slotInfo.rgb] as RgbColor });
-                          }
-                        }}>{slotInfo.index > 0 && <span style={{
-                          display: 'inline-block',
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          background: hex(slotInfo.rgb),
-                          marginRight: 5
-                        }} />}{tr(slotInfo.name)}</button>;
-                      })}
+                      {XSYD_COLOR_SLOTS.filter(slotInfo => slotInfo.index > 0).map(slotInfo => <button key={slotInfo.index} type="button" disabled={disabled} aria-pressed={false} title={tr(slotInfo.name)} onClick={() => base({
+                        mix: false,
+                        colorIndex: slotInfo.index,
+                        rgb: [...slotInfo.rgb] as RgbColor
+                      })}><span style={{
+                        display: 'inline-block',
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        background: hex(slotInfo.rgb),
+                        marginRight: 5
+                      }} />{tr(slotInfo.name)}</button>)}
                     </div>}
                   </>}</>}</> : layer && metadata && <><p className="custom-rgb-description">{tr(definition?.detail ?? '')}</p>{layer.effect === "aurora" && <div className="custom-rgb-base-migration">
                   <p>{tr('Aurora is now a Base effect. Move this layer to cover all keys and control its brightness directly.')}</p>
