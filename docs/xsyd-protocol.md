@@ -68,16 +68,17 @@ See `src/protocol/xsyd/codec.ts`.
 | `50 <00..06> ff ff` (subcmd `0x50`) | `00 50 <00..06> ff` | write polling rate (`4k_to_2k_to_1k.pcapng` #0, #636, #996, `VA 0x09DCA`); triggers USB re-enumeration |
 | `50 07 ff ff` (subcmd `0x50`) | `00 50 <00..06> ff` | read current polling rate (`4k_to_2k_to_1k.pcapng` #14, #650, #1010) |
 
-### 2.1 Profile switching (`0x00` subcmd `0x70`) vs. 500 ms deferred Flash flush (`VA 0x07E28`)
+### 2.1 Profile switching (`0x00` subcmd `0x70`) vs. 500 ms deferred Flash flush (`VA 0x07E28` & `VA 0x09AF0`)
 
 - **5 Flash sectors per profile (`VA 0x11B5E..0x11CE8`, table at `VA 0x4340..0x439C`)**:
   - **Profile 0 (`slot = 0`)**: `0x08021000`, `0x08020000`, `0x08022000` (per-key fields `0x23`/`0x29`), `0x08025000` (`user_rgb` `0x2A`), `0x08023000` (global RGB `0x18`)
   - **Profile 1 (`slot = 1`)**: `0x08027000`, `0x08026000`, `0x08028000`, `0x0802B000`, `0x08029000`
   - **Profile 2 (`slot = 2`)**: `0x0802D000`, `0x0802C000`, `0x0802E000`, `0x08031000`, `0x0802F000`
   - **Profile 3 (`slot = 3`)**: `0x08033000`, `0x08032000`, `0x08034000`, `0x08037000`, `0x08035000`
-- **Deferred Flash write (`VA 0x07E28` → `0x11914`)**:
-  - Writing to `0x23`, `0x29`, `0x18`, or `0x2A` only updates SRAM and sets a dirty flag in `-1684(gp)` with a **500 ms countdown** (`*(u16*)0x20000A76 = 500`).
-  - Only after 500 ms of main-loop ticks does `VA 0x07E30` call `VA 0x11914` to erase/write the profile's Flash sectors.
+- **Deferred Flash write (`VA 0x07E28` → `0x11914` → `0x09AF0`)**:
+  - Writing to `0x23`, `0x24..0x2C`, `0x29`, `0x18`, or `0x2A` only updates SRAM and sets a dirty flag in `-1684(gp)` with a **500 ms countdown** (`*(u32*)(gp - 0x764) = 500`, `VA 0x0AD9E`).
+  - Only after ~500–670 ms of main-loop ticks does `VA 0x07E30` call `VA 0x11914` to erase/write the profile's Flash sectors, and then `VA 0x09AF0` emits an unsolicited `5C 04 FF <ck> | 0A FF <hi> <lo>` notification (`socd_ad_...pcapng` `#31790`, `#61148`, `#88278`).
+  - Because the MCU masks interrupts while erasing SPI/nor Flash sectors, an `0x23` packet arriving during the erase window can be dropped; `XsydDeviceManager` automatically retries `0x23` requests on transient read timeouts and recognizes `0xFF` (`0A FF`) as Flash-flush completion.
 - **Critical hardware constraint on `0x00 0x70 <slot>` (`VA 0x16342` → `0x12AF4`)**:
   - Sending `5C 04 00 94 | 70 <slot> FF FF` unconditionally invokes `VA 0x11B5E(slot)` and `VA 0x12AF4()`, which **reloads the profile's Flash sectors back into SRAM**.
   - If `0x00 0x70 <slot>` is sent again within 500 ms after a `0x23` write (for example, inside `saveXsydRemapChanges`, `saveXsydAdvancedBindings`, `saveXsydRgbProfile`, or `hydrateFromXsydDevice`), `VA 0x12AF4` overwrites SRAM with the old Flash contents before the 500 ms flush fires, **wiping out the uncommitted `0x23` Actuation/RT/Deadzone changes**!
@@ -109,7 +110,7 @@ reply:  5C 04 80 14 | 00 50 <code> FF
 ## 3. Keymap (`VA 0x4A20` & `VA 0x0D0A8`)
 
 68 physical keys laid out in a 6 × 21 grid (`cell = 0..125`).
-- On the wire (`0x23`, `0x24`, `0x25`, `0x27`, `0x28`, `0x2A`, `0x2C`), each key is identified by its 1-byte `keyValue` (HID usage low byte, with `Fn = 0x01` because `0xF001 & 0xFF = 0x01`).
+- On the wire (`0x23`, `0x24`, `0x25`, `0x26`, `0x27`, `0x28`, `0x2A`, `0x2C`), each key is identified by its 1-byte `keyValue` (HID usage low byte, with `Fn = 0x01` because `0xF001 & 0xFF = 0x01`).
 - Firmware `VA 0x0D0A8` scans the 256-entry flash table at `VA 0x4A20` to find `pos` (`1..255`), then converts `pos_0 = pos - 1` into `cell = (pos_0 >> 5) * 21 + (pos_0 & 0x1F)`.
 
 ---
@@ -145,16 +146,6 @@ payload[4 + 4k]      value high byte
 | **`0x17` (23)** | **`0x0B19E`** | **`0x0B450`** | **`0x200040E8 + 2*cell`** | **Bottom Deadzone (µm)** (`0..1000 µm`). Verified in `wasd_deadzone.pcapng` (`#06`: W/A/S/D `200 µm = 0.20 mm`; `#13`: W/A/S/D `1000 µm = 1.00 mm`). Evaluated at `VA 0x1357C` (`effective_bottom = max_travel - BottomDeadzone`). Sanitized at `VA 0x12C90`: if `> 1000 µm`, reset to `200 µm` (`0.20 mm`). |
 | **`0x19` (25)** | **`0x0B1CE`** | **`0x0B482`** | **`0x200045F4 + 2*cell`** | **Switch Type ID (`0..3`)**. Selects Hall ADC-to-travel LUT (`VA 0x1D48C`) and max travel (`3400 µm` vs `3300 µm` at `VA 0x12CEA`). |
 
-> **Why earlier docs/code had the `0.15 mm -> 0.02 mm` ("limit breaker") and Deadzone bugs:**
-> Earlier notes misidentified `0x16` as `RapidTrigger` and `0x17` as `Deadzone`, leaving `0x14` and `0x15` unwritten.
-> - Writing `0.15 mm` (`150 µm`) RT in the old code actually wrote `150 µm` to `field 0x16` (**Top Deadzone**) and set `field 0x08 = 0x20` (enabling RT), while leaving `field 0x14` and `0x15` untouched at the keyboard's NVRAM value (`20 µm = 0.02 mm` in Profiles 1–3 of `profile_1_2_3_4.pcapng`), causing the official web driver to display `0.02 mm`!
-> - Writing Top/Bottom Deadzone in the old code ignored `bottomDeadzoneMm` and wrote `topDeadzoneMm` only to `field 0x17`, then read `field 0x17` back into both `topDeadzoneMm` and `bottomDeadzoneMm`.
-> - **`wasd_deadzone.pcapng` verification**:
->   - `#03 OUT`: `5C 39 23 EE | 01 | 1a 16 96 00 | 04 16 96 00 | 16 16 96 00 | 07 16 96 00 | 00...` → Sets W (`0x1a`), A (`0x04`), S (`0x16`), D (`0x07`) **Top Deadzone (`field 0x16`) = `0x0096` (`150 µm = 0.15 mm`)**.
->   - `#06 OUT`: `5C 39 23 EE | 01 | 1a 17 c8 00 | 04 17 c8 00 | 16 17 c8 00 | 07 17 c8 00 | 00...` → Sets W, A, S, D **Bottom Deadzone (`field 0x17`) = `0x00C8` (`200 µm = 0.20 mm`)**.
->   - `#11 OUT`: `5C 39 23 EE | 01 | 1a 16 e8 03 | 04 16 e8 03 | 16 16 e8 03 | 07 16 e8 03 | 00...` → Sets W, A, S, D **Top Deadzone (`field 0x16`) = `0x03E8` (`1000 µm = 1.00 mm`)**.
->   - `#13 OUT`: `5C 39 23 EE | 01 | 1a 17 e8 03 | 04 17 e8 03 | 16 17 e8 03 | 07 17 e8 03 | 00...` → Sets W, A, S, D **Bottom Deadzone (`field 0x17`) = `0x03E8` (`1000 µm = 1.00 mm`)**.
-
 ### 4.2 Switch Type IDs (`field 0x19`, `VA 0x1D48C` & `VA 0x12CEA..0x12D14`)
 
 Verified in firmware (`VA 0x130C6..0x13112`, `VA 0x12CEA..0x12D14`, `VA 0x1D48C`) and `change_A_Zjadepro_Q_toblackemperor_WtoTTCKING_E-to_yongchun_switch.pcapng`:
@@ -165,8 +156,6 @@ Verified in firmware (`VA 0x130C6..0x13112`, `VA 0x12CEA..0x12D14`, `VA 0x1D48C`
 | `1` | **Jade Pro / Magnetic Jade** (`jadepro`) | Curve 0 (`VA 0x04E44`) | **`3400 µm` (`3.40 mm`)** | `'switch-1'` (`'jade-pro'`) |
 | `2` | **Black King / Black Emperor / Uranus** | Curve 1 (`VA 0x05644`) | **`3300 µm` (`3.30 mm`)** | `'black'` (`'switch-3'`) |
 | `3` | **Meteor Magnetic / TTC King** | Curve 1 (`VA 0x05644`) | **`3300 µm` (`3.30 mm`)** | `'white'` |
-
-> **Firmware travel sanitizer (`VA 0x12D02..0x12D14`)**: When a profile loads (`VA 0x12AF4`), if a key has `SwitchType` `2` or `3` (`max_travel = 3300 µm`) and its `Travel (0x04)` exceeds `3300 µm` (e.g. `3350` or `3400 µm`), the firmware rejects `Travel` and resets it to `Global Actuation (0x29)` (`500 µm = 0.50 mm` in Profile 0)! `xsydProtocolEncoder` therefore clamps `Travel` and `RT` to `xsydSwitchMaxTravelUm(swId)`.
 
 ### 4.3 `0x29` Global Actuation Read/Write (`VA 0x0C092..0x0C12E`)
 
@@ -281,16 +270,27 @@ Verified across all 4 SOCD resolution modes (`payload[8] = mode`, evaluated at f
 
 ---
 
-## 7. Hall travel & pressed-state stream (`0x12` → `0x92`)
+## 7. Hall travel & pressed-state stream (`0x12` → `0x92`) & 200 Hz Optimization
 
 Verified on `travel_test_press_randomkey.pcapng` and firmware disassembly (`VA 0xA758`, `0xA77C`, `0xA7A8`, `0xA802`, `0xC6D8`, `0x12FE8`):
 
 | request (`0x12`, LEN 4) | reply (`0x92`) | payload layout | capture evidence (`travel_test_press_randomkey.pcapng`) |
 |---|---|---|---|
-| `5C 04 12 A6 \| 03 01 FF FF` | `5C 82 92 A4` (`LEN = 0x82 = 130` B across 3 HID reports) | `00 03 \| u8[126] \| FF FF` — per-key pressed/actuated state at `0x20006A48 + matrixIndex` (`0x00` = released, `0x02` = actuated) | `payload[2 + 92] = 0x02` while `KeyM` (HID `0x10`, `matrixIndex = 92`) is held; `payload[2 + 65] = 0x02` while `KeyS` (HID `0x16`, `matrixIndex = 65`) is held |
-| `5C 04 12 A6 \| 02 01 FF FF` | `5C 80 92 A3` (`LEN = 0x80 = 128` B across 3 HID reports) | `00 02 \| u16_le[63]` — travel in micrometres (`0..3400` µm) at `0x200041EC` for `matrixIndex = 0..62` (rows 0–2: `Escape`..`Delete`) | 175 upper-half polls |
-| `5C 04 12 A6 \| 02 02 FF FF` | `5C 80 92 A3` (`LEN = 0x80 = 128` B across 3 HID reports) | `00 02 \| u16_le[63]` — travel in micrometres (`0..3400` µm) at `0x2000426A` for `matrixIndex = 63..125` (rows 3–5: `CapsLock`..`ArrowRight`) | `KeyM` (`matrixIndex = 92 = 63 + 29`) ramps `u16_le[29]` from `0` → `3400` µm (`3.400 mm`); `KeyS` (`matrixIndex = 65 = 63 + 2`) ramps `u16_le[2]` from `0` → `1783` µm (`1.783 mm`) |
-| `5C 04 12 A6 \| 06 <01\|02> FF FF` | `5C 80 92 A3` (`LEN = 0x80 = 128` B across 3 HID reports) | `00 06 \| u16_le[63]` — filtered 12-bit Hall ADC (`0..4095`) at `0x200042E8` / `0x20004366` | `calibrate_all_keyboard.pcapng` |
+| `5C 04 12 A6 \| 03 01 FF FF` | `5C 82 92 27` (`LEN = 0x82 = 130` B across 3 HID reports) | `00 03 \| u8[126] \| FF FF` — per-key pressed/actuated state at `0x20006A48 + matrixIndex` (`0x00` = released, `0x02` = actuated) | `payload[2 + 92] = 0x02` while `KeyM` (HID `0x10`, `matrixIndex = 92`) is held; `payload[2 + 65] = 0x02` while `KeyS` (HID `0x16`, `matrixIndex = 65`) is held |
+| `5C 04 12 A6 \| 02 01 FF FF` | `5C 80 92 A6` (`LEN = 0x80 = 128` B across 3 HID reports) | `00 02 \| u16_le[63]` — travel in micrometres (`0..3400` µm) at `0x200041EC` for `matrixIndex = 0..62` (rows 0–2: `Escape`..`Enter`/`PageUp`) | 175 upper-half polls |
+| `5C 04 12 A6 \| 02 02 FF FF` | `5C 80 92 A6` (`LEN = 0x80 = 128` B across 3 HID reports) | `00 02 \| u16_le[63]` — travel in micrometres (`0..3400` µm) at `0x2000426A` for `matrixIndex = 63..125` (rows 3–5: `ShiftLeft`..`ArrowRight`) | `KeyM` (`matrixIndex = 92 = 63 + 29`) ramps `u16_le[29]` from `0` → `3400` µm (`3.400 mm`); `KeyS` (`matrixIndex = 65 = 63 + 2`) ramps `u16_le[2]` from `0` → `1783` µm (`1.783 mm`) |
+| `5C 04 12 A6 \| 06 <01\|02> FF FF` | `5C 80 92 A6` (`LEN = 0x80 = 128` B across 3 HID reports) | `00 06 \| u16_le[63]` — filtered 12-bit Hall ADC (`0..4095`) at `0x200042E8` / `0x20004366` | `calibrate_all_keyboard.pcapng` |
+
+### 7.1 Achieving 200 Hz (`5.0 ms` period) on WIN 68 HE MAX
+
+Unlike HERO68 (which packs up to 9 keys into a single 64-byte `0x98` HID report), each `0x92` reply on WIN 68 HE MAX is **132–134 bytes split across 3 × 64-byte HID reports** (`~2.0–2.4 ms` per USB round-trip).
+- **Why the legacy loop topped out at ~60–80 Hz**:
+  - Polling both `0x12 0x03` (3 reports) and `0x12 0x02` (3 reports) on every iteration (`~6 ms`) plus a `setTimeout(..., 8)` sleep (`~8.5 ms`) cost `~14.5 ms` per tick (`~68 Hz`).
+- **200 Hz Optimization (`src/protocol/hero68/hallStream.ts` & `service/native/hid_bridge.cpp`)**:
+  1. **Single-Round-Trip Steady State**: Poll `0x12 0x03` (`buildXsydHallPressedFrame`) **only once on stream start** to seed `pressedByMatrixIndex`, then issue **one** `0x12 0x02` (`buildXsydHallTravelFrame`) request per 5.0 ms tick (`~2.0 ms` round-trip) and maintain `pressed` flags via travel hysteresis (`<= 80 µm` release, `>= 150 µm` press).
+  2. **Smart Active-Table Prioritization**: When only one half-matrix table (`1` or `2`) has depressed keys (`travelUm > 80`), dedicate 3 out of 4 ticks to the active table and scan the idle table every 4th tick; when all demanded keys lie in a single table, poll only that table at 100% duty cycle.
+  3. **5.0 ms `MessageChannel` Deadline Pacer**: Replaces `setTimeout(..., 8)` with a `MessageChannel`-assisted 5.0 ms deadline pacer to bypass Chromium's 4 ms nested timer clamp.
+  4. **Self-Healing Multi-Report Assembler (`XsydFrameAssembler.push`)**: If a 3-report `0x92` Hall reply is interrupted when switching to `0x23` configuration reads/writes, `XsydFrameAssembler` detects incoming standalone single-report replies (`0xA3`, `0x80`, `0xFF`) or fresh `0x92` headers and resets the stale partial buffer immediately so `0xA3` is never swallowed.
 
 ---
 

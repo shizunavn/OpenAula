@@ -3,6 +3,17 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.5.0 — WIN 68 HE MAX Flash Flush 0x23 Recovery, 200 Hz Hall Stream & Research Synthesis
+
+- Auto-recovery from `0x23` read timeout during Flash flush:
+  - Addressed SPI/NOR Flash sector erase freeze (`VA 0x07E28` → `0x11914` → `0x09AF0`): during the ~500–670 ms deferred Flash write window, MCU masks interrupts, dropping incoming `0x23` packets and later emitting unsolicited `5C 04 FF <ck> | 0A FF <hi> <lo>`.
+  - `XsydDeviceManager` now automatically retries `0x23` requests up to 2 times upon read timeouts and handles Flash-flush completion frames cleanly, eliminating `WIN 68 HE MAX read timed out (opcode=0x23)` errors.
+- 200 Hz High-Speed XSYD Hall Sensor Streaming:
+  - Streamlined Hall polling sequence in `src/protocol/hero68/hallStream.ts`, `service/hall/hallController.ts`, and `service/native/hid_bridge.cpp`.
+  - Implemented single `0x12 0x03` initial seed for pressed state, followed by 1-round-trip steady-state polling with 3:1 prioritized sampling of depressed keys over idle keys, achieving stable ~200 Hz Hall streaming.
+- Firmware static analysis synthesis (`KNOWN_STATE.md`):
+  - Added comprehensive 1286-line verified technical specification covering MCU XS105 / SI2828C memory map, Flash sector layouts, jump tables, and HID descriptors for AULA WIN 68 HE MAX (`App v1.1.4_20260204a`).
+
 ## 1.4.3 — WIN 68 HE MAX DKS & 4-Mode SOCD Support
 
 - WIN 68 HE MAX DKS (Dynamic Keystroke) implementation:

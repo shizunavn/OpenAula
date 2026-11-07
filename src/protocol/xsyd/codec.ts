@@ -26,21 +26,21 @@ function assertByte(value: number, name: string): void {
 }
 
 /**
- * Byte 3 of the frame (VA 0xCF48 in firmware).
- *
- * The firmware sums magic + LEN + OPCODE + 0x35 + `buf[0x60 + LEN]`, i.e. the
- * LAST payload byte only (pack[3 + LEN]) — never the whole body. Proven on all
- * 4316 frames of 9 USB captures; whole-payload sums reproduce only the frames
- * whose body happens to total 0x00/0xFF.
- *
- * Three families deviate, each explained by how the frame was assembled:
- *   - `in` with OPCODE < 0x80 never passes through the reply packer (which sets
- *     `opcode |= 0x80` before checksumming), so the byte stays 0x00;
- *   - OPCODE 0x30 uses a fixed 0x43-byte slot, so the addend is pack[63];
- *   - LEN > 60 pushes the addend past the 64-byte report: 0x00 for the 128-byte
- *     Hall reply (0x92, LEN 0x80) and 0xFF when it carries a FF FF suffix
- *     (LEN 0x82).
- */
+  * Byte 3 of the frame (VA 0xCF48 in firmware).
+  *
+  * The firmware sums magic + LEN + OPCODE + 0x35 + `buf[0x60 + LEN]`, i.e. the
+  * LAST payload byte only (pack[3 + LEN]) — never the whole body. Proven on all
+  * 4316 frames of 9 USB captures; whole-payload sums reproduce only the frames
+  * whose body happens to total 0x00/0xFF.
+  *
+  * Three families deviate, each explained by how the frame was assembled:
+  *   - `in` with OPCODE < 0x80 never passes through the reply packer (which sets
+  *     `opcode |= 0x80` before checksumming), so the byte stays 0x00;
+  *   - OPCODE 0x30 uses a fixed 0x43-byte slot, so the addend is pack[63];
+  *   - LEN > 60 pushes the addend past the 64-byte report: 0x00 for the 128-byte
+  *     Hall reply (0x92, LEN 0x80) and 0xFF when it carries a FF FF suffix
+  *     (LEN 0x82).
+  */
 export function xsydChecksum(frame: ArrayLike<number>, direction: "out" | "in" = "out"): number {
   const magic = frame[0] ?? 0;
   const length = frame[1] ?? 0;
@@ -112,6 +112,11 @@ export interface XsydReply {
  * The firmware header carries LEN, so the expected frame size is known as soon
  * as the first report arrives. A report whose first byte is not 0x5C while the
  * buffer is empty is a stray/echoed report and is dropped.
+ *
+ * Self-healing guard: if a multi-report `0x92` Hall reply (3 × 64B reports) is
+ * interrupted or drops a continuation report and a valid standalone reply header
+ * (`0xA3`, `0x80`, `0xFF`, or a fresh `0x92` header) arrives next, the stale
+ * partial buffer is discarded immediately so it cannot swallow the new reply.
  */
 export class XsydFrameAssembler {
   #buffer = new Uint8Array(XSYD_MAX_PAYLOAD + HEADER_LENGTH);
@@ -122,6 +127,29 @@ export class XsydFrameAssembler {
   push(report: ArrayLike<number>): XsydReply | null {
     if (report.length < 4) {
       return null;
+    }
+    if (this.#filled > 0 && this.#buffer[2] === 0x92) {
+      const magic = report[0] ?? 0;
+      const len = report[1] ?? 0;
+      const op = report[2] ?? 0;
+      const isSingleReportReply =
+        magic === XSYD_MAGIC &&
+        len > 0 &&
+        len <= XSYD_REPORT_LENGTH - HEADER_LENGTH &&
+        op >= 0x80 &&
+        op !== 0x92 &&
+        report.length >= HEADER_LENGTH + len &&
+        report[3] === xsydChecksum(report, "in");
+      const isFreshHallHeader =
+        magic === XSYD_MAGIC &&
+        (len === 0x80 || len === 0x82) &&
+        op === 0x92 &&
+        report[3] === xsydChecksum(report, "in") &&
+        (report[4] ?? 0xff) === 0x00 &&
+        (report[5] === 0x01 || report[5] === 0x02 || report[5] === 0x03);
+      if (isSingleReportReply || isFreshHallHeader) {
+        this.reset();
+      }
     }
     if (this.#filled === 0) {
       if (report[0] !== XSYD_MAGIC) {

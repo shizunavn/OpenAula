@@ -1107,3 +1107,184 @@ test('WIN 68 HE MAX GamepadPage & BackgroundServicePage work without timeout whe
   assert.equal(typeof bgServicePageMod.default, 'function')
   assert.equal(typeof gamepadServiceMod.useSharedHallService, 'function')
 })
+
+test('XsydFrameAssembler self-heals interrupted 3-report 0x92 Hall frames when 0xA3 (0x23), 0xFF (Flash flush), or a fresh 0x92 header arrives', async () => {
+  const codecMod = await bundle('src/protocol/xsyd/codec.ts')
+  const featuresMod = await bundle('src/protocol/xsyd/features.ts')
+
+  const travelPayload = new Uint8Array(0x80)
+  travelPayload[0] = 0x00
+  travelPayload[1] = 0x02
+  travelPayload[2 + 17 * 2] = 0xd0 // KeyW = 2000 um
+  travelPayload[2 + 17 * 2 + 1] = 0x07
+  const hallFrame = codecMod.buildXsydFrame(0x92, travelPayload)
+  hallFrame[3] = codecMod.xsydChecksum(hallFrame, 'in')
+  const hallReports = codecMod.xsydReports(hallFrame)
+  assert.equal(hallReports.length, 3)
+
+  const fieldReadReq = featuresMod.buildFieldReadFrame([
+    { pos: 0x1a, field: featuresMod.XsydFeatureField.Travel },
+  ])
+  const a3Reply = new Uint8Array(fieldReadReq)
+  a3Reply[2] = 0xa3
+  a3Reply[4 + 3] = 0xe8
+  a3Reply[4 + 4] = 0x03
+  a3Reply[3] = codecMod.xsydChecksum(a3Reply, 'in')
+
+  const assembler = new codecMod.XsydFrameAssembler()
+  // Simulate 0x92 Hall stream interrupted after report #1 (missing reports #2 and #3)
+  assert.equal(assembler.push(hallReports[0]), null)
+  // Next arrives a single-report 0xA3 reply for opcode 0x23: must NOT be swallowed as report #2 of 0x92!
+  const recoveredA3 = assembler.push(a3Reply)
+  assert.ok(recoveredA3, '0xA3 reply must be decoded immediately instead of swallowed by stale 0x92 buffer')
+  assert.equal(recoveredA3.opcode, 0xa3)
+  assert.equal(recoveredA3.checksumValid, true)
+
+  // Simulate 0x92 Hall stream interrupted after report #1 and #2, followed by a fresh 0x92 header
+  assert.equal(assembler.push(hallReports[0]), null)
+  assert.equal(assembler.push(hallReports[1]), null)
+  assert.equal(assembler.push(hallReports[0]), null, 'Fresh 0x92 header resets stale partial buffer and becomes report #1')
+  assert.equal(assembler.push(hallReports[1]), null)
+  const recoveredHall = assembler.push(hallReports[2])
+  assert.ok(recoveredHall && recoveredHall.opcode === 0x92 && recoveredHall.checksumValid)
+})
+
+test('XsydDeviceManager recovers from transient 0x23 read timeout during firmware Flash sector erase (0xFF) and streams XSYD Hall at 200 Hz', async () => {
+  const xsydCodec = await bundle('src/protocol/xsyd/codec.ts')
+  const xsydFeatures = await bundle('src/protocol/xsyd/features.ts')
+  const hallStreamMod = await bundle('src/protocol/hero68/hallStream.ts')
+
+  const oldNav = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const listeners = new Set()
+  let field23Attempts = 0
+  const hallRequests = []
+  let wTravelUm = 2200
+
+  function makeReply(reqOpcode, payloadBytes) {
+    const f = xsydCodec.buildXsydFrame(reqOpcode | 0x80, payloadBytes)
+    f[3] = xsydCodec.xsydChecksum(f, 'in')
+    return f
+  }
+
+  const mockDevice = {
+    opened: true,
+    vendorId: 0x1c4f,
+    productId: 0xee88,
+    productName: 'WIN 68 HE MAX',
+    collections: [{ usagePage: 0xffa0, usage: 0x0001 }],
+    async open() {
+      this.opened = true
+    },
+    async close() {
+      this.opened = false
+    },
+    addEventListener(type, listener) {
+      if (type === 'inputreport') listeners.add(listener)
+    },
+    removeEventListener(type, listener) {
+      if (type === 'inputreport') listeners.delete(listener)
+    },
+    async sendReport(_reportId, data) {
+      const bytes = new Uint8Array(data)
+      const op = bytes[2]
+      const sub = bytes[4]
+      queueMicrotask(() => {
+        if (op === 0x00 && sub === 0x01) {
+          const r = makeReply(0x00, [0x00, 0x01, 0x09, 0x01, 0x00])
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x00 && sub === 0x25) {
+          const r = makeReply(0x00, [0x00, 0x25, 0x0a, 0x0a, 0x00, 0x48, 0x0d])
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x00 && sub === 0x26) {
+          const ascii = [...Buffer.from('WIN 68 HE MAX', 'ascii')]
+          const r = makeReply(0x00, [0x00, 0x26, ...ascii])
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x00 && sub === 0x70) {
+          const r = makeReply(0x00, [0x00, 0x70, bytes[5] === 0x04 ? 0x00 : bytes[5], 0xff])
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x23) {
+          field23Attempts += 1
+          if (field23Attempts === 1) {
+            // Simulate firmware dropping the first 0x23 packet during a Flash erase and emitting unsolicited 0xFF
+            const flashDone = xsydCodec.buildXsydFrame(0xff, [0x0a, 0xff, 0x8d, 0x5c])
+            flashDone[3] = xsydCodec.xsydChecksum(flashDone, 'in')
+            for (const l of listeners) l({ reportId: 0, data: new DataView(flashDone.buffer) })
+            return
+          }
+          const r = makeReply(0x23, bytes.slice(4, 4 + bytes[1]))
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x12) {
+          hallRequests.push([bytes[4], bytes[5]])
+          if (bytes[4] === 0x03) {
+            const p = new Uint8Array(0x82)
+            p[0] = 0x00
+            p[1] = 0x03
+            p[128] = 0xff
+            p[129] = 0xff
+            const f = xsydCodec.buildXsydFrame(0x92, p)
+            f[3] = xsydCodec.xsydChecksum(f, 'in')
+            for (const chunk of xsydCodec.xsydReports(f)) {
+              for (const l of listeners) l({ reportId: 0, data: new DataView(chunk.buffer) })
+            }
+          } else if (bytes[4] === 0x02) {
+            const p = new Uint8Array(0x80)
+            p[0] = 0x00
+            p[1] = 0x02
+            if (bytes[5] === 0x01) {
+              // KeyW is matrix index 23 in Table 1
+              p[2 + 23 * 2] = wTravelUm & 0xff
+              p[2 + 23 * 2 + 1] = (wTravelUm >> 8) & 0xff
+            }
+            const f = xsydCodec.buildXsydFrame(0x92, p)
+            f[3] = xsydCodec.xsydChecksum(f, 'in')
+            for (const chunk of xsydCodec.xsydReports(f)) {
+              for (const l of listeners) l({ reportId: 0, data: new DataView(chunk.buffer) })
+            }
+          }
+        }
+      })
+    },
+  }
+
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { hid: { async getDevices() { return [mockDevice] } } },
+  })
+
+  const { xsydDeviceManager, hero68HallStream } = hallStreamMod
+  try {
+    await xsydDeviceManager.connect(false)
+    // 1. Verify 0x23 automatic retry recovers when attempt #1 times out during Flash flush
+    const fieldFrame = xsydFeatures.buildFieldReadFrame([
+      { pos: 0x1a, field: xsydFeatures.XsydFeatureField.Travel },
+    ])
+    const reply = await xsydDeviceManager.request(fieldFrame, 80)
+    assert.equal(reply.opcode, 0xa3)
+    assert.equal(field23Attempts, 2, '0x23 must automatically retry and succeed on attempt #2')
+
+    // 2. Verify 200 Hz XSYD Hall stream (single 0x12 0x03 seed + 1-round-trip 0x12 0x02 steady state)
+    hallRequests.length = 0
+    await hero68HallStream.start(['KeyW', 'KeyS'])
+    await new Promise(resolve => setTimeout(resolve, 95))
+    const snap = hero68HallStream.getSnapshot()
+    await hero68HallStream.stop()
+
+    const pressedPolls = hallRequests.filter(([sub]) => sub === 0x03).length
+    const travel1Polls = hallRequests.filter(([sub, tbl]) => sub === 0x02 && tbl === 0x01).length
+    const travel2Polls = hallRequests.filter(([sub, tbl]) => sub === 0x02 && tbl === 0x02).length
+    assert.equal(pressedPolls, 1, '0x12 subcmd 0x03 (pressed state) must be polled only once on initial seed')
+    assert.ok(
+      travel1Polls > travel2Polls * 2,
+      `Active Table 1 (KeyW depressed) must be prioritized 3:1 over idle Table 2 (got T1=${travel1Polls}, T2=${travel2Polls})`
+    )
+    assert.ok(
+      snap.telemetryHz !== null && snap.telemetryHz >= 150,
+      `Expected ~200 Hz XSYD Hall stream rate, got ${snap.telemetryHz} Hz`
+    )
+  } finally {
+    await hero68HallStream.stop().catch(() => {})
+    await xsydDeviceManager.disconnect()
+    if (oldNav) Object.defineProperty(globalThis, 'navigator', oldNav)
+    else delete globalThis.navigator
+  }
+})

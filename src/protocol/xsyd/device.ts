@@ -441,14 +441,13 @@ export async function readXsydFieldTable(
   requester: XsydRequester,
   queries: readonly { pos: number; field: number }[] = []
 ): Promise<XsydFieldWrite[]> {
+  if (queries.length === 0) {
+    return []
+  }
   const results: XsydFieldWrite[] = []
   const chunks: { pos: number; field: number }[][] = []
-  if (queries.length === 0) {
-    chunks.push([])
-  } else {
-    for (let i = 0; i < queries.length; i += XSYD_FEATURE_SLOTS) {
-      chunks.push(queries.slice(i, i + XSYD_FEATURE_SLOTS))
-    }
+  for (let i = 0; i < queries.length; i += XSYD_FEATURE_SLOTS) {
+    chunks.push(queries.slice(i, i + XSYD_FEATURE_SLOTS))
   }
   for (const batch of chunks) {
     const reply = await requester.request(buildFieldReadFrame(batch))
@@ -1021,6 +1020,9 @@ function errorMessage(error: unknown): string {
  *   deferred Flash flush (`VA 0x07E28` -> `0x11914` vs `VA 0x16342` -> `0x12AF4`),
  *   so redundant `0x00 0x70 <slot>` frames during a multi-step save never reload
  *   stale Flash over uncommitted SRAM writes.
+ * - Retries `0x23` field-table requests automatically on transient read timeouts
+ *   (e.g., when a request lands during the firmware's ~500–670 ms Flash sector erase,
+ *   which emits an unsolicited `0xFF` completion packet at `VA 0x09AF0`).
  */
 export class XsydDeviceManager implements Hero68Transport, XsydRequester {
   #device: HIDDeviceLike | undefined
@@ -1317,9 +1319,9 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     }
   }
 
-  #queueControlOperation<T>(run: () => Promise<T>): Promise<T> {
+  #queueControlOperation<T>(run: () => Promise<T>, useCrossTabLock = true): Promise<T> {
     const work = () =>
-      typeof navigator !== 'undefined' && navigator.locks
+      useCrossTabLock && typeof navigator !== 'undefined' && navigator.locks
         ? navigator.locks.request('openhero68:xsyd-hid-control', run)
         : run()
     const next = this.#requestTail.then(work)
@@ -1338,16 +1340,16 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
   async request(
     frame: Uint8Array,
     timeoutMs = 800,
-    options: { expectReply?: boolean } = {}
+    options: { expectReply?: boolean; retries?: number } = {}
   ): Promise<XsydReply> {
     const expectReply = options.expectReply ?? true
+    const op = frame[2] ?? 0
     return this.#queueControlOperation(async () => {
       if (!expectReply) {
         this.#assembler.reset()
         await this.send(frame)
         return SILENT_REPLY
       }
-      const op = frame[2]
       const sub = frame[4]
       // Guard `0x00` subcmd `0x70` profile select against firmware `VA 0x16342` -> `0x12AF4`:
       // In firmware v1.1.4, `0x00 0x70 <slot>` unconditionally reloads Flash into SRAM.
@@ -1381,15 +1383,42 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
           return reply
         }
       }
-      const reply = await this.#requestOnce(frame, timeoutMs)
+      // `0x23` per-key field table reads/writes run in 34..68 packet bursts and
+      // frequently overlap the firmware's ~500–670 ms deferred Flash sector erase
+      // (`VA 0x0AD9E` -> `0x11914` -> `0x09AF0`), during which a single USB packet
+      // can be dropped while the MCU masks interrupts. Retry `0x23` up to 2 times.
+      const maxRetries = options.retries ?? (op === 0x23 ? 2 : 0)
+      const reply = await this.#requestWithRetry(frame, timeoutMs, maxRetries)
       if (
         [0x18, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2c].includes(op) &&
         frame[4] === 0x01
       ) {
-        this.#lastSramWriteAt = Date.now()
+        if (this.#lastSramWriteAt === 0) {
+          this.#lastSramWriteAt = Date.now()
+        }
       }
       return reply
-    })
+    }, op !== 0x12)
+  }
+
+  async #requestWithRetry(frame: Uint8Array, timeoutMs: number, maxRetries: number): Promise<XsydReply> {
+    const setTimer = typeof window !== 'undefined' && window.setTimeout ? window.setTimeout.bind(window) : setTimeout
+    let lastError: unknown
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const attemptTimeout = maxRetries > 0 && attempt < maxRetries ? Math.min(timeoutMs, 350) : timeoutMs
+        return await this.#requestOnce(frame, attemptTimeout)
+      } catch (error) {
+        lastError = error
+        const isReadTimeout = error instanceof Error && error.message.includes('read timed out')
+        if (!isReadTimeout || attempt >= maxRetries || !this.#device?.opened) {
+          throw error
+        }
+        this.#assembler.reset()
+        await new Promise(resolve => setTimer(resolve, 35))
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
 
   async #requestOnce(frame: Uint8Array, timeoutMs = 800): Promise<XsydReply> {
@@ -1402,6 +1431,8 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     const clearTimer =
       typeof window !== 'undefined' && window.clearTimeout ? window.clearTimeout.bind(window) : clearTimeout
 
+    this.#assembler.reset()
+
     return new Promise<XsydReply>((resolve, reject) => {
       const timeoutError = (stage: 'read' | 'send') =>
         new Error(
@@ -1413,6 +1444,7 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
         reject,
         timer: setTimer(() => {
           this.#waiters.delete(waiter)
+          this.#assembler.reset()
           const error = timeoutError('send')
           reject(error)
           this.#setSnapshot({
@@ -1430,12 +1462,14 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
           clearTimer(waiter.timer)
           waiter.timer = setTimer(() => {
             this.#waiters.delete(waiter)
+            this.#assembler.reset()
             reject(timeoutError('read'))
           }, Math.max(1, timeoutMs))
         })
         .catch(error => {
           clearTimer(waiter.timer)
           this.#waiters.delete(waiter)
+          this.#assembler.reset()
           reject(error instanceof Error ? error : new Error(String(error)))
         })
     })
@@ -1458,6 +1492,9 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     const payload = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength)
     reportTrace.add('in', event.reportId ?? XSYD_REPORT_ID, payload)
     if (this.#waiters.size === 0) {
+      if (payload.length >= 6 && payload[0] === XSYD_MAGIC && payload[2] === 0xff && payload[4] === 0x0a && payload[5] === 0xff) {
+        this.#lastSramWriteAt = 0
+      }
       return
     }
     const clearTimer =
@@ -1466,6 +1503,11 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
       const reply = this.#assembler.push(payload)
       if (!reply) {
         return
+      }
+      // Unsolicited `0xFF` (`0A FF <hi> <lo>` at `VA 0x09AF0`) signals that the
+      // firmware finished its deferred SRAM -> Flash sector flush.
+      if (reply.opcode === 0xff && reply.payload[0] === 0x0a && reply.payload[1] === 0xff) {
+        this.#lastSramWriteAt = 0
       }
       for (const waiter of this.#waiters) {
         if (reply.opcode !== waiter.expectedOpcode) {
