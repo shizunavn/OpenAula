@@ -3,6 +3,16 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.3.2.1 - RGB color controls and 1.0 mm dead zone limit
+
+- The dead zone slider limit in both Rapid Trigger and Quick Settings is raised from 0.5 mm to 1.0 mm, matching the firmware range without protocol changes.
+- Redesigned RGB color controls across Onboard, Custom Effects, and Per-key lighting:
+  - Unified color header with an active custom color picker pill and editable uppercase HEX readout.
+  - 8-chip swatch grid (Multicolor rainbow chip + 7 hardware color presets) replacing cluttered tabs and checkboxes.
+  - Dedicated Reverse direction toggle row with clear iconography.
+  - Per-key paint tools use a compact circular swatch palette and streamlined color inputs.
+- Cleaned up WIN 68 HE MAX palette strips: colour slots only display when Multicolor / Palette mode is active, avoiding desync between single-color swatches and firmware slots.
+
 ## 1.3.2 - WIN 68 HE MAX Rhythm Sync and Hall polling
 
 - Rhythm Sync runs on WIN 68 HE MAX from the Windows service. The helper already rendered the shared 68-key frame; it now also encodes it for XSYD: `0x18` with mode `0x15` (Per-key Color) once per session, then `0x2A` batch writes of 14 keys each, five per changed frame and nothing at all when the frame is identical to the last one sent. `rhythm-stop` writes `0x18` mode `0x00` so the board does not freeze on the last frame. The captures in this repository come from the official driver, so it is not validated on a physical board.
