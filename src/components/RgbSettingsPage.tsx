@@ -28,7 +28,6 @@ import {
   XSYD_COLOR_SLOTS,
   XSYD_DEFAULT_PALETTE_RGB,
   XSYD_MAX_BRIGHTNESS,
-  xsydColorIndexForZone,
   xsydDeviceManager,
   xsydRgbForColorIndex,
 } from '../protocol/xsyd/device';
@@ -203,10 +202,24 @@ function ActiveRgbSettingsPage({
     activeZone === 'side',
     isWin68
   );
-  const activeColorIndex = config.mix ? 0 : (config.colorIndex && config.colorIndex >= 1 && config.colorIndex <= 7 ? config.colorIndex : closestXsydColorSlot(config.rgb));
-  const paletteSlots = config.palette && config.palette.length === 7
-    ? config.palette
-    : XSYD_DEFAULT_PALETTE_RGB.map(c => [...c] as RgbColor);
+  const activeColorIndex = config.mix
+    ? 0
+    : config.colorIndex && config.colorIndex >= 1 && config.colorIndex <= 7
+      ? config.colorIndex
+      : closestXsydColorSlot(config.rgb);
+  const paletteSlots =
+    config.palette && config.palette.length === 7
+      ? config.palette
+      : XSYD_DEFAULT_PALETTE_RGB.map(c => [...c] as RgbColor);
+  const activeSingleRgb: RgbColor =
+    !config.mix && config.colorIndex && config.colorIndex >= 1 && config.colorIndex <= 7
+      ? xsydRgbForColorIndex(config.colorIndex, paletteSlots)
+      : config.rgb;
+  const activeHex = colorHex(activeSingleRgb);
+  const [hexInput, setHexInput] = useState(() => activeHex.toUpperCase());
+  useEffect(() => {
+    setHexInput(activeHex.toUpperCase());
+  }, [activeHex]);
 
   function pushWin68LiveZone(nextZone: RgbZone) {
     if (!isWin68 || !xsydDeviceManager.connected) {
@@ -247,6 +260,24 @@ function ActiveRgbSettingsPage({
       saveXsydSavedRgb(slot, nextProfile);
       pushWin68LiveZone(nextZone);
     }
+  }
+
+  function applyCustomColor(rawHex: string) {
+    const normalized = '#' + rawHex.replace('#', '').toLowerCase();
+    const rgbTuple = hexColor(normalized);
+    const targetSlot =
+      !config.mix && activeColorIndex >= 1 && activeColorIndex <= 7
+        ? activeColorIndex
+        : closestXsydColorSlot(rgbTuple);
+    const nextPalette = paletteSlots.map((c, idx) =>
+      idx === targetSlot - 1 ? rgbTuple : ([...c] as RgbColor)
+    );
+    change({
+      mix: false,
+      colorIndex: targetSlot,
+      rgb: rgbTuple,
+      palette: nextPalette,
+    });
   }
 
   function handleSaveRgbPreset() {
@@ -464,6 +495,9 @@ function ActiveRgbSettingsPage({
   }
   const customActive = playback.applied || Boolean(status?.enabled && status.mode === 'custom');
   const rhythmActive = Boolean(status?.enabled && status.mode === 'rhythm');
+  const matchesPresetColor = !config.mix && XSYD_COLOR_SLOTS.slice(1).some(
+    s => s.index === activeColorIndex && colorHex(s.rgb).toLowerCase() === activeHex.toLowerCase()
+  );
   return <RgbWorkspace tab={tab} onTab={setTab} disabled={busy || playback.busy} output={customActive ? 'custom' : rhythmActive ? 'rhythm' : 'onboard'}>
     {(rhythmMode || rhythmVisited) && <RhythmSyncEditor onSetup={onSetup} visible={rhythmMode} advancedBindings={advancedBindings} />}
     <CustomRgbEditor value={value} onChange={onChange} busy={busy} advancedBindings={advancedBindings} visible={customMode} onSetup={onSetup} playback={playback} savedPresets={savedPresets} onSaveRgbPreset={handleSaveRgbPreset} onApplySavedPreset={handleApplySavedPreset} onDeleteSavedPreset={handleDeleteSavedPreset} savedNotice={savedNotice} />
@@ -544,106 +578,97 @@ function ActiveRgbSettingsPage({
                 speed: Number(e.target.value)
               })} /></label>}
         {win68Capability?.reverse && (
-          <div className="rgb-color-controls">
-            <label className="rgb-mix">
+          <div className="rgb-reverse-row">
+            <label className="rgb-reverse-toggle">
+              <span className="rgb-reverse-label">
+                <ArrowLeftRight size={15} />
+                <span>{tr('Reverse direction')}</span>
+              </span>
               <input
                 type="checkbox"
                 checked={Boolean(config.reverse)}
                 disabled={busy}
                 onChange={e => change({ reverse: e.target.checked })}
               />
-              <ArrowLeftRight size={15} /> {tr('Reverse direction')}
             </label>
           </div>
         )}
         {capability?.color && (
           <div className="rgb-color-controls">
-            <div className="rgb-active-color">
-              {config.mix && <span className="rgb-rainbow-swatch" aria-label={tr('Multicolor palette')} />}
-              <label>
-                {tr('Color')}
-                <RgbColorPicker
-                  label={tr('Effect color')}
-                  value={colorHex(activeColorIndex >= 1 ? xsydRgbForColorIndex(activeColorIndex, paletteSlots) : config.rgb)}
+            <div className="rgb-color-header">
+              <span className="rgb-color-label">{tr('Color')}</span>
+              <div className={`rgb-custom-color-box ${!config.mix ? (matchesPresetColor ? 'is-active' : 'is-custom-active') : 'is-multicolor'}`}>
+                <label className="rgb-color-picker-trigger" title={tr('Effect color')}>
+                  <RgbColorPicker
+                    label={tr('Effect color')}
+                    value={activeHex}
+                    disabled={busy}
+                    onChange={applyCustomColor}
+                  />
+                </label>
+                <input
+                  type="text"
+                  className="rgb-color-hex-input"
+                  aria-label="HEX color"
+                  value={hexInput}
+                  maxLength={7}
+                  spellCheck={false}
                   disabled={busy}
-                  onChange={hex => {
-                    const rgbTuple = hexColor(hex);
-                    const targetSlot = activeColorIndex >= 1 && activeColorIndex <= 7 ? activeColorIndex : closestXsydColorSlot(rgbTuple);
-                    const nextPalette = paletteSlots.map((c, idx) =>
-                      idx === targetSlot - 1 ? rgbTuple : ([...c] as RgbColor)
-                    );
-                    change({
-                      mix: false,
-                      colorIndex: targetSlot,
-                      rgb: rgbTuple,
-                      palette: nextPalette,
-                    });
+                  onChange={e => {
+                    const next = e.target.value;
+                    setHexInput(next);
+                    if (/^#?[0-9a-f]{6}$/i.test(next)) {
+                      applyCustomColor(next);
+                    }
                   }}
+                  onBlur={() => setHexInput(activeHex.toUpperCase())}
                 />
-              </label>
-              <span>{colorHex(activeColorIndex >= 1 ? xsydRgbForColorIndex(activeColorIndex, paletteSlots) : config.rgb).toUpperCase()}</span>
+              </div>
             </div>
-            <label className="rgb-mix">
-              <input
-                type="checkbox"
-                checked={config.mix}
-                disabled={busy}
-                onChange={e =>
-                  change({
-                    mix: e.target.checked,
-                    colorIndex: e.target.checked
-                      ? 0
-                      : config.colorIndex && config.colorIndex >= 1
-                        ? config.colorIndex
-                        : closestXsydColorSlot(config.rgb),
-                  })
-                }
-              />{' '}
-              {tr('Multicolor')}
-            </label>
-            {config.mix && <div className="rgb-zone-tabs" role="group" aria-label={tr('Color slot')}>
+            <div className="rgb-swatch-grid" role="group" aria-label={tr('Color slot')}>
               {XSYD_COLOR_SLOTS.map(slotInfo => {
-                const selectedSlot = (config.mix ? 0 : activeColorIndex) === slotInfo.index;
-                const slotRgb = slotInfo.index === 0
-                  ? null
-                  : xsydRgbForColorIndex(slotInfo.index, paletteSlots);
+                const isMulticolor = slotInfo.index === 0;
+                const presetHex = colorHex(slotInfo.rgb);
+                const selectedSlot = isMulticolor
+                  ? Boolean(config.mix)
+                  : !config.mix &&
+                    activeColorIndex === slotInfo.index &&
+                    activeHex.toLowerCase() === presetHex.toLowerCase();
                 return (
                   <button
                     key={slotInfo.index}
                     type="button"
+                    className={`rgb-swatch-chip ${isMulticolor ? 'is-multicolor' : ''}`}
                     disabled={busy}
                     aria-pressed={selectedSlot}
                     title={tr(slotInfo.name)}
                     onClick={() => {
-                      if (slotInfo.index === 0) {
+                      if (isMulticolor) {
                         change({ mix: true, colorIndex: 0 });
                       } else {
-                        const nextRgb = xsydRgbForColorIndex(slotInfo.index, paletteSlots);
+                        const presetRgb: RgbColor = [...slotInfo.rgb] as RgbColor;
+                        const nextPalette = paletteSlots.map((c, idx) =>
+                          idx === slotInfo.index - 1 ? presetRgb : ([...c] as RgbColor)
+                        );
                         change({
                           mix: false,
                           colorIndex: slotInfo.index,
-                          rgb: nextRgb,
+                          rgb: presetRgb,
+                          palette: nextPalette,
                         });
                       }
                     }}
                   >
-                    {slotRgb ? (
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          background: colorHex(slotRgb),
-                          marginRight: 5,
-                        }}
-                      />
-                    ) : null}
-                    {tr(slotInfo.name)}
+                    <span
+                      className={`rgb-swatch-dot ${isMulticolor ? 'is-rainbow' : ''}`}
+                      style={isMulticolor ? undefined : { background: presetHex }}
+                      aria-hidden="true"
+                    />
+                    <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
                   </button>
                 );
               })}
-            </div>}
+            </div>
           </div>
         )}
       </div>

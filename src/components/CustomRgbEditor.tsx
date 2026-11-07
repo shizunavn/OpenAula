@@ -528,6 +528,8 @@ export default function CustomRgbEditor({
       return next;
     });
   }
+  const baseHex = hex(config.base.rgb);
+  const layerHex = layer ? hex(layer.color) : '#ffffff';
   return <div className="custom-rgb-gate" hidden={!visible}>
     <RgbToolbarSlot visible={visible}>
       <span className="rgb-sync-note" data-attention={playback.reconnecting || playback.conflict || !applied && status?.mode === 'custom' || undefined} role="status">{playback.reconnecting ? tr('Reconnecting to background app…') : playback.conflict ? tr('Changes paused') : applied ? tr(playback.syncing ? 'Syncing changes…' : 'Auto sync') : status?.mode === 'custom' ? tr('Joining running Custom…') : demo ? tr('Simulation') : null}</span>
@@ -675,46 +677,97 @@ export default function CustomRgbEditor({
                       palette: (id as RgbGradientPalette)
                     })}><span style={{
                         background: `linear-gradient(90deg,${palette.colors.join(',')})`
-                      }} />{tr(palette.name)}</button>)}</div> : <label className="custom-rgb-color">{tr('Base color')}<RgbColorPicker label={tr('Base effect color')} value={hex(config.base.rgb)} disabled={disabled} onChange={v => base({
-                      rgb: rgb(v),
-                      mix: false
-                    })} /></label>}
+                      }} />{tr(palette.name)}</button>)}</div> : <div className="rgb-color-controls">
+                      <div className="rgb-color-header">
+                        <span className="rgb-color-label">{tr('Base color')}</span>
+                        <div className="rgb-custom-color-box is-active">
+                          <label className="rgb-color-picker-trigger" title={tr('Base effect color')}>
+                            <RgbColorPicker label={tr('Base effect color')} value={baseHex} disabled={disabled} onChange={v => base({
+                              rgb: rgb(v),
+                              mix: false
+                            })} />
+                          </label>
+                          <span className="rgb-color-hex-readout">{baseHex.toUpperCase()}</span>
+                        </div>
+                      </div>
+                      <div className="rgb-swatch-grid is-seven" role="group" aria-label={tr('Color slot')}>
+                        {XSYD_COLOR_SLOTS.filter(slotInfo => slotInfo.index > 0).map(slotInfo => {
+                          const presetHex = hex(slotInfo.rgb);
+                          return (
+                            <button
+                              key={slotInfo.index}
+                              type="button"
+                              className="rgb-swatch-chip"
+                              disabled={disabled}
+                              aria-pressed={!config.base.mix && baseHex.toLowerCase() === presetHex.toLowerCase()}
+                              title={tr(slotInfo.name)}
+                              onClick={() => base({
+                                mix: false,
+                                colorIndex: slotInfo.index,
+                                rgb: [...slotInfo.rgb] as RgbColor
+                              })}
+                            >
+                              <span className="rgb-swatch-dot" style={{ background: presetHex }} aria-hidden="true" />
+                              <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>}
           </> : <>{mode.speed && <Slider label="Base speed" value={config.base.speed + 1} min={1} max={5} unit="/ 5" disabled={disabled} onChange={v => base({
                     speed: v - 1
-                  })} />} {mode.color && <>
-                    <div className="custom-rgb-direction">
-                      <span>{tr('Color mode')}</span>
-                      <div>
-                        <button disabled={disabled} aria-pressed={!config.base.mix} onClick={() => base({
-                          mix: false
-                        })}>{tr('Single color')}</button>
-                        <button disabled={disabled} aria-pressed={config.base.mix} onClick={() => base({
-                          mix: true,
-                          colorIndex: 0
-                        })}>{tr('Palette')}</button>
+                  })} />} {mode.color && <div className="rgb-color-controls">
+                    <div className="rgb-color-header">
+                      <span className="rgb-color-label">{tr('Base color')}</span>
+                      <div className={`rgb-custom-color-box ${!config.base.mix ? 'is-active' : 'is-multicolor'}`}>
+                        <label className="rgb-color-picker-trigger" title={tr('Base effect color')}>
+                          <RgbColorPicker label={tr('Base effect color')} value={baseHex} disabled={disabled} onChange={v => base({
+                            rgb: rgb(v),
+                            mix: false,
+                            colorIndex: closestXsydColorSlot(rgb(v))
+                          })} />
+                        </label>
+                        <span className="rgb-color-hex-readout">{baseHex.toUpperCase()}</span>
                       </div>
                     </div>
-                    <label className="custom-rgb-color">{tr('Base color')}<RgbColorPicker label={tr('Base effect color')} value={hex(config.base.rgb)} disabled={disabled} onChange={v => base({
-                      rgb: rgb(v),
-                      mix: false,
-                      colorIndex: closestXsydColorSlot(rgb(v))
-                    })} /></label>
-                    {config.base.mix && <label className="custom-rgb-check"><input type="checkbox" checked disabled={disabled} onChange={() => {}} /> {tr('Multicolor')}</label>}
-                    {config.base.mix && <div className="rgb-zone-tabs" role="group" aria-label={tr('Color slot')}>
-                      {XSYD_COLOR_SLOTS.filter(slotInfo => slotInfo.index > 0).map(slotInfo => <button key={slotInfo.index} type="button" disabled={disabled} aria-pressed={false} title={tr(slotInfo.name)} onClick={() => base({
-                        mix: false,
-                        colorIndex: slotInfo.index,
-                        rgb: [...slotInfo.rgb] as RgbColor
-                      })}><span style={{
-                        display: 'inline-block',
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        background: hex(slotInfo.rgb),
-                        marginRight: 5
-                      }} />{tr(slotInfo.name)}</button>)}
-                    </div>}
-                  </>}</>}</> : layer && metadata && <><p className="custom-rgb-description">{tr(definition?.detail ?? '')}</p>{layer.effect === "aurora" && <div className="custom-rgb-base-migration">
+                    <div className="rgb-swatch-grid" role="group" aria-label={tr('Color slot')}>
+                      {XSYD_COLOR_SLOTS.map(slotInfo => {
+                        const isMulticolor = slotInfo.index === 0;
+                        const presetHex = hex(slotInfo.rgb);
+                        const selectedSlot = isMulticolor
+                          ? Boolean(config.base.mix)
+                          : !config.base.mix && baseHex.toLowerCase() === presetHex.toLowerCase();
+                        return (
+                          <button
+                            key={slotInfo.index}
+                            type="button"
+                            className={`rgb-swatch-chip ${isMulticolor ? 'is-multicolor' : ''}`}
+                            disabled={disabled}
+                            aria-pressed={selectedSlot}
+                            title={tr(slotInfo.name)}
+                            onClick={() => {
+                              if (isMulticolor) {
+                                base({ mix: true, colorIndex: 0 });
+                              } else {
+                                base({
+                                  mix: false,
+                                  colorIndex: slotInfo.index,
+                                  rgb: [...slotInfo.rgb] as RgbColor
+                                });
+                              }
+                            }}
+                          >
+                            <span
+                              className={`rgb-swatch-dot ${isMulticolor ? 'is-rainbow' : ''}`}
+                              style={isMulticolor ? undefined : { background: presetHex }}
+                              aria-hidden="true"
+                            />
+                            <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>}</>}</> : layer && metadata && <><p className="custom-rgb-description">{tr(definition?.detail ?? '')}</p>{layer.effect === "aurora" && <div className="custom-rgb-base-migration">
                   <p>{tr('Aurora is now a Base effect. Move this layer to cover all keys and control its brightness directly.')}</p>
                   <button className="secondary-button" disabled={disabled} onClick={moveAuroraToBase}>{tr('Move Aurora to Base')}</button>
                 </div>}{!metadata.semanticColor && <>
@@ -730,19 +783,51 @@ export default function CustomRgbEditor({
                       })}>{tr('Palette')}</button>
                     </div>
                   </div>
-                  <div className="custom-palette-options">{Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => <button key={id} disabled={disabled} aria-pressed={layer.multicolor && (layer.palette ?? metadata.defaults?.palette ?? 'aurora') === id} onClick={() => patchLayer({
-                    multicolor: true,
-                    palette: (id as RgbGradientPalette)
-                  })}><span style={{
-                    background: `linear-gradient(90deg,${palette.colors.join(',')})`
-                  }} />{tr(palette.name)}</button>)}</div>
-                  <label className="custom-rgb-check"><input type="checkbox" checked={layer.multicolor} disabled={disabled} onChange={e => patchLayer({
-                    multicolor: e.target.checked
-                  })} /> {tr('Multicolor')}</label>
-                  <label className="custom-rgb-color">{tr('Effect color')}<RgbColorPicker label={tr('Layer color')} value={hex(layer.color)} disabled={disabled} onChange={v => patchLayer({
-                    color: rgb(v),
-                    multicolor: false
-                  })} /></label>
+                  {layer.multicolor ? (
+                    <div className="custom-palette-options">{Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => <button key={id} disabled={disabled} aria-pressed={layer.multicolor && (layer.palette ?? metadata.defaults?.palette ?? 'aurora') === id} onClick={() => patchLayer({
+                      multicolor: true,
+                      palette: (id as RgbGradientPalette)
+                    })}><span style={{
+                      background: `linear-gradient(90deg,${palette.colors.join(',')})`
+                    }} />{tr(palette.name)}</button>)}</div>
+                  ) : (
+                    <div className="rgb-color-controls">
+                      <div className="rgb-color-header">
+                        <span className="rgb-color-label">{tr('Effect color')}</span>
+                        <div className="rgb-custom-color-box is-active">
+                          <label className="rgb-color-picker-trigger" title={tr('Layer color')}>
+                            <RgbColorPicker label={tr('Layer color')} value={layerHex} disabled={disabled} onChange={v => patchLayer({
+                              color: rgb(v),
+                              multicolor: false
+                            })} />
+                          </label>
+                          <span className="rgb-color-hex-readout">{layerHex.toUpperCase()}</span>
+                        </div>
+                      </div>
+                      <div className="rgb-swatch-grid is-seven" role="group" aria-label={tr('Color slot')}>
+                        {XSYD_COLOR_SLOTS.filter(slotInfo => slotInfo.index > 0).map(slotInfo => {
+                          const presetHex = hex(slotInfo.rgb);
+                          return (
+                            <button
+                              key={slotInfo.index}
+                              type="button"
+                              className="rgb-swatch-chip"
+                              disabled={disabled}
+                              aria-pressed={!layer.multicolor && layerHex.toLowerCase() === presetHex.toLowerCase()}
+                              title={tr(slotInfo.name)}
+                              onClick={() => patchLayer({
+                                color: [...slotInfo.rgb] as RgbColor,
+                                multicolor: false
+                              })}
+                            >
+                              <span className="rgb-swatch-dot" style={{ background: presetHex }} aria-hidden="true" />
+                              <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>}<div className="custom-slider-grid">
                   <Slider label="Opacity" value={layer.opacity} min={0} max={100} unit="%" disabled={disabled} onChange={v => patchLayer({
                     opacity: v

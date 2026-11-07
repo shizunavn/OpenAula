@@ -71,19 +71,18 @@ export default function RgbKeyPaintTools({
   return <section className="rgb-key-paint-tools" aria-label={tr('Per-key painting')}>
     <RgbKeySelectionTools selected={selected} onSelect={onSelect} disabled={disabled} />
     <div className="rgb-key-paint-color">
-      <label>{tr('Color')}<RgbColorPicker label={tr('Paint selected keys')} value={color} disabled={disabled} onChange={onColor} /></label>
-      <input className="rgb-key-paint-hex" aria-label={tr('Brush HEX color')} value={hex} maxLength={7} spellCheck={false} disabled={disabled} onChange={event => changeHex(event.target.value)} onBlur={() => setHex(color.toUpperCase())} />
-      <div className="rgb-zone-tabs" role="group" aria-label={tr('Palette')}>
+      <div className="rgb-custom-color-box is-active">
+        <label className="rgb-color-picker-trigger" title={tr('Color')}>
+          <RgbColorPicker label={tr('Paint selected keys')} value={color} disabled={disabled} onChange={onColor} />
+        </label>
+        <input className="rgb-color-hex-input" aria-label={tr('Brush HEX color')} value={hex} maxLength={7} spellCheck={false} disabled={disabled} onChange={event => changeHex(event.target.value)} onBlur={() => setHex(color.toUpperCase())} />
+      </div>
+      <div className="rgb-paint-palette" role="group" aria-label={tr('Palette')}>
         {XSYD_COLOR_SLOTS.slice(1).map(slot => {
           const swatchHex = slotHex(slot.rgb);
-          return <button key={slot.index} type="button" disabled={disabled} aria-pressed={color.toLowerCase() === swatchHex} title={tr(slot.name)} onClick={() => onColor(swatchHex)}><span style={{
-            display: 'inline-block',
-            width: 10,
-            height: 10,
-            borderRadius: '50%',
-            background: swatchHex,
-            marginRight: 4
-          }} />{tr(slot.name)}</button>;
+          return <button key={slot.index} type="button" className="rgb-paint-swatch" disabled={disabled} aria-pressed={color.toLowerCase() === swatchHex} aria-label={tr(slot.name)} title={tr(slot.name)} onClick={() => onColor(swatchHex)}><span className="rgb-swatch-dot" style={{
+            background: swatchHex
+          }} aria-hidden="true" /></button>;
         })}
       </div>
       <button type="button" className="apply-button" title={!selected.size ? tr('Select keys on the preview to paint.') : undefined} disabled={disabled || !selected.size} onClick={onPaint}><Paintbrush size={15} /> {tr('Paint keys')}</button>
