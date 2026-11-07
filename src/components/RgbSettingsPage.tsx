@@ -32,6 +32,7 @@ import {
   xsydRgbForColorIndex,
 } from '../protocol/xsyd/device';
 import { keyValueForCode } from '../protocol/xsyd/features';
+import { stopXsydRhythm, useXsydRhythmStats } from '../protocol/serviceLighting';
 import './RgbSettingsPage.css';
 import { useI18n } from '../i18n';
 import { TachyonContext } from '../app/TachyonContext';
@@ -149,9 +150,13 @@ function ActiveRgbSettingsPage({
   const {
     status
   } = useRgbServiceState();
+  const xsydRhythmStats = useXsydRhythmStats();
   const [tab, setTab] = useState<RgbTab>(() => {
     if (initialCustom) {
       return 'custom';
+    }
+    if (xsydRhythmStats.active) {
+      return 'rhythm';
     }
     if (status?.mode === 'rhythm' || status?.mode === 'custom' || status?.mode === 'onboard') {
       return status.mode;
@@ -494,16 +499,23 @@ function ActiveRgbSettingsPage({
     }
   }
   const customActive = playback.applied || Boolean(status?.enabled && status.mode === 'custom');
-  const rhythmActive = Boolean(status?.enabled && status.mode === 'rhythm');
+  const rhythmActive = xsydRhythmStats.active || Boolean(status?.enabled && status.mode === 'rhythm');
   const matchesPresetColor = !config.mix && XSYD_COLOR_SLOTS.slice(1).some(
     s => s.index === activeColorIndex && colorHex(s.rgb).toLowerCase() === activeHex.toLowerCase()
   );
   return <RgbWorkspace tab={tab} onTab={setTab} disabled={busy || playback.busy} output={customActive ? 'custom' : rhythmActive ? 'rhythm' : 'onboard'}>
-    {(rhythmMode || rhythmVisited) && <RhythmSyncEditor onSetup={onSetup} visible={rhythmMode} advancedBindings={advancedBindings} />}
+    {(rhythmMode || rhythmVisited) && <RhythmSyncEditor onSetup={onSetup} visible={rhythmMode} advancedBindings={advancedBindings} onboardProfile={value} />}
     <CustomRgbEditor value={value} onChange={onChange} busy={busy} advancedBindings={advancedBindings} visible={customMode} onSetup={onSetup} playback={playback} savedPresets={savedPresets} onSaveRgbPreset={handleSaveRgbPreset} onApplySavedPreset={handleApplySavedPreset} onDeleteSavedPreset={handleDeleteSavedPreset} savedNotice={savedNotice} />
     {!customMode && !rhythmMode && <>
     <RgbToolbarSlot>
-      {(status?.enabled || playback.applied) && <button className="apply-button" disabled={busy || playback.busy} onClick={() => void playback.onboard()}>{tr('Use onboard lighting')}</button>}
+      {(status?.enabled || playback.applied || xsydRhythmStats.active) && <button className="apply-button" disabled={busy || playback.busy} onClick={() => {
+        if (xsydRhythmStats.active) {
+          void stopXsydRhythm(value);
+        }
+        if (status?.enabled || playback.applied) {
+          void playback.onboard();
+        }
+      }}>{tr('Use onboard lighting')}</button>}
       <button type="button" className="secondary-button" disabled={busy} onClick={handleSaveRgbPreset}><Save size={15} /> {savedNotice ?? tr('Save')}</button>
     </RgbToolbarSlot>
     <RgbToolbarSlot notice>{playback.error && <p className="stream-error" role="alert">{tr(playback.error)}</p>}</RgbToolbarSlot>

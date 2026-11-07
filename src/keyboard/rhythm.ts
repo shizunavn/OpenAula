@@ -122,54 +122,175 @@ export function restoreRhythm(input: unknown): RhythmConfiguration {
   return validateRhythm(input);
 }
 
-/** Illustrative demo only. Hardware playback uses the native DSP and encoded output. */
-export function rhythmDemo(config: RhythmConfiguration, timeMs: number, model: HeroDeviceModelId = 'hero68') {
+/** Convert HSL (`h: 0..360`, `sPct: 0..100`, `lPct: 0..100`) to `#rrggbb` hex. */
+export function hslToHex(h: number, sPct: number, lPct: number): string {
+  const hue = ((h % 360) + 360) % 360;
+  const s = Math.max(0, Math.min(1, sPct / 100));
+  const l = Math.max(0, Math.min(1, lPct / 100));
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r1 = 0;
+  let g1 = 0;
+  let b1 = 0;
+  if (hue < 60) {
+    r1 = c; g1 = x; b1 = 0;
+  } else if (hue < 120) {
+    r1 = x; g1 = c; b1 = 0;
+  } else if (hue < 180) {
+    r1 = 0; g1 = c; b1 = x;
+  } else if (hue < 240) {
+    r1 = 0; g1 = x; b1 = c;
+  } else if (hue < 300) {
+    r1 = x; g1 = 0; b1 = c;
+  } else {
+    r1 = c; g1 = 0; b1 = x;
+  }
+  const toByteHex = (v: number) => Math.max(0, Math.min(255, Math.round((v + m) * 255))).toString(16).padStart(2, '0');
+  return `#${toByteHex(r1)}${toByteHex(g1)}${toByteHex(b1)}`;
+}
+
+/**
+ * Render a 68/84-key Rhythm Sync frame from either live Web Audio FFT/waveform data
+ * or the built-in synth rhythm generator when `frequencyData` is null.
+ * Always emits `#rrggbb` hex strings so frames can be streamed directly over XSYD `0x2A`.
+ */
+export function renderRhythmAudioFrame(
+  config: RhythmConfiguration,
+  timeMs: number,
+  frequencyData?: Uint8Array | null,
+  timeDomainData?: Uint8Array | null,
+  model: HeroDeviceModelId = 'win68HeMax'
+) {
   const board = getBoard(model);
   const t = timeMs / 1000;
-  const phase = t * 2 % 1;
-  const level = Math.exp(-phase * 7) * (.75 + .25 * Math.sin(t * .7));
+  const phase = (t * 2) % 1;
+
+  let level = Math.exp(-phase * 7) * (0.75 + 0.25 * Math.sin(t * 0.7));
+  const colBins: number[] = Array(16).fill(0);
+
+  if (frequencyData && frequencyData.length > 0) {
+    const usableBins = Math.max(16, Math.min(frequencyData.length, Math.floor(frequencyData.length * 0.65)));
+    const dbGain = 0.5 + (config.spectrum.db / 100) * 1.8;
+    const sensGain = Math.max(0.2, config.sensitivity * 0.35);
+    let energySum = 0;
+    for (let c = 0; c < 16; c++) {
+      const startBin = Math.floor(Math.pow(c / 16, 1.5) * (usableBins - 1));
+      const endBin = Math.max(startBin + 1, Math.floor(Math.pow((c + 1) / 16, 1.5) * usableBins));
+      let acc = 0;
+      for (let b = startBin; b < endBin; b++) {
+        acc += (frequencyData[b] ?? 0) / 255;
+      }
+      const avg = acc / Math.max(1, endBin - startBin);
+      const boosted = Math.min(1, Math.pow(avg, 1.25) * dbGain * sensGain);
+      colBins[c] = boosted;
+      energySum += boosted;
+    }
+    level = Math.min(1, (energySum / 16) * 1.25);
+    if (timeDomainData && timeDomainData.length > 0) {
+      let rmsAcc = 0;
+      for (let i = 0; i < timeDomainData.length; i++) {
+        const centered = ((timeDomainData[i] ?? 128) - 128) / 128;
+        rmsAcc += centered * centered;
+      }
+      const rms = Math.sqrt(rmsAcc / timeDomainData.length);
+      level = Math.min(1, Math.max(level, rms * sensGain * 2.2));
+    }
+  } else {
+    for (let c = 0; c < 16; c++) {
+      const nx = c / 15;
+      colBins[c] = Math.max(0, Math.min(1, Math.sin(nx * 9 + t * 3) * 0.4 + level * 0.6));
+    }
+  }
+
+  // Apply spatial smoothing across columns for Dynamic Spectrum (mode 428)
+  const radius = Math.max(0, Math.min(8, Math.round(config.spectrum.spatialRadius / 2)));
+  const smoothedBins = colBins.map((val, c) => {
+    if (radius === 0) return val;
+    let sum = 0;
+    let weightSum = 0;
+    for (let d = -radius; d <= radius; d++) {
+      const idx = Math.max(0, Math.min(15, c + d));
+      const w = radius + 1 - Math.abs(d);
+      sum += colBins[idx] * w;
+      weightSum += w;
+    }
+    return sum / Math.max(1, weightSum);
+  });
+
   const keys: Record<string, string> = {};
   const maxRowIndex = Math.max(1, board.rows.length - 1);
-  board.rows.forEach((row, y) => row.forEach((key, x) => {
-    if (key.spacer) {
-      return;
-    }
-    const nx = x / Math.max(1, row.length - 1);
-    const ny = y / maxRowIndex;
-    let value = 0;
-    switch (config.keyMode) {
-      case 169:
-        value = Math.hypot((nx - .5) * 1.6, ny - .5) < level ? 1 : 0;
-        break;
-      case 170:
-        value = Math.max(0, Math.sin(nx * 5 + t * 2 + ny) * level);
-        break;
-      case 171:
-        value = level;
-        break;
-      case 172:
-        value = ny > 1 - Math.exp(-((phase + nx * .7) % 1) * 7) ? 1 : 0;
-        break;
-      case 173:
-        value = Math.hypot(nx - (.5 + .3 * Math.sin(Math.floor(t * 3) * 2)), ny - .5) < level * .7 ? 1 : 0;
-        break;
-      case 428:
-        value = ny > 1 - Math.max(0, Math.sin(nx * 9 + t * 3) * .4 + level * .6) ? 1 : .02;
-        break;
-    }
-    const hue = config.palette === 'fire' ? nx * 45 : config.palette === 'aurora' ? 160 + nx * 120 : (nx * 300 + t * 25) % 360;
-    keys[key.id] = config.palette === 'fixed' ? '#' + [1, 3, 5].map(i => Math.round(parseInt(config.color.slice(i, i + 2), 16) * value * config.brightness / 100).toString(16).padStart(2, '0')).join('') : `hsl(${hue} 90% ${value * config.brightness * .5}%)`;
-  }));
+  board.rows.forEach((row, y) =>
+    row.forEach((key, x) => {
+      if (key.spacer) {
+        return;
+      }
+      if (config.keyMode === 180) {
+        keys[key.id] = '#000000';
+        return;
+      }
+      const nx = x / Math.max(1, row.length - 1);
+      const ny = y / maxRowIndex;
+      const colIdx = Math.max(0, Math.min(15, Math.round(nx * 15)));
+      const colEnergy = smoothedBins[colIdx] ?? level;
+      let value = 0;
+      switch (config.keyMode) {
+        case 169:
+          value = Math.hypot((nx - 0.5) * 1.6, ny - 0.5) < level ? 1 : 0;
+          break;
+        case 170:
+          value = Math.max(0, Math.sin(nx * 5 + t * 2 + ny) * level);
+          break;
+        case 171:
+          value = level;
+          break;
+        case 172:
+          value = ny > 1 - Math.exp(-((phase + nx * 0.7) % 1) * 7) * Math.max(0.25, level) ? 1 : 0;
+          break;
+        case 173:
+          value = Math.hypot(nx - (0.5 + 0.3 * Math.sin(Math.floor(t * 3) * 2)), ny - 0.5) < level * 0.7 ? 1 : 0;
+          break;
+        case 428:
+          value = ny >= 1 - colEnergy ? 1 : 0.02;
+          break;
+      }
+      const hue =
+        config.palette === 'fire'
+          ? nx * 45
+          : config.palette === 'aurora'
+            ? 160 + nx * 120
+            : (nx * 300 + t * 25) % 360;
+      keys[key.id] =
+        config.palette === 'fixed'
+          ? '#' +
+            [1, 3, 5]
+              .map(i =>
+                Math.round((parseInt(config.color.slice(i, i + 2), 16) * value * config.brightness) / 100)
+                  .toString(16)
+                  .padStart(2, '0')
+              )
+              .join('')
+          : hslToHex(hue, 90, value * config.brightness * 0.5);
+    })
+  );
   const sideCount = board.capabilities.sideLedCount;
-  const side = Array.from({
-    length: sideCount
-  }, (_, i) => {
-    const lit = config.sideMode === 501 ? i < level * sideCount : config.sideMode === 502 ? Math.abs(i - Math.floor((sideCount - 1) / 2)) < level * (sideCount / 2) : config.sideMode === 503;
-    return lit ? `hsl(${(t * 60 + i * 15) % 360} 85% ${level * config.brightness * .5}%)` : '#181c20';
+  const side = Array.from({ length: sideCount }, (_, i) => {
+    const lit =
+      config.sideMode === 501
+        ? i < level * sideCount
+        : config.sideMode === 502
+          ? Math.abs(i - Math.floor((sideCount - 1) / 2)) < level * (sideCount / 2)
+          : config.sideMode === 503;
+    return lit ? hslToHex((t * 60 + i * 15) % 360, 85, level * config.brightness * 0.5) : '#181c20';
   });
   return {
     keys,
     side,
     level
   };
+}
+
+/** Illustrative demo & synth fallback. Emits `#rrggbb` hex colors for every key. */
+export function rhythmDemo(config: RhythmConfiguration, timeMs: number, model: HeroDeviceModelId = 'hero68') {
+  return renderRhythmAudioFrame(config, timeMs, null, null, model);
 }

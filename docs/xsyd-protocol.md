@@ -47,7 +47,7 @@ deviate, both explained by how the frame was assembled:
   because it never passes through the reply packer.
 - `OP = 0x30` uses a fixed 0x43-byte slot, so the addend is `frame[63]`.
 
-Verified on 4316 frames across 9 captures (`tests/xsyd-codec.test.mjs`).
+Verified on 8,257+ frames across 11 captures (`tests/xsyd-codec.test.mjs`).
 
 Replies set bit 7 on the opcode (`0x2C` → `0xAC`). A reply larger than 60
 payload bytes arrives as several `inputreport` events.
@@ -120,13 +120,13 @@ reply:  5C 04 80 14 | 00 50 <code> FF
 
 ```
 payload[0]           mode: 0x00 = Read from SRAM (jump table VA 0x1C744), 0x01 = Write to SRAM (jump table VA 0x1C6DC)
-payload[1 + 4k]      pos    (1-byte keyValue / HID usage, 0xFF = unused padding slot)
+payload[1 + 4k]      pos    (1-byte keyValue / HID usage, 0xFF or 0x00 = unused padding slot)
 payload[2 + 4k]      field  (field ID 0x00..0x19 for write, 0x00..0x30 for read)
 payload[3 + 4k]      value low byte
 payload[4 + 4k]      value high byte
 ```
 
-`LEN` is `0x39` (57 bytes) for 14 slots.
+`LEN` is `0x39` (57 bytes) for 14 slots. Note that the official web driver pads unused write slots with either `FF FF 00 00` or `00 00 00 00` (`wasd_deadzone.pcapng`), and the firmware echoes unused slots as `FF FF FF 00` on `0xA3` replies (`VA 0x0B298`).
 
 | `field` | Write VA (`0x1C6DC`) | Read VA (`0x1C744`) | SRAM Address (`cell = 0..125`) | Meaning & Hardware Behavior |
 |---|---|---|---|---|
@@ -141,14 +141,19 @@ payload[4 + 4k]      value high byte
 | **`0x08` (8)** | **`0x0B122`** | **`0x0B3C4`** | **`0x200051CC + cell` (u8)** | **Key Mode / Header byte**: `bit 5 (0x20)` = **Rapid Trigger ON** (`VA 0x13504..0x13510`) & locks per-key Travel against `0x29` global writes (`VA 0x0C0DC`); `0x00` = **Rapid Trigger OFF**; `bits 0..3` = Advanced Key type (`1=DKS, 2=MPT, 3=MT, 4=TGL, 5=END, 7=SOCD`). |
 | **`0x14` (20)** | **`0x0B150`** | **`0x0B402`** | **`0x2000380A + 2*cell`** | **Rapid Trigger Press Sensitivity (µm)** (`10..3400 µm`). Evaluated at `VA 0x1352E`. Sanitized at `VA 0x12D6A`: if `<= 9`, reset to `300 µm` (`0.30 mm`). |
 | **`0x15` (21)** | **`0x0B16A`** | **`0x0B41C`** | **`0x20003906 + 2*cell`** | **Rapid Trigger Release Sensitivity (µm)** (`10..3400 µm`). Evaluated at `VA 0x13538`. Sanitized at `VA 0x12D80`: if `<= 9`, reset to `300 µm` (`0.30 mm`). |
-| **`0x16` (22)** | **`0x0B19C`** | **`0x0B44E`** | **`0x20003FEC + 2*cell`** | **Top Deadzone (µm)** (`0..1000 µm`). Evaluated at `VA 0x13202` (`effective_actuation = max(TopDeadzone, Travel)`) and `VA 0x13572`. |
-| **`0x17` (23)** | **`0x0B1B6`** | **`0x0B468`** | **`0x200040E8 + 2*cell`** | **Bottom Deadzone (µm)** (`0..1000 µm`). Evaluated at `VA 0x1357C` (`effective_bottom = max_travel - BottomDeadzone`). |
+| **`0x16` (22)** | **`0x0B184`** | **`0x0B436`** | **`0x20003FEC + 2*cell`** | **Top Deadzone (µm)** (`0..1000 µm`). Verified in `wasd_deadzone.pcapng` (`#03`: W/A/S/D `150 µm = 0.15 mm`; `#11`: W/A/S/D `1000 µm = 1.00 mm`). Evaluated at `VA 0x13202` (`effective_actuation = max(TopDeadzone, Travel)`) and `VA 0x13572`. Sanitized at `VA 0x12C72`: if `> 1000 µm`, reset to `200 µm` (`0.20 mm`). |
+| **`0x17` (23)** | **`0x0B19E`** | **`0x0B450`** | **`0x200040E8 + 2*cell`** | **Bottom Deadzone (µm)** (`0..1000 µm`). Verified in `wasd_deadzone.pcapng` (`#06`: W/A/S/D `200 µm = 0.20 mm`; `#13`: W/A/S/D `1000 µm = 1.00 mm`). Evaluated at `VA 0x1357C` (`effective_bottom = max_travel - BottomDeadzone`). Sanitized at `VA 0x12C90`: if `> 1000 µm`, reset to `200 µm` (`0.20 mm`). |
 | **`0x19` (25)** | **`0x0B1CE`** | **`0x0B482`** | **`0x200045F4 + 2*cell`** | **Switch Type ID (`0..3`)**. Selects Hall ADC-to-travel LUT (`VA 0x1D48C`) and max travel (`3400 µm` vs `3300 µm` at `VA 0x12CEA`). |
 
 > **Why earlier docs/code had the `0.15 mm -> 0.02 mm` ("limit breaker") and Deadzone bugs:**
 > Earlier notes misidentified `0x16` as `RapidTrigger` and `0x17` as `Deadzone`, leaving `0x14` and `0x15` unwritten.
 > - Writing `0.15 mm` (`150 µm`) RT in the old code actually wrote `150 µm` to `field 0x16` (**Top Deadzone**) and set `field 0x08 = 0x20` (enabling RT), while leaving `field 0x14` and `0x15` untouched at the keyboard's NVRAM value (`20 µm = 0.02 mm` in Profiles 1–3 of `profile_1_2_3_4.pcapng`), causing the official web driver to display `0.02 mm`!
 > - Writing Top/Bottom Deadzone in the old code ignored `bottomDeadzoneMm` and wrote `topDeadzoneMm` only to `field 0x17`, then read `field 0x17` back into both `topDeadzoneMm` and `bottomDeadzoneMm`.
+> - **`wasd_deadzone.pcapng` verification**:
+>   - `#03 OUT`: `5C 39 23 EE | 01 | 1a 16 96 00 | 04 16 96 00 | 16 16 96 00 | 07 16 96 00 | 00...` → Sets W (`0x1a`), A (`0x04`), S (`0x16`), D (`0x07`) **Top Deadzone (`field 0x16`) = `0x0096` (`150 µm = 0.15 mm`)**.
+>   - `#06 OUT`: `5C 39 23 EE | 01 | 1a 17 c8 00 | 04 17 c8 00 | 16 17 c8 00 | 07 17 c8 00 | 00...` → Sets W, A, S, D **Bottom Deadzone (`field 0x17`) = `0x00C8` (`200 µm = 0.20 mm`)**.
+>   - `#11 OUT`: `5C 39 23 EE | 01 | 1a 16 e8 03 | 04 16 e8 03 | 16 16 e8 03 | 07 16 e8 03 | 00...` → Sets W, A, S, D **Top Deadzone (`field 0x16`) = `0x03E8` (`1000 µm = 1.00 mm`)**.
+>   - `#13 OUT`: `5C 39 23 EE | 01 | 1a 17 e8 03 | 04 17 e8 03 | 16 17 e8 03 | 07 17 e8 03 | 00...` → Sets W, A, S, D **Bottom Deadzone (`field 0x17`) = `0x03E8` (`1000 µm = 1.00 mm`)**.
 
 ### 4.2 Switch Type IDs (`field 0x19`, `VA 0x1D48C` & `VA 0x12CEA..0x12D14`)
 
@@ -256,9 +261,9 @@ Verified on `travel_test_press_randomkey.pcapng` and firmware disassembly (`VA 0
 
 ---
 
-## 8. Global RGB (`0x18` → `0x98`) & Per-key RGB (`0x2A` → `0xAA`)
+## 8. Global RGB (`0x18` → `0x98`), Per-key RGB (`0x2A` → `0xAA`) & Rhythm Sync
 
-Verified on `tideflux_softripple_snippingstorm_brightness0-4-3-1-2-0_speed1-2-3-4-0_reverseon-off_colorchangetosmoothflow(multicolor-red-blue).pcapng`, `Q(green)-E(red)_-Z(yellow)-P(Pink).txt`, and firmware disassembly (`VA 0x0AA10`, `0x10DE4`, `0x1D2A0`).
+Verified on `tideflux_softripple_...pcapng`, `Q(green)-E(red)_-Z(yellow)-P(Pink).txt`, `rhythm_capture.pcapng`, and firmware disassembly (`VA 0x0AA10`, `0x0C12E..0x0C2D0`, `0x10DE4`, `0x1D2A0`).
 
 ### 8.1 Global RGB (`0x18` → `0x98`)
 
@@ -266,12 +271,35 @@ Verified on `tideflux_softripple_snippingstorm_brightness0-4-3-1-2-0_speed1-2-3-
 - **Write request (`LEN = 0x2C = 44`):** `5C 2C 18 <CK> | 01 00 00 00 00 <28B BGR palette> 00 00 00 00 <flags> <brightness> <mode> <speed> 02 00 <colorIndex>`
 - **Reply (`LEN = 0x2D = 45`):** `5C 2D 98 <CK> | 00 00 00 00 00 <28B BGR palette> 00 00 00 00 <flags> <brightness> <mode> <speed> 02 00 <colorIndex> 00`
 
-### 8.2 Per-Key RGB (`0x2A` → `0xAA`)
+### 8.2 Per-Key RGB (`0x2A` → `0xAA`, `VA 0x0C12E..0x0C2D0`)
 
 - **Single-key write (`LEN = 0x05`):** `5C 05 2A <CK> | 01 <keyValue> <R> <G> <B>`
-- **Batch read/write (`LEN = 0x39 = 57`):** `5C 39 2A <CK> | <00=read | 01=write> + 14 × [keyValue, R, G, B]` (unused slots padded with `FF 00 00 00`).
+- **Batch read/write (`LEN = 0x39 = 57`):** `5C 39 2A <CK> | <00=read | 01=write> + 14 × [keyValue, R, G, B]`.
+- **SRAM destination (`VA 0x0C242..0x0C28C`):** Each 4-byte slot `[keyValue, R, G, B]` resolves `cell = 0..125` via `VA 0x0D0A8` and writes `R, G, B` into `user_rgb` (`0x20001EF8 + 3*cell`).
+- **Flash persistence (`VA 0x0C27C..0x0C28C`):** Firmware only calls `VA 0x11D70` (Flash commit to `0x08025000 + slot*0x6000`) when a slot contains the sentinel `FE FE FE FE`. Normal `0x2A` single-key and 14-slot batch writes update SRAM **with zero Flash wear**.
 
-See `src/protocol/xsyd/rgb.ts` and `src/keyboard/xsydRgbPreview.ts`.
+### 8.3 Rhythm Sync Streaming (`rhythm_capture.pcapng`)
+
+Verified across all 3,926 packets (389 full 5-frame cycles) of `rhythm_capture.pcapng`:
+
+1. **Enter Per-Key RGB Mode (`#0014` `OUT`, `OP = 0x18`, `LEN = 0x2C`):**
+   ```
+   5C 2C 18 BD | 01 00 00 00 00 00 00 ff 00 00 ff 00 00 00 ff ff 00 ff 00 00 00 ff ff 00 00 ff ff 00 00 ff ff ff 00 00 00 00 00 00 04 15 03 02 00 00
+   ```
+   Switches the keyboard to `mode = 0x15` (`Per-key Color`), `brightness = 4` (100%), `speed = 3`, `colorIndex = 0`.
+2. **Stream 68 Keys in 5 × 14-Slot `0x2A` (`LEN = 0x39 = 57`) Batch Frames (`#0017..#0021`, `#0036..#0040`, ...):**
+   - Each frame has header `5C 39 2A <CK>`, `payload[0] = 0x01`, and **14 slots** (`payload[1..56]`), followed by 3 report-padding `0x00` bytes (`bytes 61..63`).
+   - Because `CK = (0x35 + 0x5C + 0x39 + 0x2A + payload[56]) & 0xFF = (0xF4 + payload[56]) & 0xFF`, `CK` equals `0xF4` whenever the 14th slot's Blue byte (`payload[56]`) is `0x00`.
+   - **Exact 5-Batch Key Order (68 keys total = `4 × 14 + 12`):**
+     - **Batch 0 (14 keys):** `[41, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 45, 46, 42]` (`Esc` .. `Backspace`)
+     - **Batch 1 (14 keys):** `[76, 43, 20, 26, 8, 21, 23, 28, 24, 12, 18, 19, 47, 48]` (`Delete`, `Tab` .. `BracketRight`)
+     - **Batch 2 (14 keys):** `[49, 75, 57, 4, 22, 7, 9, 10, 11, 13, 14, 15, 51, 52]` (`Backslash`, `PageUp`, `CapsLock` .. `Quote`)
+     - **Batch 3 (14 keys):** `[40, 78, 225, 29, 27, 6, 25, 5, 17, 16, 54, 55, 56, 229]` (`Enter`, `PageDown`, `ShiftLeft` .. `ShiftRight`)
+     - **Batch 4 (12 keys + 2 zero-padded slots):** `[82, 224, 227, 226, 44, 230, 1, 228, 80, 81, 79, 0, 0, 0]` (`ArrowUp`, `ControlLeft` .. `ArrowRight`; slot 11 has `keyValue = 0` (`00 00 00 00`), and slots 12–13 are padded with `00 00 00 00`).
+   - **Device Reply (`IN`, `OP = 0xAA`, `LEN = 0x39`):**
+     - The keyboard replies to each `0x2A` write with `5C 39 AA <CK> | 00 <echo of 14 slots>` (`CK = (0x74 + payload[56]) & 0xFF`, so `CK = 0x74` when `payload[56] == 0x00`).
+
+See `src/protocol/xsyd/rgb.ts`, `src/protocol/serviceLighting.ts`, and `service/native/rhythm_core.h`.
 
 ---
 

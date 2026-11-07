@@ -3,6 +3,14 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.4.0 — WIN 68 HE MAX Rhythm Sync Native & WebHID Direct Streaming
+
+- Full Rhythm Sync support on WIN 68 HE MAX:
+  - Direct WebHID streaming: RhythmSyncEditor drives animations directly over WebHID (`0x18` mode `0x15` + `0x2A` 14-slot batch cycles) using the browser's Web Audio API when the background service is offline.
+  - Adaptive USB streaming: compact single-key writes (`LEN = 0x05`) when `<= 4` keys change; 14-slot batch writes (`LEN = 0x39`, at most 5 USB packets for 68 keys) when `> 4` keys change.
+  - Native service update: `service/native/rhythm_core.h` updated with verified palette matching `rhythm_capture.pcapng` (#0014) and `0x00` padding for unused batch slots.
+  - Multi-source audio reactivity: dynamic bandpass filtering, stereo channels, and seamless handover between WebHID and Windows Service.
+
 ## 1.3.3.0 - WIN 68 HE MAX Disassembly Protocol: Global Actuation, Switch Calibration & SRAM Guard
 
 - Global Actuation (`0x29` / `0xA9`) implementation for WIN 68 HE MAX: read and write global actuation point in micrometres (100..3400 µm range) across all non-overridden keys (`Header & 0x30 == 0`).

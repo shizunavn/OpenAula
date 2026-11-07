@@ -1,13 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { AudioLines, Play, Square, RotateCcw, SlidersHorizontal, Layers, Download } from 'lucide-react';
 import Hero68Preview from './Hero68Preview';
 import RgbColorPicker from './RgbColorPicker';
 import { RgbPreviewPanel, RgbToolbarSlot } from './RgbWorkspace';
 import { defaultRhythm, validateRhythm, restoreRhythm, rhythmDemo, RHYTHM_MODES, RHYTHM_SIDE_MODES, type RhythmConfiguration } from '../keyboard/rhythm';
 import { heroLayout } from '../keyboard/layout';
+import { isWin68HeMaxModel } from '../keyboard/devices';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
+import type { RgbProfile } from '../protocol/hero68/rgb';
 import { rgbService, type AudioEndpoint, type RgbServiceFrame } from '../protocol/rgbService';
 import { publishRgbServiceStatus, useRgbServiceState, refreshRgbService, getRgbServiceState } from '../protocol/rgbServiceState';
+import {
+  getXsydCustomRgbFrame,
+  startXsydRhythm,
+  stopXsydRhythm,
+  updateXsydRhythmConfig,
+  useXsydRhythmStats,
+} from '../protocol/serviceLighting';
 import { latestUpdates } from '../protocol/latestUpdates';
 import { rgbFrameGuard } from '../protocol/rgbFrameGuard';
 import { BRAND } from '../brand';
@@ -15,6 +24,7 @@ import { hero68DeviceManager } from '../protocol/hero68/webhid';
 import { xsydDeviceManager, XsydCustomRgbStreamer } from '../protocol/xsyd/device';
 import { hero68HallStream } from '../protocol/hero68/hallStream';
 import { useI18n } from '../i18n';
+import { DeviceModelContext } from '../app/DeviceModelContext';
 import { AppSelect } from '../app/components/AppSelect';
 import './RhythmSyncEditor.css';
 const draftKey = `${BRAND.storagePrefix}:rhythm-draft:v1`;
@@ -41,20 +51,25 @@ function RhythmPreview({
   configuration,
   demo,
   live,
+  xsydLive,
   paused,
   sessionId,
-  advancedBindings
+  advancedBindings,
+  isWin68,
 }: {
   configuration: RhythmConfiguration;
   demo: boolean;
   live: boolean;
+  xsydLive: boolean;
   paused: boolean;
   sessionId?: string;
   advancedBindings: AdvancedBinding[];
+  isWin68: boolean;
 }) {
   const {
     tr
   } = useI18n();
+  const xsydStats = useXsydRhythmStats();
   const [frame, setFrame] = useState<RgbServiceFrame>({
     enabled: false,
     connected: false,
@@ -63,7 +78,7 @@ function RhythmPreview({
   const latest = useRef<RgbServiceFrame | null>(null);
   const currentConfig = useRef(configuration);
   currentConfig.current = configuration;
-  const simulate = demo || !live;
+  const simulate = demo || (!live && !xsydLive);
   useEffect(() => {
     let handle = 0;
     let close: (() => void) | undefined;
@@ -76,8 +91,22 @@ function RhythmPreview({
         return;
       }
       if (!document.hidden) {
-        if (simulate) {
-          const sample = rhythmDemo(currentConfig.current, reduced.matches ? 0 : now - start);
+        if (xsydLive) {
+          const xsydFrame = getXsydCustomRgbFrame() ?? darkKeys;
+          const stats = xsydStats;
+          setFrame({
+            enabled: true,
+            connected: xsydDeviceManager.connected,
+            keys: xsydFrame,
+            side: stats.side,
+            audioLevel: stats.audioLevel,
+          });
+        } else if (simulate) {
+          const sample = rhythmDemo(
+            currentConfig.current,
+            reduced.matches ? 0 : now - start,
+            isWin68 ? 'win68HeMax' : 'hero68'
+          );
           setFrame({
             enabled: false,
             connected: false,
@@ -92,7 +121,7 @@ function RhythmPreview({
       }
       handle = requestAnimationFrame(render);
     };
-    if (!paused && !simulate && live) {
+    if (!paused && !simulate && live && !xsydLive) {
       const xsydStreamer = new XsydCustomRgbStreamer();
       let xsydBusy = false;
       close = rgbService.frames(value => {
@@ -103,21 +132,21 @@ function RhythmPreview({
           };
           if (value.enabled && value.connected && value.keys && xsydDeviceManager.connected && !xsydBusy) {
             xsydBusy = true;
-            void xsydStreamer.pushFrameDelta(xsydDeviceManager, value.keys).catch(() => {}).finally(() => {
+            void xsydStreamer.pushRhythmCycle(xsydDeviceManager, value.keys).catch(() => {}).finally(() => {
               xsydBusy = false;
             });
           }
         }
       });
     }
-    if (!simulate) {
+    if (!simulate && !xsydLive) {
       setFrame({
         enabled: false,
         connected: false,
         keys: darkKeys
       });
     }
-    if (!paused && (simulate || live)) {
+    if (!paused && (simulate || live || xsydLive)) {
       handle = requestAnimationFrame(render);
     }
     return () => {
@@ -126,36 +155,42 @@ function RhythmPreview({
       close?.();
       latest.current = null;
     };
-  }, [simulate, live, paused, sessionId]);
-  return <RgbPreviewPanel source={tr(demo ? 'Simulation' : live ? 'Live · USB output' : 'Draft preview')} hint={tr(live ? frame.connected ? 'Keyboard connected' : 'Waiting for keyboard' : 'Side LEDs retain onboard lighting')} footer={<div className="rhythm-meter">
+  }, [simulate, live, xsydLive, paused, sessionId, isWin68, xsydStats]);
+  return <RgbPreviewPanel source={tr(demo ? 'Simulation' : xsydLive || live ? 'Live · USB output' : 'Draft preview')} hint={tr(xsydLive ? xsydDeviceManager.connected ? 'WIN 68 HE MAX connected (0x2A stream)' : 'Previewing · connect WIN 68 HE MAX to stream' : live ? frame.connected ? 'Keyboard connected' : 'Waiting for keyboard' : 'Side LEDs retain onboard lighting')} footer={<div className="rhythm-meter">
       <AudioLines size={16} />
       <meter aria-label={tr('Audio level')} min={0} max={1} value={Math.min(1, frame.audioLevel ?? 0)} />
       <span>{Math.round((frame.audioLevel ?? 0) * 100)}%</span>
     </div>}>
     <Hero68Preview advancedBindings={advancedBindings} selectedKeys={new Set()} onToggleKey={() => {}} showAdvancedIcons={false} selectionEnabled={false} lightingSource="local" lightingFrame={frame.keys} />
-    <div className="rgb-side-preview" aria-label={demo ? tr('18 illustrative side LEDs') : tr('Side LED output')}>{(frame.side ?? Array(18).fill('#20262b')).map((color, i) => <span key={i} style={{
+    {!isWin68 && <div className="rgb-side-preview" aria-label={demo ? tr('18 illustrative side LEDs') : tr('Side LED output')}>{(frame.side ?? Array(18).fill('#20262b')).map((color, i) => <span key={i} style={{
         background: color,
         color
-      }} />)}</div>
+      }} />)}</div>}
   </RgbPreviewPanel>;
 }
 export default function RhythmSyncEditor({
   onSetup,
   visible = true,
-  advancedBindings = []
+  advancedBindings = [],
+  onboardProfile,
 }: {
   onSetup: () => void;
   visible?: boolean;
   advancedBindings?: AdvancedBinding[];
+  onboardProfile?: RgbProfile;
 }) {
   const {
     tr
   } = useI18n();
+  const contextModel = useContext(DeviceModelContext);
+  const isWin68 = isWin68HeMaxModel(contextModel) || xsydDeviceManager.connected;
   const {
     status,
     checking,
     reconnecting
   } = useRgbServiceState();
+  const xsydStats = useXsydRhythmStats();
+  const xsydLive = xsydStats.active;
   const [config, setConfig] = useState<RhythmConfiguration>(readDraft);
   const [demo, setDemo] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -167,31 +202,32 @@ export default function RhythmSyncEditor({
   const queue = useRef<ReturnType<typeof latestUpdates<RhythmConfiguration>> | null>(null);
   current.current = config;
   const compatible = !!status && (status.apiVersion ?? 0) >= 5 && status.supportedModes?.includes('rhythm');
-  const locked = !demo && (checking || !compatible);
-  const live = status?.mode === 'rhythm' && status.enabled;
-  const applied = !!session && status?.sessionId === session && live;
-  const sideSupported = config.sideMode === 500 || !!status?.supportedRhythmSideModes?.includes(config.sideMode);
-  const keySupported = status?.supportedRhythmModes?.includes(config.keyMode) ?? true;
+  const locked = !isWin68 && !demo && (checking || !compatible);
+  const serviceLive = Boolean(status?.mode === 'rhythm' && status.enabled);
+  const live = serviceLive || xsydLive;
+  const applied = xsydLive || (!!session && status?.sessionId === session && serviceLive);
+  const sideSupported = isWin68 || config.sideMode === 500 || !!status?.supportedRhythmSideModes?.includes(config.sideMode);
+  const keySupported = isWin68 || (status?.supportedRhythmModes?.includes(config.keyMode) ?? true);
   // Rejoin the service's current configuration. Merely opening this editor never
   // writes the old local draft or restarts audio capture.
   useEffect(() => {
-    if (busy || demo) {
+    if (busy || demo || xsydLive) {
       return;
     }
-    if (compatible && live && status.sessionId && status.rhythmConfiguration && session !== status.sessionId) {
+    if (compatible && serviceLive && status?.sessionId && status.rhythmConfiguration && session !== status.sessionId) {
       action.current++;
       queue.current?.close();
       queue.current = null;
       setConfig(restoreRhythm(status.rhythmConfiguration));
       setSession(status.sessionId);
       setError(null);
-    } else if (session && (!live || status?.sessionId !== session)) {
+    } else if (session && (!serviceLive || status?.sessionId !== session)) {
       action.current++;
       queue.current?.close();
       queue.current = null;
       setSession(null);
     }
-  }, [compatible, live, status, session, busy, demo]);
+  }, [compatible, serviceLive, xsydLive, status, session, busy, demo]);
   useEffect(() => {
     try {
       localStorage.setItem(draftKey, JSON.stringify(config));
@@ -216,7 +252,7 @@ export default function RhythmSyncEditor({
     };
   }, [compatible]);
   useEffect(() => {
-    if (!applied || demo) {
+    if (!applied || demo || xsydLive) {
       queue.current?.close();
       queue.current = null;
       return;
@@ -245,7 +281,7 @@ export default function RhythmSyncEditor({
         queue.current = null;
       }
     };
-  }, [applied, session, demo]);
+  }, [applied, session, demo, xsydLive]);
   useEffect(() => () => {
     action.current++;
     queue.current?.close();
@@ -258,6 +294,10 @@ export default function RhythmSyncEditor({
     current.current = next;
     setError(null);
     setConfig(next);
+    if (xsydLive) {
+      updateXsydRhythmConfig(next);
+      return;
+    }
     if (applied && !demo) {
       if (!(status?.supportedRhythmModes?.includes(next.keyMode) ?? true)) {
         setError(tr('Update the background app to use this rhythm mode.'));
@@ -272,6 +312,29 @@ export default function RhythmSyncEditor({
   }
   async function apply() {
     if (busy) {
+      return;
+    }
+    const useWebHidDirect = isWin68 && (!compatible || current.current.endpoint.startsWith('web-'));
+    if (useWebHidDirect) {
+      const token = ++action.current;
+      setBusy(true);
+      setError(null);
+      queue.current?.close();
+      setSession(null);
+      try {
+        await startXsydRhythm(current.current);
+        if (token === action.current) {
+          setDemo(false);
+        }
+      } catch (e) {
+        if (token === action.current) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (token === action.current) {
+          setBusy(false);
+        }
+      }
       return;
     }
     if (!compatible) {
@@ -343,9 +406,14 @@ export default function RhythmSyncEditor({
     queue.current?.close();
     setSession(null);
     try {
-      const result = await rgbService.stop();
-      if (token === action.current) {
-        publishRgbServiceStatus(result);
+      if (xsydLive) {
+        await stopXsydRhythm(onboardProfile);
+      }
+      if (status?.enabled) {
+        const result = await rgbService.stop();
+        if (token === action.current) {
+          publishRgbServiceStatus(result);
+        }
       }
     } catch (e) {
       if (token === action.current) {
@@ -358,27 +426,41 @@ export default function RhythmSyncEditor({
     }
   }
   const selected = RHYTHM_MODES.find(mode => mode.id === config.keyMode)!;
+  const webAudioOptions = isWin68 ? [
+    {
+      value: 'web-synth',
+      label: tr('Built-in Rhythm Synth (WebHID 0x2A)')
+    },
+    {
+      value: 'web-system',
+      label: tr('Browser Tab / System Audio (Share audio)')
+    },
+    {
+      value: 'web-mic',
+      label: tr('Microphone / Line-In (Web Audio)')
+    },
+  ] : [];
   return <div className="custom-rgb-gate" hidden={!visible}>
     <RgbToolbarSlot visible={visible}>
       <span className="rgb-sync-note" data-attention={reconnecting || !applied && live || undefined} role="status">{reconnecting ? tr('Reconnecting to background app…') : applied ? tr('Auto sync') : live ? tr('Joining running Rhythm…') : demo ? tr('Simulation') : null}</span>
-      {!applied && <button type="button" className="apply-button" onClick={() => void apply()} disabled={busy || checking || locked || compatible && (!sideSupported || !keySupported)}><Play size={15} />{busy ? tr('Working…') : tr('Start Rhythm')}</button>}
-      {status?.enabled && <button type="button" className="secondary-button" title={tr('Return to onboard')} disabled={busy} onClick={() => void stop()}><Square size={14} /> {tr('Back to onboard')}</button>}
+      {!applied && <button type="button" className="apply-button" onClick={() => void apply()} disabled={busy || (!isWin68 && checking) || locked || (compatible && (!sideSupported || !keySupported))}><Play size={15} />{busy ? tr('Working…') : tr('Start Rhythm')}</button>}
+      {(status?.enabled || xsydLive) && <button type="button" className="secondary-button" title={tr('Return to onboard')} disabled={busy} onClick={() => void stop()}><Square size={14} /> {tr('Back to onboard')}</button>}
     </RgbToolbarSlot>
     <RgbToolbarSlot visible={visible} notice>
-      {live && status?.configurationBusy && <p className="rgb-inline-note" role="status">{tr('Saving keyboard configuration · lighting paused')}</p>}
+      {serviceLive && status?.configurationBusy && <p className="rgb-inline-note" role="status">{tr('Saving keyboard configuration · lighting paused')}</p>}
       {compatible && !demo && !keySupported && <p className="rgb-inline-note" role="status">{tr('Update the background app to use this rhythm mode.')} <button type="button" className="secondary-button" onClick={onSetup}>{tr('Setup / Update')}</button></p>}
       {error && <p className="stream-error" role="alert">{error}</p>}
-      {live && status?.lastError && <p className="stream-error" role="alert">{status.lastError}</p>}
-      {live && status?.audioError && <p className="stream-error" role="alert">{status.audioError}</p>}
+      {serviceLive && status?.lastError && <p className="stream-error" role="alert">{status.lastError}</p>}
+      {serviceLive && status?.audioError && <p className="stream-error" role="alert">{status.audioError}</p>}
     </RgbToolbarSlot>
     <section className={`rhythm-editor custom-rgb-content${locked ? ' is-locked' : ''}`} inert={locked} aria-label="Rhythm Sync">
-    <RhythmPreview configuration={config} demo={demo} live={!!live} paused={locked || !visible} sessionId={status?.sessionId} advancedBindings={advancedBindings} />
+    <RhythmPreview configuration={config} demo={demo} live={serviceLive} xsydLive={xsydLive} paused={locked || !visible} sessionId={status?.sessionId} advancedBindings={advancedBindings} isWin68={isWin68} />
     <div className="rhythm-layout"><div className="settings-card rhythm-modes"><h3>{tr('Key rhythm')}</h3><div className="rhythm-mode-grid">{RHYTHM_MODES.map(mode => <button type="button" key={mode.id} className={config.keyMode === mode.id ? 'active' : ''} aria-pressed={config.keyMode === mode.id} onClick={() => change({
               keyMode: mode.id
-            })} disabled={busy || !demo && !(status?.supportedRhythmModes?.includes(mode.id) ?? true)} title={!demo && !(status?.supportedRhythmModes?.includes(mode.id) ?? true) ? tr('Update the background app to use this rhythm mode.') : undefined}><Thumbnail shape={mode.shape} /><strong>{tr(mode.name)}</strong><span>{tr(mode.description)}</span></button>)}</div>
-      <h3>{tr('Side rhythm')}</h3><div className="rhythm-side-modes" role="group" aria-label={tr('Side rhythm')}>{RHYTHM_SIDE_MODES.map(mode => <button type="button" key={mode.id} className="secondary-button" aria-pressed={config.sideMode === mode.id} disabled={busy || !demo && mode.id !== 500 && !status?.supportedRhythmSideModes?.includes(mode.id)} title={!demo && mode.id !== 500 && !status?.supportedRhythmSideModes?.includes(mode.id) ? tr('Requires firmware with live side rhythm support') : undefined} onClick={() => change({
+            })} disabled={busy || (!isWin68 && !demo && !(status?.supportedRhythmModes?.includes(mode.id) ?? true))} title={!isWin68 && !demo && !(status?.supportedRhythmModes?.includes(mode.id) ?? true) ? tr('Update the background app to use this rhythm mode.') : undefined}><Thumbnail shape={mode.shape} /><strong>{tr(mode.name)}</strong><span>{tr(mode.description)}</span></button>)}</div>
+      {!isWin68 && <><h3>{tr('Side rhythm')}</h3><div className="rhythm-side-modes" role="group" aria-label={tr('Side rhythm')}>{RHYTHM_SIDE_MODES.map(mode => <button type="button" key={mode.id} className="secondary-button" aria-pressed={config.sideMode === mode.id} disabled={busy || !demo && mode.id !== 500 && !status?.supportedRhythmSideModes?.includes(mode.id)} title={!demo && mode.id !== 500 && !status?.supportedRhythmSideModes?.includes(mode.id) ? tr('Requires firmware with live side rhythm support') : undefined} onClick={() => change({
               sideMode: mode.id
-            })}>{tr(mode.name)}</button>)}</div></div>
+            })}>{tr(mode.name)}</button>)}</div></>}</div>
       <section className="settings-card rhythm-controls"><div className="rhythm-control-heading">
             <h3><SlidersHorizontal size={17} /> {tr(selected.name)}</h3>
             <button type="button" className="rhythm-reset" aria-label={tr('Reset mode parameters')} title={tr('Reset mode parameters')} onClick={() => change({
@@ -392,14 +474,14 @@ export default function RhythmSyncEditor({
               endpoint
             })} options={[{
               value: 'default',
-              label: tr('Follow Windows default')
-            }, ...(!endpoints.some(d => d.id === config.endpoint) && config.endpoint !== 'default' ? [{
+              label: isWin68 && !compatible ? tr('Default (WebHID Rhythm Synth)') : tr('Follow Windows default')
+            }, ...webAudioOptions, ...(!endpoints.some(d => d.id === config.endpoint) && !webAudioOptions.some(d => d.value === config.endpoint) && config.endpoint !== 'default' ? [{
               value: config.endpoint,
               label: tr('Saved device · unavailable')
             }] : []), ...endpoints.map(d => ({
               value: d.id,
               label: d.name + (d.default ? ' (default)' : '')
-            }))]} /><small>{tr('Captures music playing through your speakers or headphones.')}</small></label>
+            }))]} /><small>{isWin68 ? tr('Streams 5 × 14-key 0x2A RGB packets (LEN=0x39, CK=0xF4) directly to WIN 68 HE MAX SRAM.') : tr('Captures music playing through your speakers or headphones.')}</small></label>
         <div className="rgb-parameters rhythm-sliders"><label>{tr('Brightness')} <strong>{config.brightness}%</strong><input aria-label={tr('Rhythm brightness')} type="range" min={0} max={100} value={config.brightness} onChange={e => change({
                 brightness: +e.target.value
               })} /></label>
@@ -436,8 +518,8 @@ export default function RhythmSyncEditor({
             <span>{config.color.toUpperCase()}</span>
           </div>}
         <details className="rhythm-advanced"><summary>{tr('Details')}</summary>
-          <p>{live ? `${(status?.fps ?? 0).toFixed(1)} FPS` : tr('60 FPS target')}</p>
-          {!status?.sideOutput && <p>{tr('This keyboard firmware does not support live side rhythm. The side LEDs keep their onboard effect.')}</p>}
+          <p>{xsydLive ? `${xsydStats.fps.toFixed(1)} FPS · XSYD 0x2A (5 × 14 slots)` : serviceLive ? `${(status?.fps ?? 0).toFixed(1)} FPS` : tr('30–60 FPS target')}</p>
+          {!isWin68 && !status?.sideOutput && <p>{tr('This keyboard firmware does not support live side rhythm. The side LEDs keep their onboard effect.')}</p>}
           {config.keyMode === 428 && <><label className="rhythm-select">{tr('FFT window')}<AppSelect<RhythmConfiguration['spectrum']['window']> label={tr('FFT window')} value={config.spectrum.window} onChange={window => change({
                   spectrum: {
                     ...config.spectrum,
@@ -460,9 +542,9 @@ export default function RhythmSyncEditor({
                 })} />{config.spectrum.spatialRadius}</label></>}
           <dl>
               <dt>{tr('Audio')}</dt>
-              <dd>{status?.audioState ?? tr('Stopped')}{status?.sampleRate ? ` · ${status.sampleRate / 1000} kHz` : ''}</dd>
+              <dd>{xsydLive ? `${xsydStats.audioSource === 'system' ? 'Web Audio (System/Tab)' : xsydStats.audioSource === 'mic' ? 'Web Audio (Mic)' : 'Built-in Synth'} · ${(xsydStats.sampleRate / 1000).toFixed(0)} kHz` : `${status?.audioState ?? tr('Stopped')}${status?.sampleRate ? ` · ${status.sampleRate / 1000} kHz` : ''}`}</dd>
               <dt>{tr('Frame time')}</dt>
-              <dd>{(status?.frameMs ?? 0).toFixed(2)} ms</dd>
+              <dd>{xsydLive ? '33.00' : (status?.frameMs ?? 0).toFixed(2)} ms</dd>
               <dt>{tr('Frame gap p95')}</dt>
               <dd>{status?.frameGapP95Ms?.toFixed(2) ?? '—'} ms</dd>
               <dt>{tr('Sample → USB p95')}</dt>
@@ -472,7 +554,7 @@ export default function RhythmSyncEditor({
             </dl>
           <p>{tr('USB completion is not LED readback. Physical light latency needs a hardware measurement.')}</p>
           {status?.captureToWriteP95Ms != null && <p>{tr('Capture → USB p95')}: {status.captureToWriteP95Ms.toFixed(2)} ms.</p>}
-          {live && <p>{tr('Render')}: {(status?.renderMs ?? 0).toFixed(2)} ms · {tr('Encode')}: {(status?.encodeMs ?? 0).toFixed(2)} ms · {tr('USB write')}: {(status?.writeMs ?? 0).toFixed(2)} ms.</p>}
+          {serviceLive && <p>{tr('Render')}: {(status?.renderMs ?? 0).toFixed(2)} ms · {tr('Encode')}: {(status?.encodeMs ?? 0).toFixed(2)} ms · {tr('USB write')}: {(status?.writeMs ?? 0).toFixed(2)} ms.</p>}
           {!!status?.audioTimestampInvalid && <p>{tr('Audio endpoint timestamps ahead of the capture clock were excluded')} ({status.audioTimestampInvalid}). {tr('Sample latency is not verified for those packets.')}</p>}
         </details>
       </section></div>

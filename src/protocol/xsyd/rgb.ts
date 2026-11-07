@@ -1,4 +1,4 @@
-// XSYD `0x5C` RGB protocol (`0x18` Global Lighting & `0x2A` Per-Key RGB / Custom Stream)
+// XSYD `0x5C` RGB protocol (`0x18` Global Lighting & `0x2A` Per-Key RGB / Custom & Rhythm Stream)
 // for the AULA WIN 68 HE MAX (VID 0x1CA2, PID 0x1901, firmware v1.1.4).
 //
 // Every frame layout below is verified byte-for-byte against real USB captures:
@@ -6,6 +6,7 @@
 //   2. `Q(green)-E(red)_-Z(yellow)-P(Pink).txt`
 //   3. `connect_keyboard_to_webhidofficial.txt`
 //   4. `profile_1_2_3_4.txt`
+//   5. `rhythm_capture.pcapng` (2,045 `OUT op=0x2A len=0x39` batch frames across 409 5-frame cycles)
 
 import { BRAND } from '../../brand'
 import type { LightingFrame } from '../../keyboard/lightingPreviewBus'
@@ -21,7 +22,7 @@ export const XSYD_RGB_REPLY_OPCODE = 0x98
 export const XSYD_PER_KEY_RGB_OPCODE = 0x2a
 export const XSYD_PER_KEY_RGB_REPLY_OPCODE = 0xaa
 
-/** Effect ID (`payload[39]`) that activates Custom Per-Key RGB (`0x2A` colors). */
+/** Effect ID (`payload[39]`) that activates Custom Per-Key RGB & Rhythm Sync (`0x2A` colors). */
 export const XSYD_PER_KEY_RGB_MODE = 0x15
 
 /** Number of 4-byte `[keyValue, R, G, B]` slots in a full `0x2A` (`LEN = 0x39`) frame. */
@@ -32,6 +33,20 @@ export const XSYD_MAX_BRIGHTNESS = 4
 
 /** Hardware speed levels on WIN 68 HE MAX (`0..4`). */
 export const XSYD_MAX_SPEED = 4
+
+/**
+ * Exact 68-key wire order (`Escape`..`ArrowRight`, with `Fn = 0x01`) used in
+ * the 5-frame `0x2A` (`LEN = 0x39`) batch cycle of `rhythm_capture.pcapng`
+ * (`#0017..#0021`, `#0036..#0040`, etc.):
+ * - Batch 0 (`14 keys`): `29 1e 1f 20 21 22 23 24 25 26 27 2d 2e 2a` (`Escape..Backspace`)
+ * - Batch 1 (`14 keys`): `49 2b 14 1a 08 15 17 1c 18 0c 12 13 2f 30` (`Insert..BracketRight`)
+ * - Batch 2 (`14 keys`): `31 4c 39 04 16 07 09 0a 0b 0d 0e 0f 33 34` (`Backslash..Quote`)
+ * - Batch 3 (`14 keys`): `28 4b e1 1d 1b 06 19 05 11 10 36 37 38 e5` (`Enter..ShiftRight`)
+ * - Batch 4 (`12 keys`): `52 4e e0 e3 e2 2c e6 01 e4 50 51 4f` (`ArrowUp..ArrowRight`)
+ */
+export const XSYD_RHYTHM_KEY_IDS: readonly string[] = Object.freeze(
+  XSYD_KEYS.map(k => (k.code === 'F1' ? 'Fn' : k.code))
+)
 
 export interface XsydRgbRequester {
   request(frame: Uint8Array, timeoutMs?: number): Promise<XsydReply>
@@ -50,11 +65,6 @@ export interface XsydColorSlotInfo {
 /**
  * The 7 hardware preset color slots stored in `payload[5..32]` of `0x18` / `0x98`
  * in `[B, G, R, 0xFF]` order, plus `0` for Multicolor.
- *
- * Verified in `tideflux_..._pcapng`:
- *   - `colorIndex = 0` (`pkt=28908, 31746`): Multicolor
- *   - `colorIndex = 1` (`pkt=36682`): Red (`payload[5..8] = 00 00 ff ff`)
- *   - `colorIndex = 4` (`pkt=38840`): Blue (`payload[17..20] = ff 00 00 ff`)
  */
 export const XSYD_COLOR_SLOTS: readonly XsydColorSlotInfo[] = [
   { index: 0, name: 'Multicolor', rgb: [255, 255, 255], wireBgr: [0x00, 0x00, 0x00, 0xff] },
@@ -124,8 +134,6 @@ function clampByte(value: number): number {
 
 /**
  * Normalize brightness to WIN 68 HE MAX's hardware `0..4` range.
- * If a legacy HERO68 draft carries `5..20` (where 20 = 100%), scale by `round(v / 5)`
- * so switching models never triggers an invalid brightness error.
  */
 export function normalizeXsydBrightness(brightness: number): number {
   if (!Number.isFinite(brightness) || brightness <= 0) {
@@ -193,13 +201,10 @@ export function xsydRgbForColorIndex(
 }
 
 /**
- * Default `RgbProfile` tailored for AULA WIN 68 HE MAX:
- * - `mode = 0x01` (`Aurora Wave`), `brightness = 4` (100%), `speed = 3`, `mix = true` (`colorIndex = 0`)
- * - `reverse = false`
- * - 68 per-key colors initialized to `[255, 255, 255]`
+ * Default `RgbProfile` tailored for AULA WIN 68 HE MAX.
  */
 export function defaultXsydRgb(
-  keyIds: readonly string[] = XSYD_KEYS.map(k => (k.code === 'F1' ? 'Fn' : k.code))
+  keyIds: readonly string[] = XSYD_RHYTHM_KEY_IDS
 ): RgbProfile {
   return {
     keys: {
@@ -225,11 +230,6 @@ export function defaultXsydRgb(
 
 /**
  * Build `0x18` global lighting read request payload (`LEN = 0x2B` = 43 bytes).
- *
- * Verified against:
- * - `connect_keyboard_to_webhidofficial.txt` `idx=20` (`useDefaultPalette = false`, 28 × `0xFF`)
- * - `profile_1_2_3_4.txt` `idx=2, 287, 574, 859` (`useDefaultPalette = true`, 28B default BGR palette)
- * Both produce `CK = 0xD4`.
  */
 export function buildXsydRgbReadPayload(useDefaultPalette = false): Uint8Array {
   const payload = new Uint8Array(0x2b)
@@ -249,9 +249,6 @@ export function buildXsydRgbReadFrame(useDefaultPalette = false): Uint8Array {
 
 /**
  * Build `0x18` global lighting write payload (`LEN = 0x2C` = 44 bytes).
- *
- * Verified byte-for-byte against all 21 `OUT op=0x18 len=0x2C` packets in
- * `tideflux_softripple_snippingstorm_brightness0-4-3-1-2-0_speed1-2-3-4-0_reverseon-off_colorchangetosmoothflow(multicolor-red-blue).pcapng`.
  */
 export function buildXsydRgbWritePayload(zone: RgbZone): Uint8Array {
   const mode =
@@ -275,11 +272,8 @@ export function buildXsydRgbWritePayload(zone: RgbZone): Uint8Array {
 
   const payload = new Uint8Array(0x2c)
   payload[0] = 0x01 // Write
-  // payload[1..4] = 00 00 00 00
   payload.set(XSYD_DEFAULT_PALETTE_BGR, 5)
 
-  // If the caller supplied custom slot colors in `zone.palette` that differ from
-  // the default display colors, encode them into the 7 `[B, G, R, 0xFF]` slots.
   if (zone.palette && zone.palette.length === 7) {
     for (let i = 0; i < 7; i++) {
       const custom = zone.palette[i]
@@ -298,7 +292,6 @@ export function buildXsydRgbWritePayload(zone: RgbZone): Uint8Array {
     }
   }
 
-  // payload[33..36] = 00 00 00 00
   payload[37] = zone.reverse ? 0x03 : 0x01
   payload[38] = brightness
   payload[39] = mode
@@ -365,12 +358,6 @@ export function decodeXsydRgbReply(reply: XsydReply): RgbZone {
 
 /**
  * Build `0x2A` single-key RGB write payload (`LEN = 0x05`: `01 <keyValue> <R> <G> <B>`).
- *
- * Verified byte-for-byte against `Q(green)-E(red)_-Z(yellow)-P(Pink).txt`:
- * - `Q` (`0x14`, `[7, 255, 0]`):   `5c 05 2a c0 | 01 14 07 ff 00` (`idx=6`)
- * - `E` (`0x08`, `[255, 0, 0]`):   `5c 05 2a c0 | 01 08 ff 00 00` (`idx=8`)
- * - `Z` (`0x1D`, `[232, 255, 0]`): `5c 05 2a c0 | 01 1d e8 ff 00` (`idx=10`)
- * - `P` (`0x13`, `[255, 0, 206]`): `5c 05 2a 8e | 01 13 ff 00 ce` (`idx=13`)
  */
 export function buildXsydPerKeyWritePayload(keyValue: number, color: RgbColor): Uint8Array {
   if (!Number.isInteger(keyValue) || keyValue < 0 || keyValue > 0xfe) {
@@ -389,10 +376,13 @@ export function buildXsydPerKeyWriteFrame(keyValue: number, color: RgbColor): Ui
 
 /**
  * Build a 14-slot `0x2A` batch write frame (`LEN = 0x39` = 57 bytes, `payload[0] = 0x01`).
- * Unused slots are padded with `ff 00 00 00`.
+ * Unused slots are padded with `emptySlotByte` (`0xFF` or `0x00`, followed by `00 00 00`).
+ * Note: Firmware `VA 0x0C17A..0x0C182` maps both `0x00` and `0xFF` to `pos = 0xFF` (skip)
+ * without triggering any Flash flush (`VA 0x0C18E` only flushes on `0xFE 0xFE 0xFE 0xFE`).
  */
 export function buildXsydPerKeyBatchWriteFrame(
-  entries: readonly { keyValue: number; color: RgbColor }[]
+  entries: readonly { keyValue: number; color: RgbColor }[],
+  emptySlotByte: 0x00 | 0xff = 0xff
 ): Uint8Array {
   if (entries.length === 0 || entries.length > XSYD_PER_KEY_SLOTS) {
     throw new RangeError(`Expected 1..${XSYD_PER_KEY_SLOTS} key color entries, got ${entries.length}`)
@@ -403,7 +393,7 @@ export function buildXsydPerKeyBatchWriteFrame(
     const offset = 1 + 4 * k
     const item = entries[k]
     if (!item) {
-      payload[offset] = 0xff
+      payload[offset] = emptySlotByte
       continue
     }
     const { keyValue, color } = item
@@ -421,14 +411,55 @@ export function buildXsydPerKeyBatchWriteFrame(
   return buildXsydFrame(XSYD_PER_KEY_RGB_OPCODE, payload)
 }
 
+function parseHexRgb(hex: string): RgbColor {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) {
+    return [0, 0, 0]
+  }
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ]
+}
+
+/**
+ * Build the 5 `0x2A` (`LEN = 0x39`) Rhythm Sync batch write frames for a 68-key
+ * `LightingFrame` (`{ [keyId]: '#rrggbb' }` or `Record<string, RgbColor>`).
+ *
+ * Verified byte-for-byte against `rhythm_capture.pcapng` (`#0017..#0021`, `#0036..#0040`):
+ * - 5 frames × 14 slots (`4 × 14 + 12 = 68` keys, with the trailing 2 slots of frame 5
+ *   padded as `00 00 00 00 00 00 00 00`, producing `CK = 0xF4` on frame 5).
+ */
+export function buildXsydPerKeyRhythmFrames(
+  frame: LightingFrame | Record<string, RgbColor>,
+  keyIds: readonly string[] = XSYD_RHYTHM_KEY_IDS,
+  emptySlotByte: 0x00 | 0xff = 0x00
+): Uint8Array[] {
+  const entries: { keyValue: number; color: RgbColor }[] = []
+  for (const keyId of keyIds) {
+    const kv = keyValueForCode(keyId)
+    if (kv === undefined) continue
+    const raw = frame[keyId]
+    const color: RgbColor =
+      typeof raw === 'string'
+        ? parseHexRgb(raw)
+        : Array.isArray(raw) && raw.length === 3
+          ? [clampByte(raw[0]), clampByte(raw[1]), clampByte(raw[2])]
+          : [0, 0, 0]
+    entries.push({ keyValue: kv, color })
+  }
+  const out: Uint8Array[] = []
+  for (let i = 0; i < entries.length; i += XSYD_PER_KEY_SLOTS) {
+    out.push(buildXsydPerKeyBatchWriteFrame(entries.slice(i, i + XSYD_PER_KEY_SLOTS), emptySlotByte))
+  }
+  return out
+}
+
 /**
  * Build the 5 `0x2A` (`LEN = 0x39`) read frames that query all 68 keys in batches of 14.
- *
- * Verified byte-for-byte against `connect_keyboard_to_webhidofficial.txt` `idx=290, 292, 294, 296, 298`
- * (where the last 2 padding slots of frame 5 are `ff 00 00 00 ff 00 00 00`).
  */
 export function buildXsydPerKeyReadFrames(
-  keyIds: readonly string[] = XSYD_KEYS.map(k => (k.code === 'F1' ? 'Fn' : k.code))
+  keyIds: readonly string[] = XSYD_RHYTHM_KEY_IDS
 ): Uint8Array[] {
   const keyValues = keyIds
     .map(id => keyValueForCode(id))
@@ -494,7 +525,7 @@ export async function readXsydRgbZone(requester: XsydRgbRequester): Promise<RgbZ
  */
 export async function readXsydRgbColors(
   requester: XsydRgbRequester,
-  keyIds: readonly string[] = XSYD_KEYS.map(k => (k.code === 'F1' ? 'Fn' : k.code))
+  keyIds: readonly string[] = XSYD_RHYTHM_KEY_IDS
 ): Promise<Record<string, RgbColor>> {
   const colors: Record<string, RgbColor> = Object.fromEntries(
     keyIds.map(id => [id, [...(xsydWrittenColorsCache.get(id) ?? [255, 255, 255])] as RgbColor])
@@ -517,7 +548,7 @@ export async function readXsydRgbColors(
  */
 export async function readXsydRgbProfile(
   requester: XsydRgbRequester,
-  keyIds: readonly string[] = XSYD_KEYS.map(k => (k.code === 'F1' ? 'Fn' : k.code))
+  keyIds: readonly string[] = XSYD_RHYTHM_KEY_IDS
 ): Promise<RgbProfile> {
   const keys = await readXsydRgbZone(requester)
   const colors = await readXsydRgbColors(requester, keyIds)
@@ -535,8 +566,7 @@ export async function readXsydRgbProfile(
 }
 
 /**
- * Compare two `RgbZone` configurations using XSYD `0x18` wire semantics
- * (including `reverse` direction and `colorIndex`).
+ * Compare two `RgbZone` configurations using XSYD `0x18` wire semantics.
  */
 export function sameXsydRgbZone(a: RgbZone, b: RgbZone): boolean {
   const modeA = a.mode === 19 || a.mode === 119 ? XSYD_PER_KEY_RGB_MODE : a.mode
@@ -560,7 +590,7 @@ export function sameXsydRgbZone(a: RgbZone, b: RgbZone): boolean {
 }
 
 /**
- * Save dirty per-key colors (`0x2A` `LEN = 0x05`) and global lighting (`0x18` `LEN = 0x2C`)
+ * Save dirty per-key colors (`0x2A`) and global lighting (`0x18`)
  * to a WIN 68 HE MAX, verifying each reply before advancing the baseline.
  */
 export async function saveXsydRgbProfile(
@@ -568,7 +598,7 @@ export async function saveXsydRgbProfile(
   draft: RgbProfile,
   baseline: RgbProfile,
   verified: (next: RgbProfile) => void,
-  keyIds: readonly string[] = XSYD_KEYS.map(k => (k.code === 'F1' ? 'Fn' : k.code)),
+  keyIds: readonly string[] = XSYD_RHYTHM_KEY_IDS,
   slot?: ProfileSlot | number
 ): Promise<RgbProfile> {
   if (slot !== undefined) {
@@ -656,20 +686,12 @@ export async function saveXsydRgbProfile(
   return next
 }
 
-function parseHexRgb(hex: string): RgbColor {
-  if (!/^#[0-9a-f]{6}$/i.test(hex)) {
-    return [0, 0, 0]
-  }
-  return [
-    parseInt(hex.slice(1, 3), 16),
-    parseInt(hex.slice(3, 5), 16),
-    parseInt(hex.slice(5, 7), 16),
-  ]
-}
-
 /**
- * Stateful delta streamer for driving Custom RGB / Audio Visualizer animations
- * directly to a WIN 68 HE MAX over WebHID (`0x18` mode `0x15` + `0x2A` delta frames).
+ * Stateful streamer for driving Custom RGB & Rhythm Sync animations directly
+ * to a WIN 68 HE MAX over WebHID (`0x18` mode `0x15` + `0x2A` single-key or 14-slot batch frames).
+ *
+ * Verified against `rhythm_capture.pcapng` (`#0014` mode `0x15` init + `#0017..#0021`, `#0036..#0040`
+ * 5-frame × 14-slot `0x2A` cycles).
  */
 export class XsydCustomRgbStreamer {
   #prevColors = new Map<string, string>()
@@ -705,15 +727,16 @@ export class XsydCustomRgbStreamer {
   }
 
   /**
-   * Push a rendered `LightingFrame` (`{ [keyId]: '#rrggbb' }`) to the keyboard,
-   * sending `0x2A` (`LEN = 0x05`) only for keys whose color changed since the
-   * previous frame.
+   * Push a rendered `LightingFrame` (`{ [keyId]: '#rrggbb' }`) to the keyboard:
+   * - If `<= 4` keys changed, sends compact single-key `0x2A` (`LEN = 0x05`) frames.
+   * - If `> 4` keys changed (e.g. full-board Custom RGB or Rhythm Sync), packs changed
+   *   keys into 14-slot `0x2A` (`LEN = 0x39`) batch frames (at most 5 USB packets for all 68 keys).
    */
   async pushFrameDelta(requester: XsydRgbRequester, frame: LightingFrame): Promise<number> {
     if (!this.#active) {
       await this.start(requester)
     }
-    let sent = 0
+    const changed: { keyId: string; keyValue: number; hex: string; color: RgbColor }[] = []
     for (const [keyId, hex] of Object.entries(frame)) {
       const normalized = hex.toLowerCase()
       if (this.#prevColors.get(keyId) === normalized) {
@@ -723,15 +746,67 @@ export class XsydCustomRgbStreamer {
       if (kv === undefined) {
         continue
       }
-      await requester.request(buildXsydPerKeyWriteFrame(kv, parseHexRgb(normalized)))
-      this.#prevColors.set(keyId, normalized)
-      sent++
+      changed.push({
+        keyId,
+        keyValue: kv,
+        hex: normalized,
+        color: parseHexRgb(normalized),
+      })
     }
-    return sent
+    if (changed.length === 0) {
+      return 0
+    }
+    if (changed.length <= 4) {
+      for (const item of changed) {
+        await requester.request(buildXsydPerKeyWriteFrame(item.keyValue, item.color))
+        this.#prevColors.set(item.keyId, item.hex)
+      }
+      return changed.length
+    }
+    for (let i = 0; i < changed.length; i += XSYD_PER_KEY_SLOTS) {
+      const batch = changed.slice(i, i + XSYD_PER_KEY_SLOTS)
+      await requester.request(buildXsydPerKeyBatchWriteFrame(batch, 0x00))
+      for (const item of batch) {
+        this.#prevColors.set(item.keyId, item.hex)
+      }
+    }
+    return changed.length
   }
 
   /**
-   * Stop Custom RGB streaming and restore the onboard lighting configuration.
+   * Push a full 5-frame × 14-slot Rhythm Sync cycle (`buildXsydPerKeyRhythmFrames`)
+   * matching `rhythm_capture.pcapng` (`#0017..#0021`, `#0036..#0040`) whenever any key changes.
+   */
+  async pushRhythmCycle(
+    requester: XsydRgbRequester,
+    frame: LightingFrame,
+    keyIds: readonly string[] = XSYD_RHYTHM_KEY_IDS
+  ): Promise<number> {
+    if (!this.#active) {
+      await this.start(requester)
+    }
+    let changedCount = 0
+    for (const keyId of keyIds) {
+      const normalized = (frame[keyId] ?? '#000000').toLowerCase()
+      if (this.#prevColors.get(keyId) !== normalized) {
+        changedCount++
+      }
+    }
+    if (changedCount === 0) {
+      return 0
+    }
+    const batchFrames = buildXsydPerKeyRhythmFrames(frame, keyIds, 0x00)
+    for (const batchFrame of batchFrames) {
+      await requester.request(batchFrame)
+    }
+    for (const keyId of keyIds) {
+      this.#prevColors.set(keyId, (frame[keyId] ?? '#000000').toLowerCase())
+    }
+    return batchFrames.length
+  }
+
+  /**
+   * Stop Custom RGB / Rhythm streaming and restore the onboard lighting configuration.
    */
   async stop(requester: XsydRgbRequester, onboardZone?: RgbZone): Promise<void> {
     this.#active = false

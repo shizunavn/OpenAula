@@ -8,6 +8,7 @@ import { hero68HallStream } from '../protocol/hero68/hallStream';
 import { xsydDeviceManager } from '../protocol/xsyd/device';
 import {
   isXsydCustomRgbActive,
+  isXsydRhythmActive,
   startXsydCustomRgb,
   stopXsydCustomRgb,
   subscribeXsydCustomRgb,
@@ -31,6 +32,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
   const [error, setError] = useState<string | null>(null);
   const [previewOnly, setPreviewOnly] = useState(false);
   const xsydLive = useSyncExternalStore(subscribeXsydCustomRgb, isXsydCustomRgbActive, () => false);
+  const xsydRhythmLive = useSyncExternalStore(subscribeXsydCustomRgb, isXsydRhythmActive, () => false);
   const [backup, setBackup] = useState<RgbProfile | null>(null);
   const current = useRef(value);
   current.current = value;
@@ -228,7 +230,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
     if (busy) {
       return;
     }
-    if (xsydLive) {
+    if (xsydLive || xsydRhythmLive) {
       const token = ++action.current;
       setBusy(true);
       setError(null);

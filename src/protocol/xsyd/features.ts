@@ -23,21 +23,22 @@ export const XSYD_GLOBAL_ACTUATION_REPLY_OPCODE = 0xa9
 /**
  * Field IDs verified against firmware v1.1.4 (`VA 0x1C6DC` write table,
  * `VA 0x1C744` read table, and `VA 0x12FE8..0x13636` Hall scan engine) and
- * USBPcap captures (`profile_1_2_3_4.pcapng`, `actutation2.0global_...pcapng`).
+ * USBPcap captures (`profile_1_2_3_4.pcapng`, `actutation2.0global_...pcapng`,
+ * `wasd_deadzone.pcapng`).
  */
 export const XsydFeatureField = {
-  /** Layer 0 key action byte (`0x20003220 + 2*cell`, write `0x0B01A`, read `0x0B2B2`). */
+  /** Layer 0 key action byte (`0x20003220 + 2*cell`, write `0x0ADCC`, read `0x0B1F8`). */
   Remap: 0x00,
-  /** Per-key actuation point in micrometres (`0x2000341A + 2*cell`, write `0x0B0AA`, read `0x0B358`, scan `0x13206`). */
+  /** Per-key actuation point in micrometres (`0x2000341A + 2*cell`, write `0x0B07C`, read `0x0B34A`, scan `0x13206`). */
   Travel: 0x04,
-  /** Multi-Point Trigger (MPT) depth 1 in µm (`0x20003516 + 2*cell`, write `0x0B0CE`, read `0x0B376`). */
+  /** Multi-Point Trigger (MPT) depth 1 in µm (`0x20003516 + 2*cell`, write `0x0B0A8`, read `0x0B372`). */
   MptDepth1: 0x05,
-  /** Multi-Point Trigger (MPT) depth 2 in µm (`0x20003612 + 2*cell`, write `0x0B0EA`, read `0x0B390`). */
+  /** Multi-Point Trigger (MPT) depth 2 in µm (`0x20003612 + 2*cell`, write `0x0B0D4`, read `0x0B39A`). */
   MptDepth2: 0x06,
-  /** Multi-Point Trigger (MPT) depth 3 in µm (`0x2000370E + 2*cell`, write `0x0B106`, read `0x0B3AA`). */
+  /** Multi-Point Trigger (MPT) depth 3 in µm (`0x2000370E + 2*cell`, write `0x0B100`, read `0x0B3C2`). */
   MptDepth3: 0x07,
   /**
-   * Key mode / header byte (`0x200051CC + cell`, write `0x0B122`, read `0x0B3C4`):
+   * Key mode / header byte (`0x200051CC + cell`, write `0x0AE72`, read `0x0B270`):
    * - `bit 5 (0x20)`: Rapid Trigger enabled (`VA 0x13504..0x13510`) and per-key travel lock vs `0x29` (`VA 0x0C0DC`)
    * - `0x00`: Rapid Trigger disabled (standard actuation mode)
    * - `bits 0..3`: Advanced Key type (`1=DKS, 2=MPT, 3=MT, 4=TGL, 5=END, 7=SOCD`)
@@ -47,12 +48,20 @@ export const XsydFeatureField = {
   RapidTriggerPress: 0x14,
   /** Rapid Trigger Release sensitivity in µm (`0x20003906 + 2*cell`, write `0x0B16A`, read `0x0B41C`, scan `0x13538`). */
   RapidTriggerRelease: 0x15,
-  /** Top Deadzone in µm (`0x20003FEC + 2*cell`, write `0x0B19C`, read `0x0B44E`, scan `0x13202` & `0x13572`). */
+  /**
+   * Top Deadzone in µm (`0x20003FEC + 2*cell`, write `0x0B184`, read `0x0B436`, scan `0x13202` & `0x13572`,
+   * sanitized at `0x12C72..0x12C96` to `0..1000 µm` else reset to `200 µm`).
+   * Verified in `wasd_deadzone.pcapng` (#03 `150 µm = 0.15 mm`, #11 `1000 µm = 1.00 mm`).
+   */
   TopDeadzone: 0x16,
-  /** Bottom Deadzone in µm (`0x200040E8 + 2*cell`, write `0x0B1B6`, read `0x0B468`, scan `0x1357C`). */
+  /**
+   * Bottom Deadzone in µm (`0x200040E8 + 2*cell`, write `0x0B1AA`, read `0x0B45E`, scan `0x1357C`,
+   * sanitized at `0x12C9A..0x12CA2` to `0..1000 µm` else reset to `200 µm`).
+   * Verified in `wasd_deadzone.pcapng` (#06 `200 µm = 0.20 mm`, #13 `1000 µm = 1.00 mm`).
+   */
   BottomDeadzone: 0x17,
   /**
-   * Per-key magnetic switch calibration curve ID (`0x200045F4 + 2*cell`, write `0x0B1CE`, read `0x0B482`, scan `0x130C6`):
+   * Per-key magnetic switch calibration curve ID (`0x200045F4 + 2*cell`, write `0x0B1D0`, read `0x0B486`, scan `0x130C6`):
    * - `0`: Wing Chun / Graywood (`3400 µm` max travel, curve 0 at `VA 0x04E44`)
    * - `1`: Jade Pro / Magnetic Jade (`3400 µm` max travel, curve 0 at `VA 0x04E44`)
    * - `2`: Black King / Black Emperor / Uranus (`3300 µm` max travel, curve 1 at `VA 0x05644`)
@@ -108,8 +117,6 @@ export function buildGlobalActuationReadFrame(): Uint8Array {
  * Build an `0x29` Global Actuation write frame (`LEN = 0x0F`, `payload[0] = 0x01`).
  * Verified at firmware `VA 0x0C092..0x0C10A` and `actutation2.0global_...pcapng`:
  * `5C 0F 29 C9 | 01 00 00 <u16_le global_travel_um> 00 ...`.
- * Note: Firmware `VA 0x0C0D8` also copies `travelUm` into `field 0x04` for all keys
- * whose `Header (field 0x08)` has `(Header & 0x30) == 0`.
  */
 export function buildGlobalActuationWriteFrame(travelUm: number): Uint8Array {
   if (!Number.isInteger(travelUm) || travelUm < 100 || travelUm > 3400) {
@@ -139,7 +146,7 @@ export function decodeGlobalActuationReply(reply: XsydReply): number {
 /**
  * Build an `0x23` write payload (`payload[0] = 0x01`).
  *
- * Unused slots are padded with `ff ff 00 00`, which the firmware skips (`VA 0x0ADB8`).
+ * Unused slots are padded with `ff ff 00 00`, which the firmware skips (`VA 0x0AD62`).
  */
 export function buildFieldWritePayload(writes: readonly XsydFieldWrite[]): Uint8Array {
   if (writes.length > XSYD_FEATURE_SLOTS) {
@@ -180,7 +187,7 @@ export function buildFieldWriteFrame(writes: readonly XsydFieldWrite[]): Uint8Ar
 /**
  * Build an `0x23` readback request payload (`payload[0] = 0x00`).
  *
- * Queries up to 14 `(pos, field)` slots from SRAM (`VA 0x0ADEC`); unused slots
+ * Queries up to 14 `(pos, field)` slots from SRAM (`VA 0x0AE34`); unused slots
  * are padded with `ff ff 00 00`.
  */
 export function buildFieldReadPayload(
@@ -220,18 +227,24 @@ export function buildFieldReadFrame(
   return buildXsydFrame(0x23, buildFieldReadPayload(queries))
 }
 
-/** Decode an `0x23` / `0xA3` payload back into live slots (padding dropped). */
+/**
+ * Decode an `0x23` / `0xA3` payload back into live slots, dropping both
+ * `ff ff 00 00` / `ff ff ff 00` and `00 00 00 00` padding slots (`wasd_deadzone.pcapng`).
+ */
 export function decodeFieldWritePayload(payload: ArrayLike<number>): XsydFieldWrite[] {
   const slots: XsydFieldWrite[] = []
   for (let k = 0; k < XSYD_FEATURE_SLOTS; k++) {
     const offset = 1 + 4 * k
     if (offset + 3 >= payload.length) break
     const pos = payload[offset]
-    if (pos === 0xff) continue
+    const field = payload[offset + 1]
+    const lo = payload[offset + 2]
+    const hi = payload[offset + 3]
+    if (pos === 0xff || (pos === 0x00 && field === 0x00 && lo === 0x00 && hi === 0x00)) continue
     slots.push({
       pos,
-      field: payload[offset + 1],
-      value: payload[offset + 2] | (payload[offset + 3] << 8),
+      field,
+      value: lo | (hi << 8),
     })
   }
   return slots

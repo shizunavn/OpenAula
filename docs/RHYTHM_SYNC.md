@@ -1,4 +1,4 @@
-# Rhythm Sync — service 0.3.0 / API 5
+# Rhythm Sync — service 0.3.0 / API 5 & WIN 68 HE MAX WebHID
 
 RGB Settings has Onboard Effects, Custom Effects and Rhythm Sync. Opening a tab
 or choosing a mode changes only the draft. Apply starts background playback;
@@ -6,11 +6,12 @@ subsequent edits are coalesced and bound to that playback session. A restarted
 service or another editor invalidates the old session. Closing the browser
 leaves native playback running. Return to onboard stops host playback.
 
-Without a compatible background service, Rhythm uses the same blurred,
-keyboard-inert gate as Custom Effects. Try demo is available only in that gate.
-The unlocked editor has Apply and Return to onboard; it has no separate demo
-button. Demo is explicitly illustrative synthetic audio, requires no keyboard,
-and does not capture audio or write USB.
+On HERO 68/84 HE without a compatible background service, Rhythm uses the same
+blurred, keyboard-inert gate as Custom Effects. On **AULA WIN 68 HE MAX**, Rhythm
+Sync works **both** through the Windows background service (`Hero68RgbService.exe`)
+**and** directly in the browser over WebHID (`0x18` mode `0x15` + 5 × 14-slot
+`0x2A` batch streaming), using either Web Audio capture (Browser Tab / System Audio
+or Microphone / Line-In) or the built-in Rhythm Synth.
 
 ## Modes and geometry
 
@@ -45,26 +46,28 @@ are removed. Saved Beat Pulse presets/drafts migrate to Dynamic Spectrum
 The remaining modes use the existing loudness/spectrum pipeline and 14-field
 native configuration. Custom Tempo Pulse (manual BPM) is a separate effect.
 
-## WIN 68 HE MAX (XSYD)
+## WIN 68 HE MAX (XSYD `0x5C`) — Verified on `rhythm_capture.pcapng` & Firmware v1.1.4
 
-The capture, DSP and renderer are the same 68-key frame; only the wire format
-differs. The helper recognises the board itself (`VID_1CA2`/`PID_1901`), so the
-`rhythm:` command string is unchanged:
+The capture, DSP and renderer use the 68-key layout (`XSYD_RHYTHM_KEY_IDS`), and
+the wire format is verified byte-for-byte against `rhythm_capture.pcapng` (3,926
+packets, 389 full 5-frame cycles) and firmware `VA 0x0C12E..0x0C2D0`:
 
-- `0x18` write with mode `0x15` (Per-key Color) at full brightness, written once
-  when a session starts, before the first colour batch.
-- `0x2A` batch writes of 14 keys each (`01 <keyValue> <R> <G> <B>`, unused slots
-  `ff 00 00 00`), so one frame is five reports. A frame whose colours did not
-  change sends nothing.
-- `rhythm-stop` writes `0x18` with mode `0x00` (Static) so the board does not
-  freeze on the last rhythm frame.
-- Layout and checksum: `docs/xsyd-protocol.md` sections 1, 8.1 and 8.2. The key
-  order and `usage & 0xff` values are pinned by
-  `tests/rhythm-xsyd-service.test.mjs`.
-
-**Not validated on a physical WIN 68 HE MAX**: the captures in the repository
-come from the official driver, not from this service, and the 20–60 FPS budget
-over five `0x2A` reports per frame has not been measured on the board.
+- **Session init (`0x18`, `LEN = 0x2C`, `#0014`):**
+  `5C 2C 18 BD | 01 00 00 00 00 <28B BGR palette> 00 00 00 00 00 04 15 03 02 00 00`
+  Switches the board to `mode = 0x15` (`Per-key Color`) at full brightness (`4`),
+  speed `3`, `colorIndex = 0`, before the first `0x2A` colour batch.
+- **Per-frame streaming (`0x2A`, `LEN = 0x39`, `#0017..#0021`):**
+  5 batch reports of **14 slots** each (`01 + 14 × [keyValue, R, G, B]`), covering
+  all 68 keys (`4 × 14 + 12 = 68`) with the trailing slots of Batch 4 padded with
+  `00 00 00 00` (`CK = 0xF4` when the 14th slot's Blue byte is `0x00`).
+  Each slot writes directly to `user_rgb` in SRAM (`0x20001EF8 + 3*cell`,
+  `VA 0x0C242..0x0C28C`) with **zero Flash wear** (Flash write `VA 0x11D70` is only
+  invoked if a slot contains the `FE FE FE FE` sentinel).
+  A frame whose colours did not change sends nothing.
+- **Stop / Return to onboard (`stopXsydRhythm` / `rhythm-stop`):**
+  Restores the user's onboard `0x18` lighting configuration (or `mode = 0x00` in
+  standalone helper mode) so the board does not freeze on the last rhythm frame.
+- **Layout and checksum:** `docs/xsyd-protocol.md` sections 1, 8.1, 8.2 and 8.3.
 
 ## Native pipeline
 Windows 10 1703+/11 shared-mode event-driven WASAPI loopback captures the default
