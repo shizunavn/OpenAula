@@ -15,7 +15,7 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 >
 > No coding needed. Share your exact model, firmware version, USB IDs and a layout photo; write **Unknown** if you need help. Protocol captures are optional. Owners who can test on real hardware are especially welcome.
 >
-> **Currently verified: AULA HERO68.** HERO84 and other models still need protocol and hardware validation. The Windows service has HERO84 code paths (84-key RGB frames, Hall stream, Rhythm), but they have not been tested on a real HERO84. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings and advanced keys are checked byte for byte against USB captures, but DKS, Rappy Snappy, DDKS and non-default SOCD modes stay disabled until a capture proves their layout.
+> **Currently verified: AULA HERO68/HERO84(ONLY VERIFIED LIGHTING,RT,AP)/WIN68 MAX.** Other models still need protocol and hardware validation. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings and advanced keys are checked byte for byte against USB captures, but DKS and non-default SOCD modes stay disabled until a capture proves their layout.
 
 
 
