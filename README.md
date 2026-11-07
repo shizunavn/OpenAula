@@ -45,7 +45,7 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 | Actuation Point | Per-key or multi-key actuation from 0.10 to 3.40 mm, with a live Hall test overlay on the keyboard |
 | Rapid Trigger | Rapid Trigger and deadzone settings |
 | Key Remap | Remap keys across layers, with a searchable icon catalog |
-| Advanced Keys | SOCD, DKS, Mod Tap, Toggle, MPT and END bindings (Main Layer). DKS, RS, DDKS and non-default SOCD are disabled on WIN 68 HE MAX until a USB capture proves their frame layout |
+| Advanced Keys | SOCD, DKS, Mod Tap, Toggle, MPT and END bindings (Main Layer). DKS and non-default SOCD are disabled on WIN 68 HE MAX until a USB capture proves their frame layout |
 | Macros | Macro editor with a local library synced to the keyboard |
 | RGB Settings | On-board effects for keys and side light, plus **Custom Effects** and **Rhythm Sync**; per-key painting tools sit directly below the keyboard preview |
 | Gamepad | Setup & Remap with automatic saves, analog response curves/travel, digital AP/RT, Snappy, circle/square, angle adjustment, live tester with XInput verification, and **custom toggle keybinding** to start/stop emulation in-game |
