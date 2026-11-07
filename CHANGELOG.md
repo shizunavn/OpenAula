@@ -3,6 +3,13 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.3.2 - WIN 68 HE MAX Rhythm Sync and Hall polling
+
+- Rhythm Sync runs on WIN 68 HE MAX from the Windows service. The helper already rendered the shared 68-key frame; it now also encodes it for XSYD: `0x18` with mode `0x15` (Per-key Color) once per session, then `0x2A` batch writes of 14 keys each, five per changed frame and nothing at all when the frame is identical to the last one sent. `rhythm-stop` writes `0x18` mode `0x00` so the board does not freeze on the last frame. The captures in this repository come from the official driver, so it is not validated on a physical board.
+- Hall polling on WIN 68 HE MAX no longer falls back to roughly 70-80 Hz when 200 Hz is demanded. A cycle answers travel and pressed as two replies of three 64-byte reports each, so it costs two writes and six blocking reads; the round trip now has a 10 ms write and a 15 ms reply budget instead of 100 ms each.
+- A missed Hall read costs one cycle instead of the device: the service no longer closes and reopens the HID handle on a timeout (which cost a 250-2000 ms backoff), accepts travel and pressed independently, and reuses the last pressed reply when only that half is missing. A write failure still drops the handle.
+- Writing a HERO68 `0x09` lighting frame to an XSYD board now fails with an error instead of reporting a successful write the board never received.
+
 ## 1.3.1 - WIN 68 HE MAX RGB editor fixes
 
 - Rhythm Sync and Custom RGB no longer fail with "Error: unsupported" on WIN 68 HE MAX. The editors handed the board to the HERO68 WebHID manager whenever the service reported `connected`, which sends HERO68's `0x82` identity probe; the handoff now only happens for HERO68/HERO84.
