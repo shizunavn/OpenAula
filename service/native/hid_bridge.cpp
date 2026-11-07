@@ -9,6 +9,7 @@
 #pragma comment(lib, "psapi.lib")
 #include "frame_telemetry.h"
 #include "gamepad_output.h"
+#include "hall_core.h"
 #include "ipc_output.h"
 #include "rhythm_audio.h"
 #include <array>
@@ -433,6 +434,9 @@ struct BridgeSession {
   std::array<std::array<uint32_t, 256>, 3> xsydRemaps{};
   bool xsydRemapsInitialized = false;
   std::array<uint16_t, hall::XsydHallTotalMatrixCount> xsydTravelUm{};
+  // Last decoded `XsydHallSubcmdPressed` reply, kept for cycles whose pressed
+  // read missed while the travel read succeeded.
+  std::array<uint8_t, 192> xsydPressedFrame{};
   std::array<double, hall::Capacity> consumerHz{};
   double nextHallPublish = 0;
   double nextGamepadPublish = 0;
@@ -490,7 +494,11 @@ struct BridgeSession {
       return false;
     }
     if (device->xsyd) {
-      return true;
+      // XSYD boards address keys through XSYD opcodes only; a HERO68 `0x09`
+      // frame has no meaning for them. Fail like a write instead of reporting
+      // a success that never reached the keyboard.
+      emitLine("error:XSYD boards need an XSYD lighting frame");
+      return false;
     }
     std::vector<unsigned char> outBuf(device->output);
     std::copy(request.begin(), request.end(), outBuf.begin());
@@ -515,6 +523,10 @@ struct BridgeSession {
       return;
     }
     if (device->xsyd) {
+      // A HERO68 reply arrives as one report; XSYD splits it over three, so a
+      // cycle costs six blocking reads. Both deadlines here must stay small
+      // (their `io()` timeouts are floored at 1 ms) or a missed deadline stalls
+      // the next one and the measured rate sags well below the demand.
       auto readXsydReply = [&](uint8_t subcmd, uint8_t tableId, std::array<uint8_t, 192>& frameOut) {
         auto req = hall::buildXsydHallRequest(subcmd, tableId);
         std::vector<unsigned char> outBuf(device->output, 0);
@@ -522,14 +534,14 @@ struct BridgeSession {
         const size_t reportOffset = device->output > 64 ? 1 : 0;
         std::copy(req.begin(), req.end(), outBuf.begin() + reportOffset);
         DWORD count = 0;
-        if (!io(*device, outBuf, true, 100, count) || count != outBuf.size()) {
-          return false;
+        if (!io(*device, outBuf, true, hall::XsydWriteTimeoutMs, count) || count != outBuf.size()) {
+          return hall::XsydReadFailed;
         }
-        const double limit = rhythm::clockMs() + 100;
+        const double limit = rhythm::clockMs() + double(hall::XsydReplyBudgetMs);
         size_t collected = 0;
         while (collected < 192 && rhythm::clockMs() < limit) {
           if (!io(*device, inBuf, false, DWORD(std::max(1., limit - rhythm::clockMs())), count)) {
-            return false;
+            return hall::XsydReadFailed;
           }
           const size_t inOffset = count > 64 ? 1 : 0;
           if (count < inOffset + 64) {
@@ -542,17 +554,33 @@ struct BridgeSession {
           std::copy(chunk, chunk + 64, frameOut.begin() + collected);
           collected += 64;
         }
-        return subcmd == hall::XsydHallSubcmdPressed
-                   ? hall::matchesXsydPressedReply(frameOut.data(), collected)
-                   : hall::matchesXsydTravelReply(frameOut.data(), collected);
+        const bool matched =
+            subcmd == hall::XsydHallSubcmdPressed
+                ? hall::matchesXsydPressedReply(frameOut.data(), collected)
+                : hall::matchesXsydTravelReply(frameOut.data(), collected);
+        return matched ? hall::XsydReadOk : hall::XsydReadFailed;
       };
 
+      // Travel and pressed state are separate replies, so either half can be
+      // missing for a cycle. Keep polling the other half instead of dropping
+      // the whole cycle into a backoff.
       std::array<uint8_t, 192> pressedFrame{};
       const uint8_t tableId = (xsydTableStep++ & 1) ? 2 : 1;
       std::array<uint8_t, 192> travelFrame{};
-      if (!readXsydReply(hall::XsydHallSubcmdPressed, 1, pressedFrame) ||
-          !readXsydReply(hall::XsydHallSubcmdTravel, tableId, travelFrame)) {
-        device.reset();
+      const uint8_t travelResult = readXsydReply(hall::XsydHallSubcmdTravel, tableId, travelFrame);
+      const uint8_t pressedResult = readXsydReply(hall::XsydHallSubcmdPressed, 1, pressedFrame);
+      if (travelResult == hall::XsydWriteFailed || pressedResult == hall::XsydWriteFailed) {
+        hallScheduler.failed(rhythm::clockMs());
+        hallFault = true;
+        setGamepadPause();
+        emitLine("hall-error:Hall request timed out");
+        return;
+      }
+      const bool travelOk = travelResult == hall::XsydReadOk;
+      // A missed pressed-state reply reuses the last one, so a key can stay
+      // reported as pressed one cycle longer but never flickers to released.
+      const bool pressedOk = pressedResult == hall::XsydReadOk;
+      if (!travelOk && !pressedOk) {
         hallScheduler.failed(rhythm::clockMs());
         hallFault = true;
         setGamepadPause();
@@ -560,9 +588,14 @@ struct BridgeSession {
         return;
       }
       const size_t baseIndex = (tableId - 1) * hall::XsydHallHalfMatrixCount;
-      for (size_t i = 0; i < hall::XsydHallHalfMatrixCount; ++i) {
-        const uint16_t um = uint16_t(travelFrame[6 + i * 2] | (travelFrame[7 + i * 2] << 8));
-        xsydTravelUm[baseIndex + i] = std::min<uint16_t>(3400, um);
+      if (travelOk) {
+        for (size_t i = 0; i < hall::XsydHallHalfMatrixCount; ++i) {
+          const uint16_t um = uint16_t(travelFrame[6 + i * 2] | (travelFrame[7 + i * 2] << 8));
+          xsydTravelUm[baseIndex + i] = std::min<uint16_t>(3400, um);
+        }
+      }
+      if (pressedOk) {
+        std::copy(pressedFrame.begin(), pressedFrame.end(), xsydPressedFrame.begin());
       }
       const double at = rhythm::clockMs();
       hallFault = false;
@@ -574,7 +607,7 @@ struct BridgeSession {
           continue;
         }
         const uint16_t distanceUnits = uint16_t((xsydTravelUm[idx] + 5) / 10);
-        const bool pressed = pressedFrame[6 + idx] != 0;
+        const bool pressed = xsydPressedFrame[6 + idx] != 0;
         hallScheduler.received(heroPos, distanceUnits, 0, pressed, at);
         gamepadOutput.sample(heroPos, hallScheduler.samples[heroPos]);
       }

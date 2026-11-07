@@ -119,13 +119,32 @@ successful read; missed work is not queued or replayed. Shared cache records hav
 capture timestamps and sequence numbers. Pressure Wave uses capture intervals
 and ignores repeated sequences when calculating strike velocity.
 
-Subscriptions replace their key sets atomically. Closing a browser connection
-releases only its consumer. Gamepad and applied RGB remain in the service. The
+Subscriptions replace their key sets atomically. Closing a browser connectionreleases only its consumer. Gamepad and applied RGB remain in the service. The
 last consumer leaving removes Hall demand and stops subsequent Hall requests;
 an already running request is allowed to complete. A browser connected through
 the service consumes SSE snapshots rather than polling WebHID. Handoff drains
 the old browser polling loop before closing its handle and using the service.
 No firmware calibration or hardware polling-rate setting is changed by gamepad.
+
+### WIN 68 HE MAX (XSYD) transport
+
+The HERO68 batch above covers a key's movement in one report. An XSYD board
+answers travel (`0x12 | 02 <table>`) and pressed state (`0x12 | 03 01`) as two
+separate replies of three 64-byte reports each, so one cycle costs two writes
+and six blocking reads no matter how many keys are demanded. Two rules keep that
+inside a 200 Hz period (5 ms):
+
+- Per round trip the helper allows a 10 ms write and a 15 ms reply budget, and
+  only when the device is silent. Both are constants in `hall_core.h`.
+- A read miss costs the cycle, not the device. The helper no longer closes the
+  handle on a timeout; travel and pressed are accepted independently, and a
+  missed pressed reply reuses the last good one instead of reporting every key
+  released. Only a failed write drops the handle.
+
+Behaviour and limits are pinned by `tests/hall-xsyd-service.test.mjs`. **Not
+measured on a physical WIN 68 HE MAX**: the six reports per cycle have not been
+timed, so 200 Hz is the designed budget, not an observed rate. Read it back
+from `hall-stats` (per-key measured Hz, lifetime p99) before trusting it.
 
 ## Safety and recovery
 

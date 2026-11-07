@@ -34,6 +34,16 @@ constexpr uint8_t XsydHallSubcmdTravel = 0x02;
 constexpr uint8_t XsydHallSubcmdPressed = 0x03;
 constexpr size_t XsydHallHalfMatrixCount = 63;
 constexpr size_t XsydHallTotalMatrixCount = 126;
+// Budgets for one XSYD Hall round trip (`0x12` write + three 64-byte reports).
+// A reply usually takes a couple of milliseconds; these only bound a silent
+// device. `io()` waits at least 1 ms, so the write timeout must stay above the
+// usual USB write latency or every cycle would fail.
+constexpr DWORD XsydWriteTimeoutMs = 10;
+constexpr int XsydReplyBudgetMs = 15;
+constexpr uint8_t XsydReadOk = 0;
+constexpr uint8_t XsydReadFailed = 1;
+// The write failed, so the handle is suspect and the request count is unknown.
+constexpr uint8_t XsydWriteFailed = 2;
 
 constexpr std::array<uint8_t, XsydHallTotalMatrixCount> XsydMatrixToHeroPos{{
      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
