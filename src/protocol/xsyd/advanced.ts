@@ -1,30 +1,31 @@
 // Advanced per-key features of the XSYD `0x5C` protocol (AULA WIN 68 HE MAX).
 //
-// The `0x23` field table cannot express DKS / MT / MPT / TGL: every field there
-// is a single u16 per key. Those features have their own opcodes instead:
+// The `0x23` field table cannot express DKS / MT / MPT / TGL / END / SOCD: every
+// field there is a single u16 per key. Those features have their own opcodes:
 //
-//   0x24 MT    0x25 TGL    0x27 MPT    0x28 END
+//   0x24 MT    0x25 TGL    0x26 DKS    0x27 MPT    0x28 END    0x2C SOCD
 //
-// The opcode numbers above are the ones observed on the wire, which do not
-// always match the names the web driver uses for them (`ProtocolCMD` calls
-// 0x27 `KB2_CMD_TGL`, yet the capture carrying the MPT editor's save sends
-// 0x27). Trust the capture.
+// The opcode numbers above are the ones observed on the wire and verified
+// against the RISC-V firmware dispatch table (`VA 0x07674..0x076A0`).
 //
-// Layout below is read from the web driver (`magnet.aulastar.com`) and checked
-// byte for byte against captures:
+// Layout below is read from the web driver (`magnet.aulastar.com`), cross-checked
+// against firmware v1.1.4 (`VA 0x0B2D6..0x0BF8E` and `VA 0x1470A..0x162FA`), and
+// checked byte for byte against USB captures:
 //
 //   MT   `set_MT_at_W...` / `W_MT_holdZ_ClickE_longpresstrigger200ms`
 //   TGL  `TGL_V_setZ_logpresstriggerdelay200ms`
+//   DKS  `dks_keyW_down1.4-3.4_up3.4-1.4_A-hold1_B-hold2_C-hold3_D-end`
 //   MPT  `set_MT_at_W-holdZ-clickE-setMPT_A-0.5mmA,1mmM,1.5mmN`
 //   END  `S_END_P`
+//   SOCD `socd_AD_on` + `socd_ad_keyinredboxAtakeprecedence_keyinblueboxDtakeprecedence_neutral(changes3modein1capture)`
 //
 // All come from a device announcing ProtocolVersion 1.0.9, so the
 // `advancedKeyV2` branch (since 1.0.3) is the one in use: key codes are one
 // byte, delays are one byte in 10 ms units.
 //
-// Verified by tests/xsyd-advanced.test.mjs.
+// Verified by tests/xsyd-advanced.test.mjs and tests/xsyd-win68-integration.test.mjs.
 
-import {buildXsydFrame} from './codec'
+import {buildXsydFrame, type XsydReply} from './codec'
 import {buildFieldWriteFrame, XsydFeatureField} from './features'
 
 /** ProtocolVersion reported by the WIN 68 HE MAX in the capture handshake. */
@@ -41,6 +42,52 @@ export const XSYD_ADVANCED_DELAY_UNIT_MS = 10
 
 /** Largest hold delay the one-byte wire field can address. */
 export const XSYD_ADVANCED_DELAY_MAX_MS = XSYD_ADVANCED_DELAY_UNIT_MS * 0xff
+
+/**
+ * Verified SOCD resolution modes (`payload[8]` in opcode `0x2C`, evaluated at
+ * firmware `VA 0x14D5C..0x14D72` and `VA 0x1622E..0x162FA`):
+ * - `0x00` (`LastInputPriority`): Last pressed key overrides the earlier key (`socd_AD_on.pcapng`).
+ * - `0x01` (`FirstKeyPriority`): Key 1 (red box) always takes precedence (`#29461` in `socd_ad_...pcapng`).
+ * - `0x02` (`SecondKeyPriority`): Key 2 (blue box) always takes precedence (`#59268` in `socd_ad_...pcapng`).
+ * - `0x03` (`Neutral`): Both keys cancel out when held simultaneously (`#86416` in `socd_ad_...pcapng`).
+ */
+export const XsydSocdMode = {
+  LastInputPriority: 0x00,
+  FirstKeyPriority: 0x01,
+  SecondKeyPriority: 0x02,
+  Neutral: 0x03,
+} as const
+
+export type XsydSocdModeValue = (typeof XsydSocdMode)[keyof typeof XsydSocdMode]
+
+/**
+ * Verified 8-bit DKS phase masks (`payload[10..13]` in opcode `0x26`, evaluated
+ * against ROM table `VA 0x1D524` `[0x01, 0x02, 0x02, 0x02, 0x04, 0x18, 0x20, 0x40, 0x40, 0x40, 0x80]`
+ * at `VA 0x14A8E..0x14BD0` and captured in `dks_keyW_down1.4-3.4_up3.4-1.4_A-hold1_B-hold2_C-hold3_D-end.pcapng`):
+ * - `0x01`: Tap at Phase 0 (start of press)
+ * - `0x04`: Tap at Phase 1 (deep press)
+ * - `0x20`: Tap at Phase 2 (release from deep)
+ * - `0xc0`: Tap at Phase 3 (end of release, `D-end` in capture)
+ * - `0x03`: Hold Phase 0 → Phase 1 (`A-hold1` in capture)
+ * - `0x1c`: Hold Phase 1 → Phase 2 (`B-hold2` in capture)
+ * - `0x60`: Hold Phase 2 → Phase 3 (`C-hold3` in capture)
+ * - `0x1f`: Hold Phase 0 → Phase 2 (`0x03 | 0x1c`)
+ * - `0x7c`: Hold Phase 1 → Phase 3 (`0x1c | 0x60`)
+ * - `0x7f`: Hold Phase 0 → Phase 3 (`0x03 | 0x1c | 0x60`)
+ */
+export const XsydDksMask = {
+  None: 0x00,
+  TapStart: 0x01,
+  TapDeepPress: 0x04,
+  TapReleaseFromDeep: 0x20,
+  TapEndOfRelease: 0xc0,
+  HoldStartToDeepPress: 0x03,
+  HoldDeepPressToRelease: 0x1c,
+  HoldReleaseToEnd: 0x60,
+  HoldStartToReleaseFromDeep: 0x1f,
+  HoldDeepPressToEnd: 0x7c,
+  HoldStartToEnd: 0x7f,
+} as const
 
 function assertCode(code: number, name: string): void {
   if (!Number.isInteger(code) || code < 0 || code > 0xff) {
@@ -120,10 +167,40 @@ export interface XsydMpt {
 }
 
 /**
+ * DKS: Dynamic Keystroke (`0x26`, LEN `0x10` = 16).
+ *
+ * Verified by `dks_keyW_down1.4-3.4_up3.4-1.4_A-hold1_B-hold2_C-hold3_D-end.pcapng` (`#40752`)
+ * and firmware handler `VA 0x0B718..0x0B9FE`:
+ *   `5c 10 26 cc | 01 1a 04 00 05 00 06 00 07 00 03 1c 60 c0 78 05`
+ * - `payload[0] = 0x01` (write flag)
+ * - `payload[1] = key` (`0x1a` = 26 for W)
+ * - `payload[2..9]` = 4 action codes as little-endian `u16` (`04 00 05 00 06 00 07 00`)
+ * - `payload[10..13]` = 4 8-bit phase masks (`03 1c 60 c0`)
+ * - `payload[14..15]` = shallow actuation depth in micrometres as little-endian `u16` (`0x0578` = 1400 µm)
+ */
+export interface XsydDks {
+  /** Action code of the key being configured (`keyValue`, e.g. `0x1a` = 26 for W). */
+  key: XsydKeyCode
+  /** Four action codes (rows 0..3), each encoded as u16 LE on wire. */
+  actions: readonly XsydKeyCode[]
+  /** Explicit 8-bit phase masks `[mask0, mask1, mask2, mask3]`. */
+  masks?: readonly number[]
+  /** OpenAula 4-phase state rows (`states[0..3]`, converted via `encodeXsydDksStateRow`). */
+  states?: readonly (readonly number[])[]
+  /** Shallow actuation depth in micrometres (`100..3400` µm, e.g. `1400` µm = `0x0578`). */
+  actuationUm: number
+}
+
+/**
  * SOCD: simultaneous opposite cardinal direction pair (`0x2C`, LEN 11).
  *
- * Capture `socd_AD_on`: `5c 0b 2c c8 | 01 04 07 00 00 00 00 00 00 00 00`.
- * Only `type = 0`, `mode = 0`, `delay = 0` is verified by capture.
+ * Verified across all 4 modes:
+ * - `socd_AD_on.pcapng`:
+ *   `5c 0b 2c c8 | 01 04 07 00 00 00 00 00 00 00 00` (`mode = 0x00`: Last input priority)
+ * - `socd_ad_keyinredboxAtakeprecedence_keyinblueboxDtakeprecedence_neutral(changes3modein1capture).pcapng`:
+ *   - `#29461`: `5c 0b 2c c8 | 01 04 07 00 00 00 00 00 01 00 00` (`mode = 0x01`: Key 1 / red box priority)
+ *   - `#59268`: `5c 0b 2c c8 | 01 04 07 00 00 00 00 00 02 00 00` (`mode = 0x02`: Key 2 / blue box priority)
+ *   - `#86416`: `5c 0b 2c c8 | 01 04 07 00 00 00 00 00 03 00 00` (`mode = 0x03`: Neutral)
  */
 export interface XsydSocd {
   key1: XsydKeyCode
@@ -133,6 +210,166 @@ export interface XsydSocd {
   type?: number
   mode?: number
   delay?: number
+}
+
+/**
+ * Convert one OpenAula 4-phase DKS row (`[s0, s1, s2, s3]`) into its 8-bit XSYD
+ * wire mask byte (`payload[10 + r]` in opcode `0x26`).
+ */
+export function encodeXsydDksStateRow(row: readonly number[]): number {
+  if (!Array.isArray(row) || row.length !== 4) {
+    throw new RangeError('DKS state row must have 4 phase values')
+  }
+  const [s0, s1, s2, s3] = row
+  if (s0 === 0 && s1 === 0 && s2 === 0 && s3 === 0) {
+    return XsydDksMask.None
+  }
+  if (s0 === 14 && s1 === 0 && s2 === 0 && s3 === 0) {
+    return XsydDksMask.HoldStartToDeepPress
+  }
+  if (s0 === 0 && s1 === 14 && s2 === 0 && s3 === 0) {
+    return XsydDksMask.HoldDeepPressToRelease
+  }
+  if (s0 === 0 && s1 === 0 && s2 === 14 && s3 === 0) {
+    return XsydDksMask.HoldReleaseToEnd
+  }
+  if (s0 === 6 && s1 === 12 && s2 === 0 && s3 === 0) {
+    return XsydDksMask.HoldStartToReleaseFromDeep
+  }
+  if (s0 === 0 && s1 === 6 && s2 === 12 && s3 === 0) {
+    return XsydDksMask.HoldDeepPressToEnd
+  }
+  if (s0 === 6 && s1 === 4 && s2 === 12 && s3 === 0) {
+    return XsydDksMask.HoldStartToEnd
+  }
+  if (row.every(v => v === 0 || v === 10)) {
+    let mask = 0
+    if (s0 === 10) mask |= XsydDksMask.TapStart
+    if (s1 === 10) mask |= XsydDksMask.TapDeepPress
+    if (s2 === 10) mask |= XsydDksMask.TapReleaseFromDeep
+    if (s3 === 10) mask |= XsydDksMask.TapEndOfRelease
+    return mask
+  }
+  throw new RangeError(`Unsupported DKS state row pattern: [${row.join(', ')}]`)
+}
+
+/**
+ * Decode one 8-bit XSYD DKS wire mask byte back into OpenAula's 4-phase state row.
+ */
+export function decodeXsydDksStateMask(mask: number): [number, number, number, number] {
+  if (!Number.isInteger(mask) || mask < 0 || mask > 0xff) {
+    throw new RangeError(`DKS mask must be a byte (0..255), got ${mask}`)
+  }
+  switch (mask) {
+    case XsydDksMask.None:
+      return [0, 0, 0, 0]
+    case XsydDksMask.HoldStartToDeepPress:
+      return [14, 0, 0, 0]
+    case XsydDksMask.HoldDeepPressToRelease:
+      return [0, 14, 0, 0]
+    case XsydDksMask.HoldReleaseToEnd:
+      return [0, 0, 14, 0]
+    case XsydDksMask.HoldStartToReleaseFromDeep:
+      return [6, 12, 0, 0]
+    case XsydDksMask.HoldDeepPressToEnd:
+      return [0, 6, 12, 0]
+    case XsydDksMask.HoldStartToEnd:
+    case 0xff:
+      return [6, 4, 12, 0]
+    default:
+      return [
+        mask & XsydDksMask.TapStart ? 10 : 0,
+        mask & XsydDksMask.TapDeepPress ? 10 : 0,
+        mask & XsydDksMask.TapReleaseFromDeep ? 10 : 0,
+        mask & 0x80 ? 10 : 0,
+      ]
+  }
+}
+
+/**
+ * `0x26` payload for one DKS key (`LEN = 0x10` = 16 bytes).
+ *
+ * Capture `dks_keyW_down1.4-3.4_up3.4-1.4_A-hold1_B-hold2_C-hold3_D-end.pcapng` (`#40752`):
+ * `5c 10 26 cc | 01 1a 04 00 05 00 06 00 07 00 03 1c 60 c0 78 05`
+ */
+export function buildDksPayload(dks: XsydDks): Uint8Array {
+  assertCode(dks.key, 'key')
+  if (!Array.isArray(dks.actions) || dks.actions.length !== 4) {
+    throw new RangeError('DKS requires exactly 4 action codes')
+  }
+  for (const action of dks.actions) {
+    assertCode(action, 'action')
+  }
+  let masks: number[]
+  if (dks.masks !== undefined) {
+    if (!Array.isArray(dks.masks) || dks.masks.length !== 4) {
+      throw new RangeError('DKS requires 4 mask bytes')
+    }
+    for (const m of dks.masks) {
+      assertCode(m, 'mask')
+    }
+    masks = [...dks.masks]
+  } else if (dks.states !== undefined) {
+    if (!Array.isArray(dks.states) || dks.states.length !== 4) {
+      throw new RangeError('DKS requires 4 state rows')
+    }
+    masks = dks.states.map(encodeXsydDksStateRow)
+  } else {
+    throw new RangeError('DKS requires either masks or states')
+  }
+  if (!Number.isInteger(dks.actuationUm) || dks.actuationUm < 100 || dks.actuationUm > 3400) {
+    throw new RangeError('DKS actuationUm must be an integer in 100..3400 µm')
+  }
+  return Uint8Array.from([
+    0x01,
+    dks.key,
+    dks.actions[0],
+    0x00,
+    dks.actions[1],
+    0x00,
+    dks.actions[2],
+    0x00,
+    dks.actions[3],
+    0x00,
+    masks[0],
+    masks[1],
+    masks[2],
+    masks[3],
+    dks.actuationUm & 0xff,
+    (dks.actuationUm >> 8) & 0xff,
+  ])
+}
+
+/**
+ * Decode an `0xA6` DKS reply (`LEN = 0x2E` = 46 bytes, `#40754` in `dks_keyW_...pcapng`).
+ */
+export function decodeDksReply(reply: XsydReply): {
+  key: XsydKeyCode
+  actions: [XsydKeyCode, XsydKeyCode, XsydKeyCode, XsydKeyCode]
+  masks: [number, number, number, number]
+  states: [number, number, number, number][]
+  actuationUm: number
+} {
+  if (reply.opcode !== 0xa6 || reply.payload.length < 16) {
+    throw new Error(`Expected opcode 0xA6 DKS reply, got 0x${reply.opcode.toString(16)}`)
+  }
+  const p = reply.payload
+  const key = p[1]
+  const actions: [number, number, number, number] = [
+    p[2] | (p[3] << 8),
+    p[4] | (p[5] << 8),
+    p[6] | (p[7] << 8),
+    p[8] | (p[9] << 8),
+  ]
+  const masks: [number, number, number, number] = [p[10], p[11], p[12], p[13]]
+  const actuationUm = p[14] | (p[15] << 8)
+  return {
+    key,
+    actions,
+    masks,
+    states: masks.map(decodeXsydDksStateMask),
+    actuationUm,
+  }
 }
 
 /**
@@ -217,9 +454,13 @@ export function buildMptPayload(mpt: XsydMpt): Uint8Array {
 /**
  * `0x2C` payload for one SOCD pair (LEN 11).
  *
- * Capture `socd_AD_on`: `5c 0b 2c c8 | 01 04 07 00 00 00 00 00 00 00 00`.
- * Any non-zero `type`, `mode`, `action1`, `action2`, or `delay` is unverified
- * and rejected before reaching the wire.
+ * Verified across all 4 modes (`mode = 0..3`):
+ * - `mode = 0x00`: Last input priority (`socd_AD_on.pcapng`)
+ * - `mode = 0x01`: Key 1 (red box) takes precedence (`#29461`)
+ * - `mode = 0x02`: Key 2 (blue box) takes precedence (`#59268`)
+ * - `mode = 0x03`: Neutral (`#86416`)
+ * Any non-zero `type`, `action1`, `action2`, or `delay`, or `mode` outside `0..3`,
+ * is rejected before reaching the wire.
  */
 export function buildSocdPayload(socd: XsydSocd): Uint8Array {
   assertCode(socd.key1, 'key1')
@@ -230,10 +471,13 @@ export function buildSocdPayload(socd: XsydSocd): Uint8Array {
   const action1 = socd.action1 ?? 0
   const action2 = socd.action2 ?? 0
   const type = socd.type ?? 0
-  const mode = socd.mode ?? 0
+  const mode = socd.mode ?? XsydSocdMode.LastInputPriority
   const delay = socd.delay ?? 0
-  if (action1 !== 0 || action2 !== 0 || type !== 0 || mode !== 0 || delay !== 0) {
-    throw new RangeError('Only SOCD type=0, mode=0, delay=0 is verified by capture on WIN 68 HE MAX')
+  if (!Number.isInteger(mode) || mode < 0 || mode > 3) {
+    throw new RangeError('SOCD mode must be 0..3 on WIN 68 HE MAX')
+  }
+  if (action1 !== 0 || action2 !== 0 || type !== 0 || delay !== 0) {
+    throw new RangeError('Only SOCD type=0, action1=0, action2=0, delay=0 is verified by capture on WIN 68 HE MAX')
   }
   return Uint8Array.from([
     0x01,
@@ -244,10 +488,49 @@ export function buildSocdPayload(socd: XsydSocd): Uint8Array {
     0x00,
     0x00,
     0x00,
-    0x00,
+    mode,
     0x00,
     0x00,
   ])
+}
+
+/**
+ * Build a `0x2C` read query frame (`5c 0b 2c c8 | 00 <key> 00 00 00 00 00 00 00 0a 00`),
+ * verified by `#12086`, `#47190`, `#73090` in `socd_ad_...pcapng`.
+ */
+export function buildSocdReadFrame(key: XsydKeyCode): Uint8Array {
+  assertCode(key, 'key')
+  return buildXsydFrame(0x2c, [0x00, key, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00])
+}
+
+/**
+ * Decode an `0xAC` SOCD reply (`LEN = 0x0B` = 11 bytes, `#29463`, `#59270`, `#86418`).
+ */
+export function decodeSocdReply(reply: XsydReply): {
+  key1: XsydKeyCode
+  key2: XsydKeyCode
+  action1: number
+  action2: number
+  type: number
+  mode: XsydSocdModeValue
+  delay: number
+} | null {
+  if (reply.opcode !== 0xac || reply.payload.length < 11) {
+    throw new Error(`Expected opcode 0xAC SOCD reply, got 0x${reply.opcode.toString(16)}`)
+  }
+  const p = reply.payload
+  if (p[1] === 0 && p[2] === 0) {
+    return null
+  }
+  return {
+    key1: p[1],
+    key2: p[2],
+    action1: p[3] | (p[4] << 8),
+    action2: p[5] | (p[6] << 8),
+    type: p[7],
+    mode: (p[8] & 0x03) as XsydSocdModeValue,
+    delay: p[9] | (p[10] << 8),
+  }
 }
 
 /** Full 64-byte report body for an MT write. */
@@ -260,6 +543,11 @@ export function buildTglFrame(tgl: XsydTgl): Uint8Array {
   return buildXsydFrame(0x25, buildTglPayload(tgl))
 }
 
+/** Full 64-byte report body for a DKS write (`0x26`, `LEN = 0x10`). */
+export function buildDksFrame(dks: XsydDks): Uint8Array {
+  return buildXsydFrame(0x26, buildDksPayload(dks))
+}
+
 /** Full 64-byte report body for an END write. */
 export function buildEndFrame(end: XsydEnd): Uint8Array {
   return buildXsydFrame(0x28, buildEndPayload(end))
@@ -270,7 +558,7 @@ export function buildMptFrame(mpt: XsydMpt): Uint8Array {
   return buildXsydFrame(0x27, buildMptPayload(mpt))
 }
 
-/** Full 64-byte report body for a verified SOCD write (`type=0, mode=0`). */
+/** Full 64-byte report body for a verified SOCD write (`mode = 0..3`). */
 export function buildSocdFrame(socd: XsydSocd): Uint8Array {
   return buildXsydFrame(0x2c, buildSocdPayload(socd))
 }

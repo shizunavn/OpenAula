@@ -21,11 +21,13 @@ import type { PollingRate, ProfileSlot } from '../hero68/types'
 import type { Hero68ConnectionState, Hero68DeviceSnapshot } from '../hero68/webhid'
 import {
   buildDisableAdvancedKeyFrame,
+  buildDksFrame,
   buildEndFrame,
   buildMptFrame,
   buildMtFrame,
   buildSocdFrame,
   buildTglFrame,
+  encodeXsydDksStateRow,
   XSYD_ADVANCED_DELAY_MAX_MS,
   XSYD_ADVANCED_DELAY_UNIT_MS,
 } from './advanced'
@@ -528,8 +530,9 @@ export function requireXsydKeyValue(keyId: string): number {
 /**
  * Validate Advanced Key bindings specifically for AULA WIN 68 HE MAX (XSYD `0x5C`).
  *
- * - Rejects `DKS`, `RS`, `DDKS`, and `UNKNOWN` (no verified capture layout).
- * - Rejects `SOCD` with `mode !== 0` (only `type=0, mode=0, delay=0` is verified).
+ * - Supports `SOCD` (modes `0..3`), `DKS` (`0x26`), `MT` (`0x24`), `TGL` (`0x25`),
+ *   `MPT` (`0x27`), and `END` (`0x28`).
+ * - Rejects `RS` and `DDKS` (unverified).
  * - Validates micrometre travel bounds (`100..3400` µm) and 10 ms delay byte (`10..2550` ms).
  */
 export function validateXsydAdvanced(
@@ -543,9 +546,6 @@ export function validateXsydAdvanced(
   }
   const used = new Set<string>()
   for (const b of bindings) {
-    if ((b.kind as string) === 'DKS') {
-      throw new Error('DKS is not supported on WIN 68 HE MAX.')
-    }
     if ((b.kind as string) === 'RS' || (b.kind as string) === 'DDKS') {
       throw new Error(`${b.kind} is not supported on WIN 68 HE MAX.`)
     }
@@ -555,7 +555,7 @@ export function validateXsydAdvanced(
       }
       continue
     }
-    if (!['SOCD', 'MT', 'TGL', 'MPT', 'END'].includes(b.kind)) {
+    if (!['SOCD', 'DKS', 'MT', 'TGL', 'MPT', 'END'].includes(b.kind)) {
       throw new Error(`Unsupported Advanced Key type on WIN 68 HE MAX: ${b.kind}`)
     }
     if (b.keys.length !== (b.kind === 'SOCD' ? 2 : 1)) {
@@ -569,12 +569,12 @@ export function validateXsydAdvanced(
       used.add(keyId)
     }
     if (b.kind === 'SOCD') {
-      if (b.mode !== 0) {
-        throw new Error('Only SOCD mode 0 is verified on WIN 68 HE MAX.')
+      if (![0, 1, 2, 3].includes(b.mode)) {
+        throw new Error('Invalid SOCD mode on WIN 68 HE MAX (expected 0–3).')
       }
       continue
     }
-    const expectedActions = b.kind === 'MPT' ? 3 : b.kind === 'MT' ? 2 : 1
+    const expectedActions = b.kind === 'DKS' ? 4 : b.kind === 'MPT' ? 3 : b.kind === 'MT' ? 2 : 1
     if (b.actions.length !== expectedActions) {
       throw new Error('Invalid action count.')
     }
@@ -588,6 +588,30 @@ export function validateXsydAdvanced(
         b.delay > XSYD_ADVANCED_DELAY_MAX_MS
       ) {
         throw new Error(`Delay must be ${XSYD_ADVANCED_DELAY_UNIT_MS}–${XSYD_ADVANCED_DELAY_MAX_MS} ms on WIN 68 HE MAX.`)
+      }
+    }
+    if (b.kind === 'DKS') {
+      if (b.thresholds.length !== 4) {
+        throw new Error('DKS requires 4 depth thresholds.')
+      }
+      const depthsUm = b.thresholds.map(mmToUm)
+      if (depthsUm.some(um => !Number.isInteger(um) || um < minUm || um > maxUm)) {
+        throw new Error(
+          `Depth must be ${umToMm(minUm).toFixed(2)}–${umToMm(maxUm).toFixed(2)} mm (${minUm}–${maxUm} µm).`
+        )
+      }
+      if (depthsUm[0] >= depthsUm[1] || depthsUm[3] >= depthsUm[2]) {
+        throw new Error('Shallow DKS points must be above the deep points.')
+      }
+      if (!Array.isArray(b.states) || b.states.length !== 4) {
+        throw new Error('Invalid DKS action pattern.')
+      }
+      try {
+        for (const row of b.states) {
+          encodeXsydDksStateRow(row)
+        }
+      } catch {
+        throw new Error('Invalid DKS action pattern.')
       }
     }
     if (b.kind === 'MPT') {
@@ -615,6 +639,13 @@ export function encodeXsydAdvancedBinding(binding: AdvancedBinding): Uint8Array 
   validateXsydAdvanced([binding])
   const key = requireXsydKeyValue(binding.keys[0])
   switch (binding.kind) {
+    case 'DKS':
+      return buildDksFrame({
+        key,
+        actions: binding.actions.map(toXsydActionByte),
+        states: binding.states,
+        actuationUm: mmToUm(binding.thresholds[0]),
+      })
     case 'MT':
       return buildMtFrame({
         key,
@@ -644,7 +675,7 @@ export function encodeXsydAdvancedBinding(binding: AdvancedBinding): Uint8Array 
         key1: key,
         key2: requireXsydKeyValue(binding.keys[1]),
         type: 0,
-        mode: 0,
+        mode: binding.mode,
         delay: 0,
       })
     default:
@@ -664,7 +695,13 @@ function xsydBindingSignature(b: AdvancedBinding): string {
     delay: ['MT', 'TGL'].includes(b.kind)
       ? Math.round(b.delay / XSYD_ADVANCED_DELAY_UNIT_MS) * XSYD_ADVANCED_DELAY_UNIT_MS
       : undefined,
-    depthsUm: b.kind === 'MPT' ? b.thresholds.map(mmToUm) : undefined,
+    depthsUm:
+      b.kind === 'MPT'
+        ? b.thresholds.map(mmToUm)
+        : b.kind === 'DKS'
+          ? [mmToUm(b.thresholds[0])]
+          : undefined,
+    masks: b.kind === 'DKS' ? b.states.map(encodeXsydDksStateRow) : undefined,
   })
 }
 
@@ -1346,7 +1383,7 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
       }
       const reply = await this.#requestOnce(frame, timeoutMs)
       if (
-        [0x18, 0x23, 0x24, 0x25, 0x27, 0x28, 0x29, 0x2a, 0x2c].includes(op) &&
+        [0x18, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2c].includes(op) &&
         frame[4] === 0x01
       ) {
         this.#lastSramWriteAt = Date.now()

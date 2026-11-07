@@ -212,12 +212,23 @@ test('WIN 68 HE MAX identification and board descriptor preserve HERO68/84 guard
 })
 
 test('SOCD, disable-binding, handshake, polling rate, and 0x23 readback frames match capture byte for byte', () => {
-  // socd_AD_on.pcapng: 5c 0b 2c c8 | 01 04 07 00 00 00 00 00 00 00 00
-  const socdFrame = xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07 })
-  assert.equal(hex(socdFrame), '5c0b2cc8' + '0104070000000000000000')
+  // socd_AD_on.pcapng & socd_ad_...changes3modein1capture.pcapng: modes 0, 1, 2, 3
+  assert.equal(hex(xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 0 })), '5c0b2cc8' + '0104070000000000000000')
+  assert.equal(hex(xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 1 })), '5c0b2cc8' + '0104070000000000010000')
+  assert.equal(hex(xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 2 })), '5c0b2cc8' + '0104070000000000020000')
+  assert.equal(hex(xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 3 })), '5c0b2cc8' + '0104070000000000030000')
 
-  // Reject unverified SOCD modes/types/delays
-  assert.throws(() => xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 1 }), RangeError)
+  // dks_keyW_down1.4-3.4_up3.4-1.4_A-hold1_B-hold2_C-hold3_D-end.pcapng:
+  const dksFrame = xsydAdvanced.buildDksFrame({
+    key: 0x1a,
+    actions: [0x04, 0x05, 0x06, 0x07],
+    states: [[14, 0, 0, 0], [0, 14, 0, 0], [0, 0, 14, 0], [0, 0, 0, 10]],
+    actuationUm: 1400,
+  })
+  assert.equal(hex(dksFrame), '5c1026cc' + '011a0400050006000700031c60c07805')
+
+  // Reject out-of-range SOCD modes and unverified types/delays
+  assert.throws(() => xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 4 }), RangeError)
   assert.throws(() => xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, type: 1 }), RangeError)
   assert.throws(() => xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, delay: 10 }), RangeError)
 
@@ -523,7 +534,7 @@ test('saveXsydAdvancedBindings, xsydProtocolEncoder, and hydrateFromXsydDevice r
           makeReply(0x23, xsydFeatures.buildFieldWritePayload(readSlots))
         )
       }
-      if ([0x24, 0x25, 0x27, 0x28, 0x2c].includes(op)) {
+      if ([0x24, 0x25, 0x26, 0x27, 0x28, 0x2c].includes(op)) {
         const keyPos = op === 0x27 ? 0x04 : frame[5]
         fieldMemory.set(`${keyPos}:${xsydFeatures.XsydFeatureField.Header}`, 0x20)
         return xsydCodec.decodeXsydFrame(makeReply(op, frame.slice(4, 4 + frame[1])))
@@ -622,10 +633,21 @@ test('saveXsydAdvancedBindings, xsydProtocolEncoder, and hydrateFromXsydDevice r
     deadzoneEnabled: true,
   })
 
-  // 2. Save MT, TGL, MPT, END, and SOCD (mode=0) and verify exact wire bytes
+  // 2. Save DKS, MT, TGL, MPT, END, and SOCD (modes 0, 1, 2, 3) and verify exact wire bytes
   const draft = [
     {
-      ...heroAdvanced.newAdvanced('MT', ['KeyW'], 'win68HeMax'),
+      ...heroAdvanced.newAdvanced('DKS', ['KeyW'], 'win68HeMax'),
+      actions: [4, 5, 6, 7],
+      thresholds: [1.4, 3.4, 3.4, 1.4],
+      states: [
+        [14, 0, 0, 0],
+        [0, 14, 0, 0],
+        [0, 0, 14, 0],
+        [0, 0, 0, 10],
+      ],
+    },
+    {
+      ...heroAdvanced.newAdvanced('MT', ['KeyQ'], 'win68HeMax'),
       actions: [29, 8],
       delay: 200,
     },
@@ -644,147 +666,96 @@ test('saveXsydAdvancedBindings, xsydProtocolEncoder, and hydrateFromXsydDevice r
       actions: [19],
     },
     {
-      ...heroAdvanced.newAdvanced('SOCD', ['KeyA', 'KeyD'], 'win68HeMax'),
+      ...heroAdvanced.newAdvanced('SOCD', ['KeyC', 'KeyB'], 'win68HeMax'),
       keys: ['KeyC', 'KeyB'],
       id: 'KeyC',
-      mode: 0,
+      mode: 1,
     },
   ]
 
   await heroAdvanced.saveAdvancedBindings(requester, 0, draft, [], 'win68HeMax')
   const writtenHexes = sentFrames.map(hex)
-  assert.ok(writtenHexes.includes('5c0724d0' + '011a1d00080014'), 'MT frame matches capture')
+  assert.ok(
+    writtenHexes.includes('5c1026cc' + '011a0400050006000700031c60c07805'),
+    'DKS frame matches dks_keyW_...pcapng byte for byte'
+  )
+  assert.ok(writtenHexes.includes('5c0724d0' + '01141d00080014'), 'MT frame matches capture')
   assert.ok(writtenHexes.includes('5c0525cf' + '01191d0014'), 'TGL frame matches capture')
   assert.ok(
     writtenHexes.includes('5c0e27cb' + '0104040010001100f401e803dc05'),
     'MPT frame matches capture in micrometres'
   )
   assert.ok(writtenHexes.includes('5c0428bd' + '01161300'), 'END frame matches capture')
+  assert.ok(
+    writtenHexes.includes('5c0b2cc8' + '0106050000000000010000'),
+    'SOCD mode 1 frame matches capture layout'
+  )
 
   // 3. Removing a binding writes 0x23 field 0x08 = 0x0000 and verifies readback
   sentFrames.length = 0
-  await heroAdvanced.saveAdvancedBindings(requester, 0, draft.slice(0, 4), draft, 'win68HeMax')
+  await heroAdvanced.saveAdvancedBindings(requester, 0, draft.slice(0, 5), draft, 'win68HeMax')
   assert.ok(
     sentFrames.some(f => f[2] === 0x23 && f[4] === 0x01),
     'Removing binding sends 0x23 field 0x08 = 0 disable frame'
   )
 
-  // 4. DKS and SOCD mode != 0 are rejected before any frame is sent
+  // 4. Out-of-range SOCD mode (> 3) is rejected before any frame is sent
   sentFrames.length = 0
   await assert.rejects(
     () =>
       heroAdvanced.saveAdvancedBindings(
         requester,
         0,
-        [heroAdvanced.newAdvanced('DKS', ['KeyQ'], 'win68HeMax')],
+        [{ ...heroAdvanced.newAdvanced('SOCD', ['KeyA', 'KeyD'], 'win68HeMax'), mode: 4 }],
         [],
         'win68HeMax'
       ),
-    /DKS is not supported on WIN 68 HE MAX/
-  )
-  assert.equal(sentFrames.length, 0)
-
-  await assert.rejects(
-    () =>
-      heroAdvanced.saveAdvancedBindings(
-        requester,
-        0,
-        [{ ...heroAdvanced.newAdvanced('SOCD', ['KeyA', 'KeyD'], 'win68HeMax'), mode: 1 }],
-        [],
-        'win68HeMax'
-      ),
-    /Only SOCD mode 0 is verified/
+    /Invalid SOCD mode on WIN 68 HE MAX/
   )
   assert.equal(sentFrames.length, 0)
 })
 
-test('DKS unsupported modal and badges appear on win68/win68HeMax and never exist on hero68/hero84', () => {
+test('AdvancedKeysPage enables DKS and all 4 verified SOCD modes on win68/win68HeMax and hero68/hero84', () => {
   const oldDoc = globalThis.document
   globalThis.document = { body: {}, addEventListener() {}, removeEventListener() {} }
   try {
     const AdvancedKeysPage = advancedPageMod.default
-    const { DksUnsupportedModal, XSYD_DKS_DOC_URL } = advancedPageMod
+    const { XSYD_SOCD_OPTIONS } = advancedPageMod
 
-    const win68Tree = renderComponent({
-      type: AdvancedKeysPage,
-      props: {
-        model: 'win68',
-        bindings: [],
-        busy: false,
-        pending: false,
-        connected: true,
-        initialDksModalOpen: true,
-        onChange() {},
-      },
-    })
-
-    const win68Buttons = collectNodes(
-      win68Tree,
-      el => el.type === 'button' && el.props?.['data-mode'] !== undefined
+    assert.equal(XSYD_SOCD_OPTIONS.length, 4)
+    assert.deepEqual(
+      XSYD_SOCD_OPTIONS.map(o => ({ value: o.value, verified: o.verified, title: o.title })),
+      [
+        { value: 0, verified: true, title: 'Last input priority' },
+        { value: 1, verified: true, title: 'First key priority' },
+        { value: 2, verified: true, title: 'Second key priority' },
+        { value: 3, verified: true, title: 'Neutral' },
+      ]
     )
-    const win68DksButton = win68Buttons.find(b => b.props['data-mode'] === 'DKS')
-    assert.ok(win68DksButton, 'DKS card button exists on win68')
-    assert.equal(win68DksButton.props['data-unsupported'], 'true')
-    assert.equal(win68DksButton.props['aria-disabled'], 'true')
-    assert.match(textContent(win68DksButton), /Unsupported|Chưa hỗ trợ/)
 
-    assert.equal(win68Buttons.find(b => b.props['data-mode'] === 'RS'), undefined)
-    assert.equal(win68Buttons.find(b => b.props['data-mode'] === 'DDKS'), undefined)
-
-    const win68Modals = collectNodes(
-      win68Tree,
-      el => el.type === 'section' && el.props?.['aria-labelledby'] === 'ak-dks-unsupported-title'
-    )
-    assert.equal(win68Modals.length, 1, 'DKS unsupported modal opens on win68')
-    const modalText = textContent(win68Modals[0])
-    assert.match(modalText, /DKS is not supported on WIN 68 HE MAX/)
-    assert.match(modalText, /MT, TGL, MPT, and END/)
-    const docLinks = collectNodes(
-      win68Modals[0],
-      el => el.type === 'a' && el.props?.href === XSYD_DKS_DOC_URL
-    )
-    assert.equal(docLinks.length, 1, 'Modal links to docs/xsyd-protocol.md §7')
-
-    const trVi = i18nMod.createTranslator('vi')
-    assert.equal(
-      trVi('DKS is not supported on WIN 68 HE MAX'),
-      'DKS chưa được hỗ trợ trên WIN 68 HE MAX'
-    )
-    assert.equal(trVi('Unsupported'), 'Chưa hỗ trợ')
-    assert.equal(trVi('Unverified'), 'Chưa xác minh')
-    assert.equal(trVi('Close'), 'Đóng')
-    assert.equal(trVi('View documentation'), 'Xem tài liệu')
-    assert.ok(renderComponent({ type: DksUnsupportedModal, props: { open: false, onClose() {} } }) === null)
-
-    for (const heroModel of ['hero68', 'hero84']) {
-      const heroTree = renderComponent({
+    for (const model of ['win68', 'win68HeMax', 'hero68', 'hero84']) {
+      const tree = renderComponent({
         type: AdvancedKeysPage,
         props: {
-          model: heroModel,
+          model,
           bindings: [],
           busy: false,
           pending: false,
           connected: true,
-          initialDksModalOpen: true,
           onChange() {},
         },
       })
-      const heroButtons = collectNodes(
-        heroTree,
+      const modeButtons = collectNodes(
+        tree,
         el => el.type === 'button' && el.props?.['data-mode'] !== undefined
       )
-      const heroDksButton = heroButtons.find(b => b.props['data-mode'] === 'DKS')
-      assert.ok(heroDksButton)
-      assert.equal(heroDksButton.props['data-unsupported'], undefined)
-      assert.ok(!textContent(heroDksButton).includes('Unsupported'))
-      assert.equal(heroButtons.find(b => b.props['data-mode'] === 'RS'), undefined)
-      assert.equal(heroButtons.find(b => b.props['data-mode'] === 'DDKS'), undefined)
-
-      const heroModals = collectNodes(
-        heroTree,
-        el => el.type === 'section' && el.props?.['aria-labelledby'] === 'ak-dks-unsupported-title'
-      )
-      assert.equal(heroModals.length, 0, `DKS unsupported modal must not exist on ${heroModel}`)
+      const dksButton = modeButtons.find(b => b.props['data-mode'] === 'DKS')
+      assert.ok(dksButton, `DKS card button exists on ${model}`)
+      assert.equal(dksButton.props['data-unsupported'], undefined, `DKS must be enabled on ${model}`)
+      assert.equal(dksButton.props.disabled, false, `DKS must not be disabled on ${model}`)
+      assert.ok(!textContent(dksButton).includes('Unsupported'))
+      assert.equal(modeButtons.find(b => b.props['data-mode'] === 'RS'), undefined)
+      assert.equal(modeButtons.find(b => b.props['data-mode'] === 'DDKS'), undefined)
     }
   } finally {
     if (oldDoc !== undefined) globalThis.document = oldDoc

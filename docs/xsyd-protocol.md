@@ -187,9 +187,10 @@ opcodes are **wrong**; the table below lists what the device actually received.
 |---|---|---|---|
 | MT (mod tap) | `0x24` | `KB2_CMD_MACRO` | yes |
 | TGL | `0x25` | `KB2_CMD_MACROMODE` | yes |
+| DKS (dynamic keystroke) | `0x26` | `KB2_CMD_DKS` | yes (`dks_keyW_down1.4-3.4_up3.4-1.4_A-hold1_B-hold2_C-hold3_D-end.pcapng`) |
 | MPT (multi-point travel) | `0x27` | `KB2_CMD_TGL` | yes |
 | END | `0x28` | `KB2_CMD_TDKS` | yes |
-| DKS | **unverified** | `KB2_CMD_TDKS` | **no** |
+| SOCD | `0x2C` | `KB2_CMD_SOCD` | yes (`socd_AD_on.pcapng` + `socd_ad_...changes3modein1capture.pcapng`) |
 | DDKS | **unverified** | `KB2_CMD_DDKS` | **no** (`0x29` is Global Actuation read/write at `VA 0x0C092`) |
 | RS | **unverified** | `KB2_CMD_RS` | **no** |
 
@@ -230,21 +231,53 @@ Capture `set_MT_at_W-holdZ-clickE-setMPT_A-0.5mmA,1mmM,1.5mmN`:
 
 Capture `S_END_P`: `5c 04 28 bd | 01 16 13 00`.
 
-### 5.5 Turning advanced keys off
+### 5.5 DKS — `0x26`, LEN 16 (`0x10`), Handler `VA 0x0B718..0x0B9FE`
+
+```
+01 | key | action0(u16_le) | action1(u16_le) | action2(u16_le) | action3(u16_le) | mask0 | mask1 | mask2 | mask3 | actuationUm(u16_le)
+```
+
+- **Capture (`dks_keyW_down1.4-3.4_up3.4-1.4_A-hold1_B-hold2_C-hold3_D-end.pcapng`, `#40752`):**
+  - Request (`OUT`): `5c 10 26 cc | 01 1a 04 00 05 00 06 00 07 00 03 1c 60 c0 78 05`
+  - Reply (`IN`, `#40754`): `5c 2e a6 64 | 00 1a 04 00 05 00 06 00 07 00 03 1c 60 c0 78 05 ff ff ...`
+- **Phase Mask Encoding (`payload[10..13]`, evaluated against ROM table `VA 0x1D524` `[0x01, 0x02, 0x02, 0x02, 0x04, 0x18, 0x20, 0x40, 0x40, 0x40, 0x80]` at `VA 0x14A8E..0x14BD0`):**
+  - `0x00`: No action (`[0, 0, 0, 0]`)
+  - `0x01`: Tap at Phase 0 / Start of press (`[10, 0, 0, 0]`)
+  - `0x04`: Tap at Phase 1 / Deep press (`[0, 10, 0, 0]`)
+  - `0x20`: Tap at Phase 2 / Release from deep (`[0, 0, 10, 0]`)
+  - `0xc0`: Tap at Phase 3 / End of release (`[0, 0, 0, 10]`, `D-end` in capture)
+  - `0x03`: Hold Phase 0 → Phase 1 (`[14, 0, 0, 0]`, `A-hold1` in capture)
+  - `0x1c`: Hold Phase 1 → Phase 2 (`[0, 14, 0, 0]`, `B-hold2` in capture)
+  - `0x60`: Hold Phase 2 → Phase 3 (`[0, 0, 14, 0]`, `C-hold3` in capture)
+  - `0x1f`: Hold Phase 0 → Phase 2 (`[6, 12, 0, 0]`, `0x03 | 0x1c`)
+  - `0x7c`: Hold Phase 1 → Phase 3 (`[0, 6, 12, 0]`, `0x1c | 0x60`)
+  - `0x7f`: Hold Phase 0 → Phase 3 (`[6, 4, 12, 0]`, `0x03 | 0x1c | 0x60`)
+- **Actuation Depth (`payload[14..15]`):**
+  - Little-endian `u16` in micrometres (e.g. `0x0578` = `1400 µm` = `1.40 mm`). Firmware (`VA 0x0B8DE..0x0B97E`) clamps this to `switchMaxTravelUm - 100` (`6(ra)`), sets the deep threshold to `switchMaxTravelUm - 80` (`2(a0)`), sets the bottom-out threshold to `switchMaxTravelUm - 60` (`14(s3)`), and sets `1512(idx)` low nibble to `1` (`DKS`).
+
+### 5.6 Turning advanced keys off
 
 Write `0x23` with field `0x08` and value `0x0000` for the key. Verified by the
 `S_D_F_to-B_C_D_and_revert` capture.
 
 ---
 
-## 6. SOCD — `0x2C`, LEN 11
+## 6. SOCD — `0x2C`, LEN 11 (`0x0B`), Handler `VA 0x0BD20..0x0BF8E`
 
 ```
-flag(01=write) | key1 | key2 | action1(u16) | action2(u16) | type | mode | delay(u16)
+flag(01=write, 00=read) | key1 | key2 | action1(u16_le) | action2(u16_le) | type | mode | delay(u16_le)
 ```
 
-Capture `socd_AD_on`: `5c 0b 2c c8 | 01 04 07 00 00 00 00 00 00 00 00`, reply
-`0xAC`. Wire SOCD only with `type = mode = 0`, which is what the capture proves works.
+Verified across all 4 SOCD resolution modes (`payload[8] = mode`, evaluated at firmware `VA 0x14CA0..0x153FC` and `VA 0x1622E..0x162FA`):
+
+| `mode` (`payload[8]`) | Priority Behavior | Capture Evidence | Exact Frame (`OUT 0x2C`) |
+|---|---|---|---|
+| `0x00` | **Last input priority** (last pressed key overrides the first) | `socd_AD_on.pcapng` | `5c 0b 2c c8 \| 01 04 07 00 00 00 00 00 00 00 00` |
+| `0x01` | **First key priority** (Key 1 / red box takes precedence) | `socd_ad_...changes3modein1capture.pcapng` `#29461` | `5c 0b 2c c8 \| 01 04 07 00 00 00 00 00 01 00 00` |
+| `0x02` | **Second key priority** (Key 2 / blue box takes precedence) | `socd_ad_...changes3modein1capture.pcapng` `#59268` | `5c 0b 2c c8 \| 01 04 07 00 00 00 00 00 02 00 00` |
+| `0x03` | **Neutral** (neither key is active while both are pressed) | `socd_ad_...changes3modein1capture.pcapng` `#86416` | `5c 0b 2c c8 \| 01 04 07 00 00 00 00 00 03 00 00` |
+
+- **Read query (`OUT 0x2C`, `#12086` / `#47190` / `#73090`):** `5c 0b 2c c8 | 00 <key1> 00 00 00 00 00 00 00 0a 00` → Reply `5c 0b ac 48 | 00 <key1> <key2> <action1_u16> <action2_u16> <type> <mode> <delay_u16>` (or all zeros if `key1` is not in SOCD mode).
 
 ---
 
@@ -306,8 +339,7 @@ See `src/protocol/xsyd/rgb.ts`, `src/protocol/serviceLighting.ts`, and `service/
 ## 9. What is still unknown
 | item | why it is unknown |
 |---|---|
-| DKS layout | no capture; the only related frame (`0x28`, LEN 4) turned out to be END |
 | END with several keys | one capture, one key |
 | MPT with 1 or 2 steps | one capture, 3 steps |
-| SOCD mode/type/delay | all zero in the single capture |
-| RS | no capture |
+| SOCD custom `action1`/`action2`/`type=1`/`delay` | standard key mode (`type=0, delay=0`) with all 4 priority modes (`mode = 0..3`) is verified |
+| RS (`0x2D`) | no capture |

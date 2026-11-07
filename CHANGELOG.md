@@ -3,6 +3,17 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.4.3 — WIN 68 HE MAX DKS & 4-Mode SOCD Support
+
+- WIN 68 HE MAX DKS (Dynamic Keystroke) implementation:
+  - Enabled DKS mode for WIN 68 HE MAX via opcode `0x26`, LEN 16 (`0x10`), handler verified against firmware disassembly (`VA 0x0B718..0x0B9FE`).
+  - Implemented 4-phase key actions and phase mask encoding (`payload[10..13]` against ROM table `VA 0x1D524`): Tap Phase 0 (`0x01`), Tap Phase 1 (`0x04`), Tap Phase 2 (`0x20`), Tap Phase 3 (`0xc0`), and Hold spans (`0x03`, `0x1c`, `0x60`, `0x1f`, `0x7c`, `0x7f`).
+  - Added actuation depth setting (`payload[14..15]`) clamped to `switchMaxTravelUm - 100`.
+- WIN 68 HE MAX SOCD support with 4 priority modes:
+  - Implemented opcode `0x2C`, LEN 11 (`0x0B`), handler verified against firmware disassembly (`VA 0x0BD20..0x0BF8E`).
+  - Added 4 resolution modes (`payload[8]`): Last input priority (`0x00`), First key priority (`0x01`), Second key priority (`0x02`), Neutral (`0x03`).
+- Added `.gitattributes` to standardize LF line endings across platforms.
+
 ## 1.4.2 — WIN 68 HE MAX Rhythm Sync Audio Noise Floor Gating & Native Stream Priority
 
 - Audio noise floor gating & dark state fix:
