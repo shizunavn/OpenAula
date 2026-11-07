@@ -109,15 +109,23 @@ export function validateRhythm(input: unknown): RhythmConfiguration {
   };
 }
 
-/** Restore saved drafts without reactivating the removed Beat Pulse mode. */
+/** Restore saved drafts without reactivating the removed Beat Pulse mode or removed web-synth endpoint. */
 export function restoreRhythm(input: unknown): RhythmConfiguration {
-  if (input && typeof input === 'object' && (input as {
-    keyMode?: unknown;
-  }).keyMode === 430) {
-    return validateRhythm({
-      ...input,
-      keyMode: 428
-    });
+  if (input && typeof input === 'object') {
+    const raw = input as {
+      keyMode?: unknown;
+      endpoint?: unknown;
+    };
+    const patched: Record<string, unknown> = {
+      ...(input as Record<string, unknown>)
+    };
+    if (raw.keyMode === 430) {
+      patched.keyMode = 428;
+    }
+    if (raw.endpoint === 'web-synth') {
+      patched.endpoint = 'default';
+    }
+    return validateRhythm(patched);
   }
   return validateRhythm(input);
 }
@@ -151,22 +159,24 @@ export function hslToHex(h: number, sPct: number, lPct: number): string {
 }
 
 /**
- * Render a 68/84-key Rhythm Sync frame from either live Web Audio FFT/waveform data
- * or the built-in synth rhythm generator when `frequencyData` is null.
- * Always emits `#rrggbb` hex strings so frames can be streamed directly over XSYD `0x2A`.
+ * Render a 68/84-key Rhythm Sync frame from live Web Audio FFT/waveform data
+ * (or the illustrative demo generator when `allowSynthFallback` is true).
+ * In live mode (`allowSynthFallback === false`), missing or silent audio stays
+ * 100% dark (`#000000`) with `level === 0` so the preview never animates without music.
  */
 export function renderRhythmAudioFrame(
   config: RhythmConfiguration,
   timeMs: number,
   frequencyData?: Uint8Array | null,
   timeDomainData?: Uint8Array | null,
-  model: HeroDeviceModelId = 'win68HeMax'
+  model: HeroDeviceModelId = 'win68HeMax',
+  allowSynthFallback = false
 ) {
   const board = getBoard(model);
   const t = timeMs / 1000;
   const phase = (t * 2) % 1;
 
-  let level = Math.exp(-phase * 7) * (0.75 + 0.25 * Math.sin(t * 0.7));
+  let level = 0;
   const colBins: number[] = Array(16).fill(0);
 
   if (frequencyData && frequencyData.length > 0) {
@@ -179,10 +189,11 @@ export function renderRhythmAudioFrame(
       const endBin = Math.max(startBin + 1, Math.floor(Math.pow((c + 1) / 16, 1.5) * usableBins));
       let acc = 0;
       for (let b = startBin; b < endBin; b++) {
-        acc += (frequencyData[b] ?? 0) / 255;
+        const raw = frequencyData[b] ?? 0;
+        acc += raw > 4 ? (raw - 4) / 251 : 0;
       }
       const avg = acc / Math.max(1, endBin - startBin);
-      const boosted = Math.min(1, Math.pow(avg, 1.25) * dbGain * sensGain);
+      const boosted = avg > 0 ? Math.min(1, Math.pow(avg, 1.25) * dbGain * sensGain) : 0;
       colBins[c] = boosted;
       energySum += boosted;
     }
@@ -194,9 +205,11 @@ export function renderRhythmAudioFrame(
         rmsAcc += centered * centered;
       }
       const rms = Math.sqrt(rmsAcc / timeDomainData.length);
-      level = Math.min(1, Math.max(level, rms * sensGain * 2.2));
+      const gatedRms = rms > 0.005 ? rms : 0;
+      level = Math.min(1, Math.max(level, gatedRms * sensGain * 2.2));
     }
-  } else {
+  } else if (allowSynthFallback) {
+    level = Math.exp(-phase * 7) * (0.75 + 0.25 * Math.sin(t * 0.7));
     for (let c = 0; c < 16; c++) {
       const nx = c / 15;
       colBins[c] = Math.max(0, Math.min(1, Math.sin(nx * 9 + t * 3) * 0.4 + level * 0.6));
@@ -218,6 +231,12 @@ export function renderRhythmAudioFrame(
     return sum / Math.max(1, weightSum);
   });
 
+  const maxBin = smoothedBins.reduce((m, v) => Math.max(m, v), 0);
+  const isSilentLive = !allowSynthFallback && level < 0.008 && (config.keyMode !== 428 || maxBin < 0.012);
+  if (isSilentLive) {
+    level = 0;
+  }
+
   const keys: Record<string, string> = {};
   const maxRowIndex = Math.max(1, board.rows.length - 1);
   board.rows.forEach((row, y) =>
@@ -225,7 +244,7 @@ export function renderRhythmAudioFrame(
       if (key.spacer) {
         return;
       }
-      if (config.keyMode === 180) {
+      if (config.keyMode === 180 || isSilentLive) {
         keys[key.id] = '#000000';
         return;
       }
@@ -244,14 +263,18 @@ export function renderRhythmAudioFrame(
         case 171:
           value = level;
           break;
-        case 172:
-          value = ny > 1 - Math.exp(-((phase + nx * 0.7) % 1) * 7) * Math.max(0.25, level) ? 1 : 0;
+        case 172: {
+          const streamAmp = allowSynthFallback ? Math.max(0.25, level) : level >= 0.008 ? Math.max(0.25, level) : 0;
+          value = streamAmp > 0 && ny > 1 - Math.exp(-((phase + nx * 0.7) % 1) * 7) * streamAmp ? 1 : 0;
           break;
+        }
         case 173:
           value = Math.hypot(nx - (0.5 + 0.3 * Math.sin(Math.floor(t * 3) * 2)), ny - 0.5) < level * 0.7 ? 1 : 0;
           break;
         case 428:
-          value = ny >= 1 - colEnergy ? 1 : 0.02;
+          value = allowSynthFallback
+            ? (ny >= 1 - colEnergy ? 1 : 0.02)
+            : (colEnergy >= 0.012 && ny >= 1 - colEnergy ? 1 : 0);
           break;
       }
       const hue =
@@ -275,6 +298,9 @@ export function renderRhythmAudioFrame(
   );
   const sideCount = board.capabilities.sideLedCount;
   const side = Array.from({ length: sideCount }, (_, i) => {
+    if (isSilentLive) {
+      return '#181c20';
+    }
     const lit =
       config.sideMode === 501
         ? i < level * sideCount
@@ -292,5 +318,5 @@ export function renderRhythmAudioFrame(
 
 /** Illustrative demo & synth fallback. Emits `#rrggbb` hex colors for every key. */
 export function rhythmDemo(config: RhythmConfiguration, timeMs: number, model: HeroDeviceModelId = 'hero68') {
-  return renderRhythmAudioFrame(config, timeMs, null, null, model);
+  return renderRhythmAudioFrame(config, timeMs, null, null, model, true);
 }

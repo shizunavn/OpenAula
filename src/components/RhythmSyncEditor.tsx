@@ -70,6 +70,8 @@ function RhythmPreview({
     tr
   } = useI18n();
   const xsydStats = useXsydRhythmStats();
+  const xsydStatsRef = useRef(xsydStats);
+  xsydStatsRef.current = xsydStats;
   const [frame, setFrame] = useState<RgbServiceFrame>({
     enabled: false,
     connected: false,
@@ -91,17 +93,7 @@ function RhythmPreview({
         return;
       }
       if (!document.hidden) {
-        if (xsydLive && (!live || !latest.current?.connected)) {
-          const xsydFrame = getXsydCustomRgbFrame() ?? darkKeys;
-          const stats = xsydStats;
-          setFrame({
-            enabled: true,
-            connected: xsydDeviceManager.connected,
-            keys: xsydFrame,
-            side: stats.side,
-            audioLevel: stats.audioLevel,
-          });
-        } else if (simulate) {
+        if (simulate) {
           const sample = rhythmDemo(
             currentConfig.current,
             reduced.matches ? 0 : now - start,
@@ -114,9 +106,21 @@ function RhythmPreview({
             side: sample.side,
             audioLevel: sample.level
           });
-        } else if (latest.current) {
-          setFrame(latest.current);
-          latest.current = null;
+        } else if (live) {
+          if (latest.current) {
+            setFrame(latest.current);
+            latest.current = null;
+          }
+        } else if (xsydLive) {
+          const xsydFrame = getXsydCustomRgbFrame() ?? darkKeys;
+          const stats = xsydStatsRef.current;
+          setFrame({
+            enabled: true,
+            connected: xsydDeviceManager.connected,
+            keys: xsydFrame,
+            side: stats.side,
+            audioLevel: stats.audioLevel,
+          });
         }
       }
       handle = requestAnimationFrame(render);
@@ -147,7 +151,7 @@ function RhythmPreview({
       close?.();
       latest.current = null;
     };
-  }, [simulate, live, xsydLive, paused, sessionId, isWin68, xsydStats]);
+  }, [simulate, live, xsydLive, paused, sessionId, isWin68]);
   return <RgbPreviewPanel source={tr(demo ? 'Simulation' : xsydLive || live ? 'Live · USB output' : 'Draft preview')} hint={tr(xsydLive || live ? (frame.connected || xsydDeviceManager.connected) ? 'Keyboard connected' : 'Previewing · connect WIN 68 HE MAX to stream' : 'Side LEDs retain onboard lighting')} footer={<div className="rhythm-meter">
       <AudioLines size={16} />
       <meter aria-label={tr('Audio level')} min={0} max={1} value={Math.min(1, frame.audioLevel ?? 0)} />
@@ -214,8 +218,8 @@ export default function RhythmSyncEditor({
       setConfig(restored);
       setSession(status.sessionId);
       setError(null);
-      if (isWin68 && (!status.connected || status.lastError?.includes('RGB write failed')) && !xsydLive) {
-        void startXsydRhythm(restored).catch(() => {});
+      if (xsydLive && !restored.endpoint.startsWith('web-')) {
+        void stopXsydRhythm().catch(() => {});
       }
     } else if (session && (!serviceLive || status?.sessionId !== session)) {
       action.current++;
@@ -330,10 +334,13 @@ export default function RhythmSyncEditor({
     queue.current?.close();
     setSession(null);
     try {
-      if (isWin68) {
+      const useBrowserWebAudio = isWin68 && (!compatible || current.current.endpoint.startsWith('web-'));
+      if (useBrowserWebAudio) {
         await startXsydRhythm(current.current);
+      } else if (xsydLive) {
+        await stopXsydRhythm();
       }
-      if (compatible) {
+      if (compatible && !useBrowserWebAudio) {
         const fresh = await refreshRgbService();
         if (fresh && (fresh.apiVersion ?? 0) >= 5) {
           if (hero68HallStream.getSnapshot().active || hero68HallStream.getSnapshot().starting) {
@@ -344,7 +351,9 @@ export default function RhythmSyncEditor({
           }
           const serviceConfig: RhythmConfiguration = current.current.endpoint.startsWith('web-')
             ? { ...current.current, endpoint: 'default', sideMode: 500 }
-            : { ...current.current, sideMode: 500 };
+            : isWin68
+              ? { ...current.current, sideMode: 500 }
+              : current.current;
           const result = await rgbService.rhythmStart(serviceConfig);
           if (token === action.current) {
             publishRgbServiceStatus(result);
@@ -400,10 +409,6 @@ export default function RhythmSyncEditor({
   const selected = RHYTHM_MODES.find(mode => mode.id === config.keyMode)!;
   const webAudioOptions = isWin68 ? [
     {
-      value: 'web-synth',
-      label: tr('Built-in Rhythm Synth (WebHID 0x2A)')
-    },
-    {
       value: 'web-system',
       label: tr('Browser Tab / System Audio (Share audio)')
     },
@@ -449,7 +454,7 @@ export default function RhythmSyncEditor({
               endpoint
             })} options={[{
               value: 'default',
-              label: isWin68 && !compatible ? tr('Default (WebHID Rhythm Synth)') : tr('Follow Windows default')
+              label: tr('Follow Windows default')
             }, ...webAudioOptions, ...(!endpoints.some(d => d.id === config.endpoint) && !webAudioOptions.some(d => d.value === config.endpoint) && config.endpoint !== 'default' ? [{
               value: config.endpoint,
               label: tr('Saved device · unavailable')
@@ -517,7 +522,7 @@ export default function RhythmSyncEditor({
                 })} />{config.spectrum.spatialRadius}</label></>}
           <dl>
               <dt>{tr('Audio')}</dt>
-              <dd>{xsydLive ? `${xsydStats.audioSource === 'system' ? 'Web Audio (System/Tab)' : xsydStats.audioSource === 'mic' ? 'Web Audio (Mic)' : 'Built-in Synth'} · ${(xsydStats.sampleRate / 1000).toFixed(0)} kHz` : `${status?.audioState ?? tr('Stopped')}${status?.sampleRate ? ` · ${status.sampleRate / 1000} kHz` : ''}`}</dd>
+              <dd>{xsydLive ? `${xsydStats.audioSource === 'system' ? 'Web Audio (System/Tab)' : 'Web Audio (Mic)'} · ${(xsydStats.sampleRate / 1000).toFixed(0)} kHz` : `${status?.audioState ?? tr('Stopped')}${status?.sampleRate ? ` · ${status.sampleRate / 1000} kHz` : ''}`}</dd>
               <dt>{tr('Frame time')}</dt>
               <dd>{xsydLive ? '33.00' : (status?.frameMs ?? 0).toFixed(2)} ms</dd>
               <dt>{tr('Frame gap p95')}</dt>

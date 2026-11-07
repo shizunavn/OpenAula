@@ -9,6 +9,8 @@ import {readFile} from 'node:fs/promises'
 const layout = await readFile('src/keyboard/hero68Layout.ts', 'utf8')
 const keymap = await readFile('src/protocol/xsyd/keymap.ts', 'utf8')
 const header = await readFile('service/native/rhythm_core.h', 'utf8')
+const editor = await readFile('src/components/RhythmSyncEditor.tsx', 'utf8')
+const serviceLighting = await readFile('src/protocol/serviceLighting.ts', 'utf8')
 
 const layoutIds = [...layout.matchAll(/\{ id: '([^']+)'/g)].map(m => m[1])
 const usage = new Map(
@@ -57,4 +59,11 @@ test('XSYD rhythm encoder uses the documented 0x18 and 0x2A layouts', () => {
   assert.match(header, /constexpr size_t xsydPerKeySlots = 14;/)
   // Checksum: magic + LEN + OP + 0x35 + last payload byte.
   assert.match(header, /xsydMagic \+ payload\.size\(\) \+ opcode \+ 0x35 \+ payload\.back\(\)/)
+})
+
+test('WIN 68 HE MAX RhythmPreview keeps SSE /frames stable and never overrides service frames with fake synth output', () => {
+  assert.match(editor, /}, \[simulate, live, xsydLive, paused, sessionId, isWin68\]\);/)
+  assert.doesNotMatch(editor, /value:\s*'web-synth'/)
+  assert.match(editor, /const useBrowserWebAudio = isWin68 && \(!compatible \|\| current\.current\.endpoint\.startsWith\('web-'\)\);/)
+  assert.doesNotMatch(serviceLighting, /status\.mode === 'rhythm' && status\.rhythmConfiguration && needsWebHidFallback && !xsydRhythmActive/)
 })

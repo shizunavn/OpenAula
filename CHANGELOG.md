@@ -3,6 +3,20 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.4.2 — WIN 68 HE MAX Rhythm Sync Audio Noise Floor Gating & Native Stream Priority
+
+- Audio noise floor gating & dark state fix:
+  - FFT bins and RMS calculations are now gated (`raw > 4 ? (raw - 4) / 251 : 0`, `rms > 0.005 ? rms : 0`), dropping audio level cleanly to 0 during silence.
+  - When silent (`level < 0.008`), all 68 keys turn completely dark (`#000000`) and side LEDs settle to standby (`#181c20`), preventing visual flicker and artificial synth animations during quiet audio sections.
+- Removed legacy `web-synth` endpoint:
+  - Automatically migrates persisted `web-synth` configuration drafts to default system audio.
+  - Live streaming mode enforces `allowSynthFallback = false`, ensuring real microphone/system audio silence is accurately rendered.
+- Service stream priority & stray loop prevention:
+  - When the native Windows service is actively handling Rhythm Sync, any background browser Web Audio render loops are cleanly stopped to eliminate race conditions and frame conflicts.
+  - Prioritized SSE `/frames` synchronization in `RhythmPreview`, preventing preview jitter between live stream frames and fallback calculations.
+- Comprehensive regression testing:
+  - Added unit test coverage for 100% dark state on silence across all rhythm modes and SSE frame stability in `tests/rhythm.test.mjs` and `tests/rhythm-xsyd-service.test.mjs`.
+
 ## 1.4.1 — WIN 68 HE MAX Rhythm Sync Native USB Write Fix & Unthrottled Web Worker
 
 - Fixed WIN 68 HE MAX Rhythm Sync failure: resolved "Device disconnected or RGB write failed" caused by an overly aggressive board-type check in `writeReport` (`hid_bridge.cpp`) that unconditionally rejected all XSYD writes.

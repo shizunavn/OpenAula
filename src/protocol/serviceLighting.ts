@@ -3,7 +3,7 @@ import { rgbService } from './rgbService';
 import { publishLightingFrame, type LightingFrame } from '../keyboard/lightingPreviewBus';
 import { subscribeRgbService, getRgbServiceState } from './rgbServiceState';
 import { CustomRgbEngine, restoreCustomRgb } from '../keyboard/customRgb';
-import { renderRhythmAudioFrame, restoreRhythm, type RhythmConfiguration } from '../keyboard/rhythm';
+import { renderRhythmAudioFrame, type RhythmConfiguration } from '../keyboard/rhythm';
 import { acceptsRgbPreviewKey } from '../keyboard/rgbPreviewInput';
 import type { RgbProfile } from './hero68/rgb';
 import {
@@ -32,7 +32,7 @@ let xsydRhythmConfig: RhythmConfiguration | null = null;
 let xsydRhythmAudioLevel = 0;
 let xsydRhythmSideFrame: string[] = Array(18).fill('#181c20');
 let xsydRhythmFps = 30;
-let xsydRhythmAudioSource: 'synth' | 'system' | 'mic' = 'synth';
+let xsydRhythmAudioSource: 'synth' | 'system' | 'mic' = 'system';
 let xsydRhythmSampleRate = 48000;
 let xsydAudioContext: AudioContext | null = null;
 let xsydAudioAnalyser: AnalyserNode | null = null;
@@ -115,7 +115,7 @@ let xsydRhythmStatsSnapshot: XsydRhythmStats = {
   fps: 0,
   audioLevel: 0,
   side: xsydRhythmSideFrame,
-  audioSource: 'synth',
+  audioSource: 'system',
   sampleRate: 48000,
   configuration: null,
 };
@@ -183,12 +183,12 @@ function cleanupXsydAudioCapture() {
 async function setupXsydAudioCapture(endpoint: string): Promise<'synth' | 'system' | 'mic'> {
   cleanupXsydAudioCapture();
   if (typeof window === 'undefined' || typeof navigator === 'undefined' || !navigator.mediaDevices) {
-    xsydRhythmAudioSource = 'synth';
-    return 'synth';
+    xsydRhythmAudioSource = 'system';
+    return 'system';
   }
   if (endpoint !== 'web-system' && endpoint !== 'web-mic') {
-    xsydRhythmAudioSource = 'synth';
-    return 'synth';
+    xsydRhythmAudioSource = 'system';
+    return 'system';
   }
   try {
     let stream: MediaStream;
@@ -234,8 +234,8 @@ async function setupXsydAudioCapture(endpoint: string): Promise<'synth' | 'syste
     return xsydRhythmAudioSource;
   } catch {
     cleanupXsydAudioCapture();
-    xsydRhythmAudioSource = 'synth';
-    return 'synth';
+    xsydRhythmAudioSource = endpoint === 'web-mic' ? 'mic' : 'system';
+    return xsydRhythmAudioSource;
   }
 }
 
@@ -313,13 +313,15 @@ function xsydTick() {
       xsydElapsedMs,
       xsydAudioAnalyser ? xsydFreqBuffer : null,
       xsydAudioAnalyser ? xsydTimeBuffer : null,
-      'win68HeMax'
+      'win68HeMax',
+      false
     );
     const releaseFactor = Math.max(0.15, Math.min(0.92, xsydRhythmConfig.releaseMs / 220));
-    xsydRhythmAudioLevel =
+    const nextLevel =
       rendered.level >= xsydRhythmAudioLevel
         ? rendered.level
         : xsydRhythmAudioLevel * releaseFactor + rendered.level * (1 - releaseFactor);
+    xsydRhythmAudioLevel = nextLevel < 0.005 ? 0 : nextLevel;
     xsydRhythmSideFrame = rendered.side;
     xsydRhythmFps = Math.round((1000 / Math.max(16, dt)) * 10) / 10;
     publish(rendered.keys);
@@ -471,6 +473,7 @@ export async function startXsydRhythm(config: RhythmConfiguration): Promise<void
     xsydStreamer.reset();
   }
   xsydRhythmConfig = config;
+  xsydRhythmAudioLevel = 0;
   await setupXsydAudioCapture(config.endpoint);
   xsydRhythmActive = true;
   xsydLastTickAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -482,6 +485,7 @@ export async function startXsydRhythm(config: RhythmConfiguration): Promise<void
 
 export async function stopXsydRhythm(onboardProfile?: RgbProfile): Promise<void> {
   xsydRhythmActive = false;
+  xsydRhythmAudioLevel = 0;
   cleanupXsydAudioCapture();
   if (!xsydCustomActive) {
     clearXsydTimer();
@@ -499,6 +503,7 @@ export async function stopXsydRhythm(onboardProfile?: RgbProfile): Promise<void>
 export async function stopXsydCustomRgb(onboardProfile?: RgbProfile): Promise<void> {
   xsydCustomActive = false;
   xsydRhythmActive = false;
+  xsydRhythmAudioLevel = 0;
   cleanupXsydAudioCapture();
   clearXsydTimer();
   detachXsydKeyListeners();
@@ -531,12 +536,16 @@ function subscribe(listener: () => void) {
         const needsWebHidFallback = !status.connected || Boolean(status.lastError?.includes('RGB write failed'));
         if (status.enabled && status.mode === 'custom' && status.customConfiguration && needsWebHidFallback && !xsydCustomActive) {
           void startXsydCustomRgb(status.customConfiguration).catch(() => {});
-        } else if (status.enabled && status.mode === 'rhythm' && status.rhythmConfiguration && needsWebHidFallback && !xsydRhythmActive) {
-          try {
-            void startXsydRhythm(restoreRhythm(status.rhythmConfiguration)).catch(() => {});
-          } catch {
-            // Ignore invalid rhythm config
+        } else if (status.enabled && status.mode === 'rhythm' && xsydRhythmActive && !xsydAudioAnalyser) {
+          // If the native Windows service is handling Rhythm Sync and no browser Web Audio
+          // stream is active, shut down any stray browser rhythm runner so it never overwrites
+          // real service frames.
+          xsydRhythmActive = false;
+          xsydRhythmAudioLevel = 0;
+          if (!xsydCustomActive) {
+            clearXsydTimer();
           }
+          notifyXsydState();
         } else if (!status.enabled && prevMode && prevMode !== 'onboard' && (xsydCustomActive || xsydRhythmActive)) {
           void stopXsydCustomRgb(status.customConfiguration).catch(() => {});
         }
@@ -559,7 +568,7 @@ function subscribe(listener: () => void) {
                 lastSequence = next.sequence;
               }
             }
-            if (xsydCustomActive || xsydRhythmActive) {
+            if (xsydCustomActive || (xsydRhythmActive && xsydAudioAnalyser)) {
               return;
             }
             if (next.enabled && next.connected && next.keys) {

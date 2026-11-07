@@ -3,7 +3,7 @@ import {test} from 'node:test'
 import {readFileSync} from 'node:fs'
 import {rolldown} from 'rolldown'
 async function bundle(input){const b=await rolldown({input,external:/^node:/});try{const {output}=await b.generate({format:'esm'});return import(`data:text/javascript;base64,${Buffer.from(output[0].code).toString('base64')}`)}finally{await b.close()}}
-const {defaultRhythm,validateRhythm,restoreRhythm,rhythmDemo,RHYTHM_MODES}=await bundle('src/keyboard/rhythm.ts')
+const {defaultRhythm,validateRhythm,restoreRhythm,rhythmDemo,renderRhythmAudioFrame,RHYTHM_MODES}=await bundle('src/keyboard/rhythm.ts')
 const {nativeRhythmCommand}=await bundle('service/rhythm.ts')
 const {HERO68_KEY_POSITIONS}=await bundle('src/protocol/hero68/keyPositions.ts')
 test('rhythm defaults use low-latency controls and reject invalid persisted/API configuration',()=>{
@@ -16,11 +16,12 @@ test('native command preserves endpoint UTF-8 and all control fields, gates unve
   assert.throws(()=>nativeRhythmCommand({...c,keyMode:430}),/Invalid rhythm/)
   for(const sideMode of [501,502,503])assert.throws(()=>nativeRhythmCommand({...c,sideMode}),/not been verified/)
 })
-test('saved removed Beat Pulse migrates to Spectrum while new API commands reject it',()=>{
+test('saved removed Beat Pulse migrates to Spectrum and web-synth migrates to default while new API commands reject 430',()=>{
   const old={...defaultRhythm(),keyMode:430,brightness:53,endpoint:'saved-speakers',color:'#abcdef',syncOffsetMs:-40,tempoMode:'target',tempoBpm:600}
   const migrated=restoreRhythm(old)
   assert.deepEqual(migrated,{...defaultRhythm(),brightness:53,endpoint:'saved-speakers',color:'#abcdef'})
   assert.equal(nativeRhythmCommand(migrated).slice(7).split(';')[0],'428')
+  assert.equal(restoreRhythm({...defaultRhythm(),endpoint:'web-synth'}).endpoint,'default')
   assert.throws(()=>validateRhythm(old));assert.throws(()=>nativeRhythmCommand(old))
   assert.throws(()=>restoreRhythm({...old,keyMode:999}));assert.throws(()=>restoreRhythm({...old,brightness:101}))
   for(const mode of RHYTHM_MODES)assert.deepEqual(restoreRhythm({...defaultRhythm(),keyMode:mode.id}),validateRhythm({...defaultRhythm(),keyMode:mode.id}))
@@ -34,4 +35,20 @@ test('illustrative demo covers every mode and all keys without hardware or hidde
   assert.equal(RHYTHM_MODES.length,7);assert.ok(!RHYTHM_MODES.some(m=>m.id===430));assert.ok(!RHYTHM_MODES.some(m=>m.id===168))
   for(const mode of RHYTHM_MODES){const f=rhythmDemo({...defaultRhythm(),keyMode:mode.id},250);assert.deepEqual(Object.keys(f.keys),Object.keys(HERO68_KEY_POSITIONS));assert.equal(f.side.length,18);assert.ok(f.level>=0&&f.level<=1)}
   assert.ok(Object.values(rhythmDemo({...defaultRhythm(),keyMode:180,palette:'fixed'},0).keys).every(c=>c==='#000000'))
+})
+test('live renderRhythmAudioFrame stays 100% dark with 0% level across all modes when no audio or silence is playing',()=>{
+  const silentFft=new Uint8Array(512)
+  const silentWave=new Uint8Array(1024).fill(128)
+  for(const mode of RHYTHM_MODES){
+    const cfg={...defaultRhythm(),keyMode:mode.id,sideMode:503}
+    const noSource=renderRhythmAudioFrame(cfg,500,null,null,'win68HeMax',false)
+    assert.equal(noSource.level,0,`mode ${mode.id} with null audio must have level 0`)
+    assert.ok(Object.values(noSource.keys).every(c=>c==='#000000'),`mode ${mode.id} with null audio must keep all keys #000000`)
+    assert.ok(noSource.side.every(c=>c==='#181c20'),`mode ${mode.id} with null audio must keep side LEDs dark`)
+
+    const zeroAudio=renderRhythmAudioFrame(cfg,500,silentFft,silentWave,'win68HeMax',false)
+    assert.equal(zeroAudio.level,0,`mode ${mode.id} with silent audio must have level 0`)
+    assert.ok(Object.values(zeroAudio.keys).every(c=>c==='#000000'),`mode ${mode.id} with silent audio must keep all keys #000000`)
+    assert.ok(zeroAudio.side.every(c=>c==='#181c20'),`mode ${mode.id} with silent audio must keep side LEDs dark`)
+  }
 })
