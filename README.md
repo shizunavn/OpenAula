@@ -4,14 +4,14 @@ An open-source, browser-based configurator for **AULA HERO68 / HERO84 / WIN 68 H
 
 Formerly OpenHero68; the rename reflects support for the wider AULA line. Existing installs upgrade in place and keep their settings.
 
-[**Website**](https://open-aula.pages.dev/) · [Open the web app](https://www.google.com/search?q=https://open-aula.pages.dev/) · [Download the Windows service](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest) · [Release notes](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest)
+[**Website**](https://open-aula.pages.dev/) · [Open the web app](https://open-aula.pages.dev/) · [Download the Windows service](https://github.com/shizunavn/OpenAula/releases/latest) · [Release notes](https://github.com/shizunavn/OpenAula/releases/latest)
 
-**Found a problem? [Report a bug](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dbug-report.yml)** — web app, keyboard features, Windows service or installer.
+**Found a problem? [Report a bug](https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dbug-report.yml)** — web app, keyboard features, Windows service or installer.
 
 > [!IMPORTANT]
 > **Own a HERO84 or another Hall-effect keyboard? Help bring support to your model.**
 >
-> **[Request keyboard support →](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dadd-a-board.yml)** · [Submission guide](https://www.google.com/search?q=docs/SUBMIT_A_BOARD.md)
+> **[Request keyboard support →](https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dadd-a-board.yml)** · [Submission guide](docs/SUBMIT_A_BOARD.md)
 >
 > No coding needed. Share your exact model, firmware version, USB IDs and a layout photo; write **Unknown** if you need help. Protocol captures are optional. Owners who can test on real hardware are especially welcome.
 >
@@ -87,7 +87,7 @@ Open the HTTPS URL printed by Vite. WebHID requires a secure context, so Vite cr
 
 ## RGB tray service (Windows)
 
-1. Download and run the Windows x64 setup EXE from [Releases](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest). Choose Desktop shortcut (on by default) and optional Auto-start (off by default). The optional Gamepad driver task appears only when the driver is not installed.
+1. Download and run the Windows x64 setup EXE from [Releases](https://github.com/shizunavn/OpenAula/releases/latest). Choose Desktop shortcut (on by default) and optional Auto-start (off by default). The optional Gamepad driver task appears only when the driver is not installed.
 2. Open OpenAula from Start Menu or the Desktop shortcut. An **H** icon appears in the system tray.
 3. Open the web app and choose **Allow** if the browser asks for access to apps and services on this device.
 4. Go to **RGB Settings → Custom Effects** or **Rhythm Sync**, pick a preset and click **Start Custom** or **Start Rhythm Sync**. Running edits sync automatically; returning to the editor joins existing playback.
@@ -99,7 +99,7 @@ Gamepad starts disabled whenever the service starts. Once enabled, it keeps runn
 
 | | |
 | --- | --- |
-| Control panel | [http://127.0.0.1:16868/](https://www.google.com/search?q=http://127.0.0.1:16868/) |
+| Control panel | [http://127.0.0.1:16868/](http://127.0.0.1:16868/) |
 | Presets and logs | `%LOCALAPPDATA%\OpenAula\rgb-service` |
 | Auto-start | Optional, per Windows account, off by default. Uses the installed stable launcher. |
 | Allowed origins | The deployed web app (`https://open-aula.pages.dev`), legacy origin `https://open-hero68.pages.dev`, and `localhost:5173` / `127.0.0.1:5173`. For another host, start the service with `--allow-origin https://your-host:port`. |
@@ -118,7 +118,7 @@ The installer keeps shortcut and Auto-start choices during automatic updates. Ga
 
 The separate public landing page lives in `landing/`. Build it with
 `npm run build:landing`, check with `npm run check:landing`, and package it with
-`npm run package:landing`. See [landing page development and deployment](https://www.google.com/search?q=landing/README.md).
+`npm run package:landing`. See [landing page development and deployment](landing/README.md).
 
 Production builds and tests require development dependencies. Use `npm ci` (or
 `npm ci --include=dev` if your environment defaults to omitting them) before
@@ -177,7 +177,7 @@ npm run build:setup
 
 The launcher and HID bridge are compiled with MSVC. The TypeScript RGB engine and the Node runtime are bundled into `service/dist/`. Packaging writes `OpenAula-Setup-Windows-x64.exe` to `service/releases/`. `service/version.json` controls the service version, API and pinned toolchain. MSVC is discovered using vswhere; `HERO68_VCVARS` remains an override.
 
-Run `npm run test:setup` for isolated installer/update/rollback smoke tests. See [Setup and release operations](https://www.google.com/search?q=docs/SETUP_UPDATES.md) for release signing and GitHub Actions.
+Run `npm run test:setup` for isolated installer/update/rollback smoke tests. See [Setup and release operations](docs/SETUP_UPDATES.md) for release signing and GitHub Actions.
 
 Helper scripts in `tools/` cover verification (`verify-service-package.mjs`, `verify-service-live.mjs`, …), benchmarking, signing and release publishing.
 
@@ -215,14 +215,14 @@ docs/                Reverse-engineering notes, feature docs, release notes
 
 ## Documentation
 
-- [Custom RGB and the background service](https://www.google.com/search?q=docs/CUSTOM_RGB.md)
-- [Rhythm Sync](https://www.google.com/search?q=docs/RHYTHM_SYNC.md)
-- [Gamepad and shared Hall](https://www.google.com/search?q=docs/GAMEPAD.md) · [Recorded validation results](https://www.google.com/search?q=docs/GAMEPAD_VALIDATION.md)
-- [Macros UI](https://www.google.com/search?q=docs/MACRO_UI.md) · [Advanced Keys UI](https://www.google.com/search?q=docs/ADVANCED_KEYS_UI.md)
-- [Protocol integration notes](https://www.google.com/search?q=src/protocol/README.md)
+- [Custom RGB and the background service](docs/CUSTOM_RGB.md)
+- [Rhythm Sync](docs/RHYTHM_SYNC.md)
+- [Gamepad and shared Hall](docs/GAMEPAD.md) · [Recorded validation results](docs/GAMEPAD_VALIDATION.md)
+- [Macros UI](docs/MACRO_UI.md) · [Advanced Keys UI](docs/ADVANCED_KEYS_UI.md)
+- [Protocol integration notes](src/protocol/README.md)
 - [WIN 68 HE MAX (XSYD 0x5C) protocol](docs/xsyd-protocol.md)
-- [All docs, including reverse-engineering notes](https://www.google.com/search?q=docs/README.md)
-- [Changelog](CHANGELOG.md) · [Service release notes](https://www.google.com/search?q=docs/releases/)
+- [All docs, including reverse-engineering notes](docs/README.md)
+- [Changelog](CHANGELOG.md) · [Service release notes](docs/releases/)
 
 ## Known limitations
 
@@ -235,8 +235,8 @@ docs/                Reverse-engineering notes, feature docs, release notes
 ## Contributing
 
 Want another keyboard model or hardware revision supported? Use the
-[keyboard support form](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dadd-a-board.yml)
-and [submission guide](https://www.google.com/search?q=docs/SUBMIT_A_BOARD.md). Include the exact model, installed
+[keyboard support form](https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dadd-a-board.yml)
+and [submission guide](docs/SUBMIT_A_BOARD.md). Include the exact model, installed
 firmware, USB IDs for each connection and layout. Protocol captures are optional;
 you can submit basic details first and volunteer for hardware testing later.
 
@@ -247,7 +247,7 @@ npm run build
 npm test
 ```
 
-Found a problem? Use the [bug report form](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dbug-report.yml)
+Found a problem? Use the [bug report form](https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dbug-report.yml)
 and tell us what happened in your own words. **Only the problem description is required.**
 English and Vietnamese reports are welcome; screenshots, steps and technical details are optional.
 You do not need to find logs or version numbers to report a bug. We can ask follow-up questions if needed.
