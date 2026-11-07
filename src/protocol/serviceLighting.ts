@@ -3,7 +3,7 @@ import { rgbService } from './rgbService';
 import { publishLightingFrame, type LightingFrame } from '../keyboard/lightingPreviewBus';
 import { subscribeRgbService, getRgbServiceState } from './rgbServiceState';
 import { CustomRgbEngine, restoreCustomRgb } from '../keyboard/customRgb';
-import { renderRhythmAudioFrame, type RhythmConfiguration } from '../keyboard/rhythm';
+import { renderRhythmAudioFrame, restoreRhythm, type RhythmConfiguration } from '../keyboard/rhythm';
 import { acceptsRgbPreviewKey } from '../keyboard/rgbPreviewInput';
 import type { RgbProfile } from './hero68/rgb';
 import {
@@ -42,12 +42,63 @@ let xsydTimeBuffer: Uint8Array | null = null;
 
 const xsydStreamer = new XsydCustomRgbStreamer();
 let xsydStreamBusy = false;
-let xsydTimerHandle: ReturnType<typeof setInterval> | null = null;
+let stopXsydTimer: (() => void) | null = null;
 let xsydElapsedMs = 110;
 let xsydLastTickAt = 0;
 let xsydKeyListenersAttached = false;
+let lastServiceObservedMode: string | undefined;
 const xsydHeldKeys = new Set<string>();
 const xsydStateListeners = new Set<() => void>();
+
+/**
+ * Create an unthrottled repeating timer using a dedicated Web Worker so
+ * Chrome/Edge background-tab throttling (`document.hidden`) never slows down
+ * Custom RGB or Rhythm Sync when the user switches browser tabs.
+ */
+function startUnthrottledInterval(callback: () => void, intervalMs: number): () => void {
+  const ms = Math.max(10, Math.round(intervalMs));
+  if (
+    typeof window !== 'undefined' &&
+    typeof Worker !== 'undefined' &&
+    typeof Blob !== 'undefined' &&
+    typeof URL !== 'undefined' &&
+    typeof URL.createObjectURL === 'function'
+  ) {
+    try {
+      const workerCode = `let t=setInterval(()=>postMessage(0),${ms});onmessage=e=>{if(e.data==='stop'){clearInterval(t);close();}};`;
+      const blobUrl = URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' }));
+      const worker = new Worker(blobUrl);
+      worker.onmessage = () => callback();
+      return () => {
+        try {
+          worker.postMessage('stop');
+          worker.terminate();
+        } catch {
+          // Ignore worker termination errors
+        }
+        try {
+          URL.revokeObjectURL(blobUrl);
+        } catch {
+          // Ignore URL revoke errors
+        }
+      };
+    } catch {
+      // Fall back to standard setInterval if CSP blocks blob workers
+    }
+  }
+  const setTimer = typeof window !== 'undefined' && window.setInterval ? window.setInterval.bind(window) : setInterval;
+  const clearTimer =
+    typeof window !== 'undefined' && window.clearInterval ? window.clearInterval.bind(window) : clearInterval;
+  const handle = setTimer(callback, ms);
+  return () => clearTimer(handle);
+}
+
+function clearXsydTimer() {
+  if (stopXsydTimer) {
+    stopXsydTimer();
+    stopXsydTimer = null;
+  }
+}
 
 export type XsydRhythmStats = {
   active: boolean;
@@ -146,7 +197,6 @@ async function setupXsydAudioCapture(endpoint: string): Promise<'synth' | 'syste
         audio: true,
         video: true,
       });
-      // Stop video tracks immediately if the browser required video=true for tab/system audio capture
       for (const vTrack of stream.getVideoTracks()) {
         vTrack.stop();
       }
@@ -207,11 +257,15 @@ function onXsydWindowKeyUp(event: KeyboardEvent) {
 }
 
 function onXsydWindowBlur() {
-  if (!xsydCustomEngine) {
+  if (!xsydCustomEngine || xsydHeldKeys.size === 0) {
     return;
   }
+  // Only release physically held keys when focus leaves the window; do not
+  // reset ongoing non-key animations or clear the engine clock.
+  for (const code of xsydHeldKeys) {
+    xsydCustomEngine.event(code, false);
+  }
   xsydHeldKeys.clear();
-  xsydCustomEngine.releaseAll();
 }
 
 function attachXsydKeyListeners() {
@@ -236,9 +290,18 @@ function detachXsydKeyListeners() {
 
 function xsydTick() {
   const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  const dt = xsydLastTickAt > 0 ? Math.max(1, Math.min(100, now - xsydLastTickAt)) : 33;
+  const dt = xsydLastTickAt > 0 ? Math.max(1, Math.min(500, now - xsydLastTickAt)) : 33;
   xsydLastTickAt = now;
   xsydElapsedMs += dt;
+
+  // If the native C++ service is connected and actively streaming without errors,
+  // let the native service own the USB pipe.
+  const serviceStatus = getRgbServiceState().status;
+  const nativeOwnsUsb = Boolean(
+    serviceStatus?.enabled &&
+    serviceStatus.connected &&
+    !serviceStatus.lastError
+  );
 
   if (xsydRhythmActive && xsydRhythmConfig) {
     if (xsydAudioAnalyser && xsydFreqBuffer && xsydTimeBuffer) {
@@ -258,9 +321,11 @@ function xsydTick() {
         ? rendered.level
         : xsydRhythmAudioLevel * releaseFactor + rendered.level * (1 - releaseFactor);
     xsydRhythmSideFrame = rendered.side;
-    xsydRhythmFps = Math.round((1000 / dt) * 10) / 10;
+    xsydRhythmFps = Math.round((1000 / Math.max(16, dt)) * 10) / 10;
     publish(rendered.keys);
-    streamFrameToXsyd(rendered.keys, true);
+    if (!nativeOwnsUsb) {
+      streamFrameToXsyd(rendered.keys, true);
+    }
     notifyXsydState();
     return;
   }
@@ -271,7 +336,9 @@ function xsydTick() {
   xsydCustomEngine.advance(xsydElapsedMs);
   const rendered = xsydCustomEngine.frame();
   publish(rendered.keys);
-  streamFrameToXsyd(rendered.keys, false);
+  if (!nativeOwnsUsb) {
+    streamFrameToXsyd(rendered.keys, false);
+  }
 }
 
 export function isXsydCustomRgbActive(): boolean {
@@ -312,7 +379,10 @@ export function updateXsydCustomRgbProfile(profile: RgbProfile): void {
     if (xsydCustomActive) {
       const rendered = xsydCustomEngine.frame();
       publish(rendered.keys);
-      streamFrameToXsyd(rendered.keys, false);
+      const serviceStatus = getRgbServiceState().status;
+      if (!(serviceStatus?.enabled && serviceStatus.connected && !serviceStatus.lastError)) {
+        streamFrameToXsyd(rendered.keys, false);
+      }
     }
   }
 }
@@ -333,7 +403,16 @@ export async function startXsydCustomRgb(profile: RgbProfile): Promise<void> {
     xsydRhythmActive = false;
     cleanupXsydAudioCapture();
   }
-  if (xsydDeviceManager.connected) {
+  if (!xsydDeviceManager.connected && (await xsydDeviceManager.hasAuthorizedDevice())) {
+    await xsydDeviceManager.connect(false).catch(() => {});
+  }
+  const serviceStatus = getRgbServiceState().status;
+  const nativeOwnsUsb = Boolean(
+    serviceStatus?.enabled &&
+    serviceStatus.connected &&
+    !serviceStatus.lastError
+  );
+  if (xsydDeviceManager.connected && !nativeOwnsUsb) {
     await xsydDeviceManager.request(
       buildXsydRgbWriteFrame({
         mode: XSYD_PER_KEY_RGB_MODE,
@@ -364,11 +443,8 @@ export async function startXsydCustomRgb(profile: RgbProfile): Promise<void> {
   xsydCustomActive = true;
   xsydLastTickAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
   attachXsydKeyListeners();
-  if (xsydTimerHandle !== null) {
-    clearInterval(xsydTimerHandle);
-  }
-  const setTimer = typeof window !== 'undefined' && window.setInterval ? window.setInterval.bind(window) : setInterval;
-  xsydTimerHandle = setTimer(xsydTick, 33);
+  clearXsydTimer();
+  stopXsydTimer = startUnthrottledInterval(xsydTick, 33);
   xsydTick();
   notifyXsydState();
 }
@@ -383,8 +459,13 @@ export async function startXsydRhythm(config: RhythmConfiguration): Promise<void
   if (!xsydDeviceManager.connected && (await xsydDeviceManager.hasAuthorizedDevice())) {
     await xsydDeviceManager.connect(false).catch(() => {});
   }
-  if (xsydDeviceManager.connected) {
-    // Matches `rhythm_capture.pcapng` #0014: switch to mode 0x15 (Per-Key RGB), brightness 4, speed 3, colorIndex 0
+  const serviceStatus = getRgbServiceState().status;
+  const nativeOwnsUsb = Boolean(
+    serviceStatus?.enabled &&
+    serviceStatus.connected &&
+    !serviceStatus.lastError
+  );
+  if (xsydDeviceManager.connected && !nativeOwnsUsb) {
     await xsydStreamer.start(xsydDeviceManager, XSYD_MAX_BRIGHTNESS);
   } else {
     xsydStreamer.reset();
@@ -393,11 +474,8 @@ export async function startXsydRhythm(config: RhythmConfiguration): Promise<void
   await setupXsydAudioCapture(config.endpoint);
   xsydRhythmActive = true;
   xsydLastTickAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  if (xsydTimerHandle !== null) {
-    clearInterval(xsydTimerHandle);
-  }
-  const setTimer = typeof window !== 'undefined' && window.setInterval ? window.setInterval.bind(window) : setInterval;
-  xsydTimerHandle = setTimer(xsydTick, 33);
+  clearXsydTimer();
+  stopXsydTimer = startUnthrottledInterval(xsydTick, 33);
   xsydTick();
   notifyXsydState();
 }
@@ -405,9 +483,8 @@ export async function startXsydRhythm(config: RhythmConfiguration): Promise<void
 export async function stopXsydRhythm(onboardProfile?: RgbProfile): Promise<void> {
   xsydRhythmActive = false;
   cleanupXsydAudioCapture();
-  if (!xsydCustomActive && xsydTimerHandle !== null) {
-    clearInterval(xsydTimerHandle);
-    xsydTimerHandle = null;
+  if (!xsydCustomActive) {
+    clearXsydTimer();
   }
   const targetZone = onboardProfile?.keys ?? xsydCustomProfile?.keys;
   if (xsydDeviceManager.connected && targetZone) {
@@ -423,10 +500,7 @@ export async function stopXsydCustomRgb(onboardProfile?: RgbProfile): Promise<vo
   xsydCustomActive = false;
   xsydRhythmActive = false;
   cleanupXsydAudioCapture();
-  if (xsydTimerHandle !== null) {
-    clearInterval(xsydTimerHandle);
-    xsydTimerHandle = null;
-  }
+  clearXsydTimer();
   detachXsydKeyListeners();
   xsydHeldKeys.clear();
   xsydCustomEngine?.releaseAll();
@@ -448,6 +522,24 @@ function subscribe(listener: () => void) {
       const status = getRgbServiceState().status;
       if (current !== generation) {
         return;
+      }
+      // Sync WebHID fallback with service mode transitions (e.g. "Start saved RGB"
+      // or "Onboard RGB" triggered from the tray app / service control panel).
+      if (status) {
+        const prevMode = lastServiceObservedMode;
+        lastServiceObservedMode = status.enabled ? status.mode : 'onboard';
+        const needsWebHidFallback = !status.connected || Boolean(status.lastError?.includes('RGB write failed'));
+        if (status.enabled && status.mode === 'custom' && status.customConfiguration && needsWebHidFallback && !xsydCustomActive) {
+          void startXsydCustomRgb(status.customConfiguration).catch(() => {});
+        } else if (status.enabled && status.mode === 'rhythm' && status.rhythmConfiguration && needsWebHidFallback && !xsydRhythmActive) {
+          try {
+            void startXsydRhythm(restoreRhythm(status.rhythmConfiguration)).catch(() => {});
+          } catch {
+            // Ignore invalid rhythm config
+          }
+        } else if (!status.enabled && prevMode && prevMode !== 'onboard' && (xsydCustomActive || xsydRhythmActive)) {
+          void stopXsydCustomRgb(status.customConfiguration).catch(() => {});
+        }
       }
       if (status?.enabled && (status.apiVersion ?? 0) >= 2) {
         if (!closeFrames) {
@@ -474,9 +566,6 @@ function subscribe(listener: () => void) {
               const allBlack = Object.values(next.keys).every(c => c === '#000000');
               if (!allBlack || status.mode === 'rhythm') {
                 publish(next.keys);
-                if (status.mode === 'rhythm' && xsydDeviceManager.connected) {
-                  streamFrameToXsyd(next.keys, true);
-                }
               }
             } else {
               publish(null);

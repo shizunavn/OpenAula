@@ -58,6 +58,24 @@ int main() {
     std::set<int> narrowSeen;for(size_t i=0;i<narrowBody.size();){const size_t n=narrowBody[i+3];for(size_t k=0;k<n;++k)narrowSeen.insert(narrowBody[i+4+k]);i+=4+n;}
     assert(narrowSeen.size()==68);for(auto extra:hero84Extras)assert(!narrowSeen.count(extra[0]));
   }
+  {
+    // Verify WIN 68 HE MAX (XSYD) custom batch decoding and 0x18/0x2A encoding.
+    const auto decoded = decodeCustomBatch(encoded.packets);
+    assert(decoded.keys == encoded.keys);
+    std::array<Color, 68> prev{};
+    bool primed = false;
+    const auto xsydFirst = encodeXsyd(decoded, prev, primed);
+    assert(primed);
+    assert(xsydFirst.packets.size() == 6); // 1x 0x18 mode 0x15 + 5x 0x2A batches
+    assert(xsydFirst.packets[0][0] == 0x5c && xsydFirst.packets[0][2] == 0x18);
+    for (size_t i = 1; i < 6; ++i) {
+      assert(xsydFirst.packets[i][0] == 0x5c && xsydFirst.packets[i][1] == 0x39 && xsydFirst.packets[i][2] == 0x2a);
+    }
+    const auto xsydUnchanged = encodeXsyd(decoded, prev, primed);
+    assert(xsydUnchanged.packets.empty());
+    const auto restore = xsydOnboardRestoreReport();
+    assert(restore[0] == 0x5c && restore[2] == 0x18);
+  }
   const auto begin=std::chrono::steady_clock::now();for(int i=0;i<1000;++i)encode(rainbow);
   const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count()/1000;
   std::cout<<"Native rhythm tests passed; worst-palette encode mean "<<ms<<" ms\n";

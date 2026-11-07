@@ -156,7 +156,7 @@ export function createRgbController({
     ctx.fps = 0;
     ctx.sessionId = randomUUID();
     ctx.frameSequence = 0;
-    if (ctx.connected) {
+    if (ctx.connected && ctx.deviceModel !== 'win68HeMax') {
       try {
         await bridge.request(
           buildReport({

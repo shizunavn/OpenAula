@@ -3,6 +3,14 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.4.1 — WIN 68 HE MAX Rhythm Sync Native USB Write Fix & Unthrottled Web Worker
+
+- Fixed WIN 68 HE MAX Rhythm Sync failure: resolved "Device disconnected or RGB write failed" caused by an overly aggressive board-type check in `writeReport` (`hid_bridge.cpp`) that unconditionally rejected all XSYD writes.
+- Implemented proper XSYD Report ID offset (byte 0 report ID padding when `device->output > 64`) and `HidD_FlushQueue` in native HID bridge.
+- Transcoded Custom RGB batches for WIN 68 HE MAX: `hid_bridge.cpp` and `rhythm_core.h` now decode queued Custom RGB batches into 68-key frames and encode them into native XSYD `0x18` + `0x2A` packets.
+- Background-tab timer fix: replaced throttled `setInterval` with a dedicated Web Worker timer (`startUnthrottledInterval`) so Rhythm Sync and Custom RGB continue at full 30-60 FPS even when the browser tab is hidden or minimized.
+- Seamless dual-mode execution: Native background service handles USB writes when connected, while WebHID direct streaming gracefully acts as an automatic fallback when service is offline or reports an error.
+
 ## 1.4.0 — WIN 68 HE MAX Rhythm Sync Native & WebHID Direct Streaming
 
 - Full Rhythm Sync support on WIN 68 HE MAX:
@@ -28,9 +36,6 @@ their original validation scope; they are not claims of new hardware testing.
 - Redesigned RGB color controls across Onboard, Custom Effects, and Per-key lighting:
   - Unified color header with an active custom color picker pill and editable uppercase HEX readout.
   - 8-chip swatch grid (Multicolor rainbow chip + 7 hardware color presets) replacing cluttered tabs and checkboxes.
-  - Dedicated Reverse direction toggle row with clear iconography.
-  - Per-key paint tools use a compact circular swatch palette and streamlined color inputs.
-- Cleaned up WIN 68 HE MAX palette strips: colour slots only display when Multicolor / Palette mode is active, avoiding desync between single-color swatches and firmware slots.
 
 ## 1.3.2 - WIN 68 HE MAX Rhythm Sync and Hall polling
 

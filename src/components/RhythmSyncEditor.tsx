@@ -21,7 +21,7 @@ import { latestUpdates } from '../protocol/latestUpdates';
 import { rgbFrameGuard } from '../protocol/rgbFrameGuard';
 import { BRAND } from '../brand';
 import { hero68DeviceManager } from '../protocol/hero68/webhid';
-import { xsydDeviceManager, XsydCustomRgbStreamer } from '../protocol/xsyd/device';
+import { xsydDeviceManager } from '../protocol/xsyd/device';
 import { hero68HallStream } from '../protocol/hero68/hallStream';
 import { useI18n } from '../i18n';
 import { DeviceModelContext } from '../app/DeviceModelContext';
@@ -91,7 +91,7 @@ function RhythmPreview({
         return;
       }
       if (!document.hidden) {
-        if (xsydLive) {
+        if (xsydLive && (!live || !latest.current?.connected)) {
           const xsydFrame = getXsydCustomRgbFrame() ?? darkKeys;
           const stats = xsydStats;
           setFrame({
@@ -121,21 +121,13 @@ function RhythmPreview({
       }
       handle = requestAnimationFrame(render);
     };
-    if (!paused && !simulate && live && !xsydLive) {
-      const xsydStreamer = new XsydCustomRgbStreamer();
-      let xsydBusy = false;
+    if (!paused && !simulate && live) {
       close = rgbService.frames(value => {
         if (!disposed && accept(value)) {
           latest.current = {
             ...value,
             keys: value.enabled && value.connected && value.keys ? value.keys : darkKeys
           };
-          if (value.enabled && value.connected && value.keys && xsydDeviceManager.connected && !xsydBusy) {
-            xsydBusy = true;
-            void xsydStreamer.pushRhythmCycle(xsydDeviceManager, value.keys).catch(() => {}).finally(() => {
-              xsydBusy = false;
-            });
-          }
         }
       });
     }
@@ -156,7 +148,7 @@ function RhythmPreview({
       latest.current = null;
     };
   }, [simulate, live, xsydLive, paused, sessionId, isWin68, xsydStats]);
-  return <RgbPreviewPanel source={tr(demo ? 'Simulation' : xsydLive || live ? 'Live · USB output' : 'Draft preview')} hint={tr(xsydLive ? xsydDeviceManager.connected ? 'WIN 68 HE MAX connected (0x2A stream)' : 'Previewing · connect WIN 68 HE MAX to stream' : live ? frame.connected ? 'Keyboard connected' : 'Waiting for keyboard' : 'Side LEDs retain onboard lighting')} footer={<div className="rhythm-meter">
+  return <RgbPreviewPanel source={tr(demo ? 'Simulation' : xsydLive || live ? 'Live · USB output' : 'Draft preview')} hint={tr(xsydLive || live ? (frame.connected || xsydDeviceManager.connected) ? 'Keyboard connected' : 'Previewing · connect WIN 68 HE MAX to stream' : 'Side LEDs retain onboard lighting')} footer={<div className="rhythm-meter">
       <AudioLines size={16} />
       <meter aria-label={tr('Audio level')} min={0} max={1} value={Math.min(1, frame.audioLevel ?? 0)} />
       <span>{Math.round((frame.audioLevel ?? 0) * 100)}%</span>
@@ -211,23 +203,27 @@ export default function RhythmSyncEditor({
   // Rejoin the service's current configuration. Merely opening this editor never
   // writes the old local draft or restarts audio capture.
   useEffect(() => {
-    if (busy || demo || xsydLive) {
+    if (busy || demo) {
       return;
     }
     if (compatible && serviceLive && status?.sessionId && status.rhythmConfiguration && session !== status.sessionId) {
       action.current++;
       queue.current?.close();
       queue.current = null;
-      setConfig(restoreRhythm(status.rhythmConfiguration));
+      const restored = restoreRhythm(status.rhythmConfiguration);
+      setConfig(restored);
       setSession(status.sessionId);
       setError(null);
+      if (isWin68 && (!status.connected || status.lastError?.includes('RGB write failed')) && !xsydLive) {
+        void startXsydRhythm(restored).catch(() => {});
+      }
     } else if (session && (!serviceLive || status?.sessionId !== session)) {
       action.current++;
       queue.current?.close();
       queue.current = null;
       setSession(null);
     }
-  }, [compatible, serviceLive, xsydLive, status, session, busy, demo]);
+  }, [compatible, serviceLive, xsydLive, isWin68, status, session, busy, demo]);
   useEffect(() => {
     try {
       localStorage.setItem(draftKey, JSON.stringify(config));
@@ -252,7 +248,7 @@ export default function RhythmSyncEditor({
     };
   }, [compatible]);
   useEffect(() => {
-    if (!applied || demo || xsydLive) {
+    if (!applied || demo || !serviceLive || !session) {
       queue.current?.close();
       queue.current = null;
       return;
@@ -264,7 +260,10 @@ export default function RhythmSyncEditor({
       if (disposed || !active?.enabled || active.mode !== 'rhythm' || active.sessionId !== session) {
         return;
       }
-      const result = await rgbService.rhythmUpdate(configuration, session!);
+      const sendable = configuration.endpoint.startsWith('web-')
+        ? { ...configuration, endpoint: 'default' }
+        : configuration;
+      const result = await rgbService.rhythmUpdate(sendable, session!);
       if (!disposed && token === action.current && getRgbServiceState().status?.sessionId === session) {
         publishRgbServiceStatus(result);
       }
@@ -281,7 +280,7 @@ export default function RhythmSyncEditor({
         queue.current = null;
       }
     };
-  }, [applied, session, demo, xsydLive]);
+  }, [applied, serviceLive, session, demo]);
   useEffect(() => () => {
     action.current++;
     queue.current?.close();
@@ -296,14 +295,13 @@ export default function RhythmSyncEditor({
     setConfig(next);
     if (xsydLive) {
       updateXsydRhythmConfig(next);
-      return;
     }
-    if (applied && !demo) {
+    if (serviceLive && session && !demo) {
       if (!(status?.supportedRhythmModes?.includes(next.keyMode) ?? true)) {
         setError(tr('Update the background app to use this rhythm mode.'));
         return;
       }
-      if (next.sideMode !== 500 && !status?.supportedRhythmSideModes?.includes(next.sideMode)) {
+      if (!isWin68 && next.sideMode !== 500 && !status?.supportedRhythmSideModes?.includes(next.sideMode)) {
         setError(tr('This firmware does not support live side rhythm. Keys keep playing with the last supported settings.'));
         return;
       }
@@ -314,30 +312,7 @@ export default function RhythmSyncEditor({
     if (busy) {
       return;
     }
-    const useWebHidDirect = isWin68 && (!compatible || current.current.endpoint.startsWith('web-'));
-    if (useWebHidDirect) {
-      const token = ++action.current;
-      setBusy(true);
-      setError(null);
-      queue.current?.close();
-      setSession(null);
-      try {
-        await startXsydRhythm(current.current);
-        if (token === action.current) {
-          setDemo(false);
-        }
-      } catch (e) {
-        if (token === action.current) {
-          setError(e instanceof Error ? e.message : String(e));
-        }
-      } finally {
-        if (token === action.current) {
-          setBusy(false);
-        }
-      }
-      return;
-    }
-    if (!compatible) {
+    if (!compatible && !isWin68) {
       onSetup();
       return;
     }
@@ -355,39 +330,36 @@ export default function RhythmSyncEditor({
     queue.current?.close();
     setSession(null);
     try {
-      const fresh = await refreshRgbService();
-      if (!fresh || (fresh.apiVersion ?? 0) < 5) {
-        throw Error(tr('Update the Windows background app to 0.3.0 or later.'));
+      if (isWin68) {
+        await startXsydRhythm(current.current);
       }
-      if (!(fresh.supportedRhythmModes?.includes(current.current.keyMode) ?? true)) {
-        throw Error(tr('Update the background app to use this rhythm mode.'));
-      }
-      if (hero68HallStream.getSnapshot().active || hero68HallStream.getSnapshot().starting) {
-        await hero68HallStream.stop();
-      }
-      if (hero68DeviceManager.connected && !hero68DeviceManager.viaService) {
-        await hero68DeviceManager.disconnect();
-      }
-      if (token !== action.current) {
-        return;
-      }
-      const result = await rgbService.rhythmStart(current.current);
-      if (token !== action.current) {
-        return;
-      }
-      publishRgbServiceStatus(result);
-      setSession(result.sessionId ?? null);
-      setDemo(false);
-      if (result.connected && !xsydDeviceManager.connected) {
-        if (await xsydDeviceManager.hasAuthorizedDevice()) {
-          await xsydDeviceManager.connect(false).catch(() => {});
+      if (compatible) {
+        const fresh = await refreshRgbService();
+        if (fresh && (fresh.apiVersion ?? 0) >= 5) {
+          if (hero68HallStream.getSnapshot().active || hero68HallStream.getSnapshot().starting) {
+            await hero68HallStream.stop();
+          }
+          if (hero68DeviceManager.connected && !hero68DeviceManager.viaService) {
+            await hero68DeviceManager.disconnect();
+          }
+          const serviceConfig: RhythmConfiguration = current.current.endpoint.startsWith('web-')
+            ? { ...current.current, endpoint: 'default', sideMode: 500 }
+            : { ...current.current, sideMode: 500 };
+          const result = await rgbService.rhythmStart(serviceConfig);
+          if (token === action.current) {
+            publishRgbServiceStatus(result);
+            setSession(result.sessionId ?? null);
+            if (result.connected && !isWin68 && !xsydDeviceManager.connected) {
+              await hero68DeviceManager.connectViaService();
+            }
+          }
         }
-        if (!xsydDeviceManager.connected) {
-          await hero68DeviceManager.connectViaService();
-        }
+      }
+      if (token === action.current) {
+        setDemo(false);
       }
     } catch (e) {
-      if (token === action.current) {
+      if (token === action.current && !isWin68) {
         setError(e instanceof Error ? e.message : String(e));
       }
     } finally {
@@ -440,6 +412,9 @@ export default function RhythmSyncEditor({
       label: tr('Microphone / Line-In (Web Audio)')
     },
   ] : [];
+  const suppressServiceWriteError = Boolean(
+    isWin68 && status?.lastError && status.lastError.includes('RGB write failed')
+  );
   return <div className="custom-rgb-gate" hidden={!visible}>
     <RgbToolbarSlot visible={visible}>
       <span className="rgb-sync-note" data-attention={reconnecting || !applied && live || undefined} role="status">{reconnecting ? tr('Reconnecting to background app…') : applied ? tr('Auto sync') : live ? tr('Joining running Rhythm…') : demo ? tr('Simulation') : null}</span>
@@ -450,7 +425,7 @@ export default function RhythmSyncEditor({
       {serviceLive && status?.configurationBusy && <p className="rgb-inline-note" role="status">{tr('Saving keyboard configuration · lighting paused')}</p>}
       {compatible && !demo && !keySupported && <p className="rgb-inline-note" role="status">{tr('Update the background app to use this rhythm mode.')} <button type="button" className="secondary-button" onClick={onSetup}>{tr('Setup / Update')}</button></p>}
       {error && <p className="stream-error" role="alert">{error}</p>}
-      {serviceLive && status?.lastError && <p className="stream-error" role="alert">{status.lastError}</p>}
+      {serviceLive && status?.lastError && !suppressServiceWriteError && <p className="stream-error" role="alert">{status.lastError}</p>}
       {serviceLive && status?.audioError && <p className="stream-error" role="alert">{status.audioError}</p>}
     </RgbToolbarSlot>
     <section className={`rhythm-editor custom-rgb-content${locked ? ' is-locked' : ''}`} inert={locked} aria-label="Rhythm Sync">

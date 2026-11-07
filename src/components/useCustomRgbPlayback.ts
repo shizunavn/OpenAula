@@ -128,7 +128,10 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
       current.current.keys?.colorIndex !== undefined ||
       current.current.keys?.reverse !== undefined ||
       Array.isArray(current.current.keys?.palette);
-    if (isXsydContext) {
+
+    // When the Windows background service is NOT running, WIN 68 HE MAX can still
+    // run Custom RGB directly over WebHID in the browser.
+    if (!status && isXsydContext) {
       const token = ++action.current;
       setBusy(true);
       setError(null);
@@ -163,6 +166,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
         }
       }
     }
+
     if (!status || updateRequired) {
       onSetup();
       return false;
@@ -177,6 +181,24 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
         return false;
       }
       if (!fresh) {
+        if (isXsydContext) {
+          const profile = {
+            ...current.current,
+            custom: {
+              ...restoreCustomRgb(current.current.custom, current.current),
+              enabled: true
+            }
+          };
+          await startXsydCustomRgb(profile);
+          if (token !== action.current) {
+            return false;
+          }
+          current.current = profile;
+          previousSignature.current = customSignature(profile);
+          callbacks.current(profile);
+          demo(false);
+          return true;
+        }
         throw Error('Background service is not responding. Run the app and try again.');
       }
       const profile = {
@@ -201,9 +223,14 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
       if (token !== action.current) {
         return false;
       }
+      // Always call `rgbService.mode('custom', profile)` when the service is running so
+      // `preset.json` persists `savedMode: 'custom'` and `profile` across service restarts!
       const result = await rgbService.mode('custom', profile);
       if (token !== action.current) {
         return false;
+      }
+      if (isXsydContext) {
+        await startXsydCustomRgb(profile);
       }
       current.current = profile;
       previousSignature.current = customSignature(profile);
@@ -211,7 +238,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
       publishRgbServiceStatus(result);
       queue.current?.observe(result);
       demo(false);
-      if (result.connected && !xsydDeviceManager.connected) {
+      if (result.connected && !isXsydContext && !xsydDeviceManager.connected) {
         await hero68DeviceManager.connectViaService();
       }
       return token === action.current;
@@ -230,46 +257,24 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
     if (busy) {
       return;
     }
-    if (xsydLive || xsydRhythmLive) {
-      const token = ++action.current;
-      setBusy(true);
-      setError(null);
-      try {
-        await stopXsydCustomRgb(current.current);
-        if (token !== action.current) {
-          return;
-        }
-        callbacks.current({
-          ...current.current,
-          custom: {
-            ...restoreCustomRgb(current.current.custom, current.current),
-            enabled: false
-          }
-        });
-      } catch (reason) {
-        if (token === action.current) {
-          setError(reason instanceof Error ? reason.message : String(reason));
-        }
-      } finally {
-        if (token === action.current) {
-          setBusy(false);
-        }
-      }
-      return;
-    }
-    if (!status) {
-      return;
-    }
     const token = ++action.current;
     setBusy(true);
     setError(null);
     try {
-      await queue.current?.pause();
-      const result = await ((status.apiVersion ?? 0) >= 3 ? rgbService.mode('onboard') : rgbService.stop());
+      if (xsydLive || xsydRhythmLive) {
+        await stopXsydCustomRgb(current.current);
+      }
+      if (status) {
+        await queue.current?.pause();
+        const result = await ((status.apiVersion ?? 0) >= 3 ? rgbService.mode('onboard') : rgbService.stop());
+        if (token !== action.current) {
+          return;
+        }
+        publishRgbServiceStatus(result);
+      }
       if (token !== action.current) {
         return;
       }
-      publishRgbServiceStatus(result);
       callbacks.current({
         ...current.current,
         custom: {

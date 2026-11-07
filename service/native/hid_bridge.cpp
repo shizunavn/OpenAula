@@ -89,6 +89,8 @@ bool heroKeyboard(HANDLE handle) {
                      name.find(L"PID_1000") != std::wstring::npos);
   const bool xsyd = (name.find(L"VID_1CA2") != std::wstring::npos &&
                      name.find(L"PID_1901") != std::wstring::npos) ||
+                    (name.find(L"VID_1C4F") != std::wstring::npos &&
+                     name.find(L"PID_EE88") != std::wstring::npos) ||
                     (name.find(L"VID_3554") != std::wstring::npos &&
                      name.find(L"PID_FA09") != std::wstring::npos);
   return hero || xsyd;
@@ -252,6 +254,7 @@ std::unique_ptr<Device> openDevice() {
     const bool xsydMatch =
         hasAttrs &&
         ((attrs.VendorID == 0x1ca2 && attrs.ProductID == 0x1901) ||
+         (attrs.VendorID == 0x1c4f && attrs.ProductID == 0xee88) ||
          (attrs.VendorID == 0x3554 && attrs.ProductID == 0xfa09)) &&
         caps.UsagePage == 0xffa0 &&
         caps.Usage == 0x0001;
@@ -429,6 +432,8 @@ struct BridgeSession {
   // Per-key Color switch has been written for this session yet.
   std::array<rhythm::Color, 68> xsydRhythmKeys{};
   bool xsydRhythmPrimed = false;
+  std::array<rhythm::Color, 68> xsydCustomKeys{};
+  bool xsydCustomPrimed = false;
   uint8_t xsydTableStep = 0;
   uint8_t xsydActiveSlot = 0;
   std::array<std::array<uint32_t, 256>, 3> xsydRemaps{};
@@ -494,11 +499,22 @@ struct BridgeSession {
       return false;
     }
     if (device->xsyd) {
-      // XSYD boards address keys through XSYD opcodes only; a HERO68 `0x09`
-      // frame has no meaning for them. Fail like a write instead of reporting
-      // a success that never reached the keyboard.
-      emitLine("error:XSYD boards need an XSYD lighting frame");
-      return false;
+      if (request[0] != rhythm::xsydMagic) {
+        // XSYD boards address keys through XSYD opcodes only; a HERO68 `0x09`
+        // frame has no meaning for them. Fail like a write instead of reporting
+        // a success that never reached the keyboard.
+        emitLine("error:XSYD boards need an XSYD lighting frame");
+        return false;
+      }
+      std::vector<unsigned char> outBuf(device->output, 0);
+      const size_t reportOffset = device->output > 64 ? 1 : 0;
+      std::copy(request.begin(), request.end(), outBuf.begin() + reportOffset);
+      DWORD count = 0;
+      const bool ok = io(*device, outBuf, true, 100, count) && count == outBuf.size();
+      if (ok) {
+        HidD_FlushQueue(device->h);
+      }
+      return ok;
     }
     std::vector<unsigned char> outBuf(device->output);
     std::copy(request.begin(), request.end(), outBuf.begin());
@@ -548,7 +564,7 @@ struct BridgeSession {
             continue;
           }
           const unsigned char* chunk = inBuf.data() + inOffset;
-          if (collected == 0 && chunk[0] != hall::XsydMagic) {
+          if (collected == 0 && (chunk[0] != hall::XsydMagic || chunk[2] != 0x92)) {
             continue;
           }
           std::copy(chunk, chunk + 64, frameOut.begin() + collected);
@@ -764,11 +780,27 @@ struct BridgeSession {
         nextFrame = now + 1000. / 60;
       }
       if (!customBatch.empty() && now >= reconnectAt) {
-        bool okay = true;
-        for (const auto& p : customBatch) {
-          if (!writeReport(p)) {
-            okay = false;
-            break;
+        if (!device) {
+          device = openDevice();
+        }
+        bool okay = device != nullptr;
+        size_t packetsWritten = customBatch.size();
+        if (okay && device->xsyd) {
+          const auto customFrame = rhythm::decodeCustomBatch(customBatch);
+          const auto encoded = rhythm::encodeXsyd(customFrame, xsydCustomKeys, xsydCustomPrimed);
+          packetsWritten = encoded.packets.size();
+          for (const auto& p : encoded.packets) {
+            if (!writeReport(p)) {
+              okay = false;
+              break;
+            }
+          }
+        } else if (okay) {
+          for (const auto& p : customBatch) {
+            if (!writeReport(p)) {
+              okay = false;
+              break;
+            }
           }
         }
         if (okay) {
@@ -778,10 +810,10 @@ struct BridgeSession {
           }
           lastSubmission = submission;
           const double gap = lastFrame ? completed - lastFrame : 0;
-          customTelemetry.custom(submission, customBatch.size(), gap);
+          customTelemetry.custom(submission, packetsWritten, gap);
           std::ostringstream event;
           event << "custom-frame:{\"submission\":" << submission
-                << ",\"packets\":" << customBatch.size()
+                << ",\"packets\":" << packetsWritten
                 << ",\"frameMs\":" << completed - now
                 << ",\"gapMs\":" << gap
                 << ",\"droppedFrames\":" << dropped
@@ -817,6 +849,9 @@ struct BridgeSession {
         nextFrame = now + 1000. / 60;
       }
       if (now >= reconnectAt) {
+        if (!device) {
+          device = openDevice();
+        }
         auto audio = capture.snapshot();
         rhythm::Frame frame = engine.render(audio.audio, now);
         const double renderedAt = rhythm::clockMs();
@@ -1035,10 +1070,26 @@ struct BridgeSession {
       emitLine("frame-queued");
       return;
     }
-    for (const auto& p : batch) {
-      if (!writeReport(p)) {
-        okay = false;
-        break;
+    if (!device) {
+      device = openDevice();
+    }
+    if (!device) {
+      okay = false;
+    } else if (device->xsyd) {
+      const auto customFrame = rhythm::decodeCustomBatch(batch);
+      const auto encoded = rhythm::encodeXsyd(customFrame, xsydCustomKeys, xsydCustomPrimed);
+      for (const auto& p : encoded.packets) {
+        if (!writeReport(p)) {
+          okay = false;
+          break;
+        }
+      }
+    } else {
+      for (const auto& p : batch) {
+        if (!writeReport(p)) {
+          okay = false;
+          break;
+        }
       }
     }
     if (!okay) {
@@ -1102,7 +1153,7 @@ struct BridgeSession {
       const bool heroCommand =
           (cmd == 0x82) || (cmd == 0x90 && zone == 0) || (cmd == 0x92) ||
           (cmd == 0x93 && zone == 0) || (cmd == 0x99 && zone == 0) ||
-          (cmd == 0x96 && zone == 0) || (cmd == 0x83);
+          (cmd == 0x96 && zone == 0) || (cmd == 0x83) || (cmd == 8 && (zone == 1 || zone == 2));
       if (!heroCommand) {
         ioPaused = false;
         setGamepadPause();
@@ -1389,6 +1440,8 @@ struct BridgeSession {
       capture.stop();
       customActive = true;
       customBatch.clear();
+      xsydCustomPrimed = false;
+      xsydCustomKeys = {};
       submission = 0;
       lastSubmission = 0;
       reusedFrames = 0;
@@ -1411,6 +1464,10 @@ struct BridgeSession {
       customBatch.clear();
       output.queue.clear(ipc::Channel::CustomFrame);
       output.queue.clear(ipc::Channel::CustomTick);
+      if (device && device->xsyd && xsydCustomPrimed) {
+        writeReport(rhythm::xsydOnboardRestoreReport());
+        xsydCustomPrimed = false;
+      }
       emitLine("custom-stopped");
       return;
     }

@@ -699,6 +699,70 @@ inline Report xsydPerKeyBatchReport(uint8_t first, const std::array<Color, 68>& 
 
 // Frames whose colours did not change are skipped entirely; a frame that did
 // change sends all five `0x2A` batches (`5C 39 2A F4 | 01 ...`).
+inline Report xsydOnboardRestoreReport(uint8_t mode = 0x00, uint8_t brightness = 4) {
+  std::vector<uint8_t> onboard(0x2c, 0);
+  onboard[0] = 0x01;
+  const std::array<std::array<uint8_t, 4>, 7> palette = {{{0x00, 0x00, 0xff, 0xff},
+                                                          {0x00, 0xff, 0x00, 0xff},
+                                                          {0x00, 0x7f, 0x7f, 0xff},
+                                                          {0xff, 0x00, 0x00, 0xff},
+                                                          {0x7f, 0x00, 0x7f, 0xff},
+                                                          {0x7f, 0x7f, 0x00, 0xff},
+                                                          {0x7f, 0x7f, 0x7f, 0xff}}};
+  for (size_t i = 0; i < palette.size(); ++i) {
+    std::copy(palette[i].begin(), palette[i].end(), onboard.begin() + 5 + i * 4);
+  }
+  onboard[37] = 0x01;
+  onboard[38] = uint8_t(std::min<int>(4, std::max<int>(0, brightness)));
+  onboard[39] = mode;
+  onboard[40] = 0x03;
+  onboard[41] = 0x02;
+  onboard[43] = 0x00;
+  return xsydReport(xsydRgbOpcode, onboard);
+}
+
+// Decode a queued Custom RGB batch (cmd = 8, zone = 1 palette-grouped reports
+// from service/frame.ts) back into a 68-key Frame so encodeXsyd can stream
+// Custom RGB to a WIN 68 HE MAX over native Windows HID (0x18 + 5 x 0x2A).
+inline Frame decodeCustomBatch(const std::vector<Report>& batch) {
+  Frame frame{};
+  std::vector<uint8_t> body;
+  body.reserve(256);
+  for (const auto& p : batch) {
+    if (p[0] != 9 || p[1] != 8 || p[2] != 1) {
+      continue;
+    }
+    const size_t n = std::min<size_t>(56, p[6]);
+    body.insert(body.end(), p.begin() + 7, p.begin() + 7 + n);
+  }
+  bool useXsydUsage = false;
+  for (size_t i = 0; i + 4 <= body.size();) {
+    const size_t count = body[i + 3];
+    i += 4;
+    for (size_t j = 0; j < count && i < body.size(); ++j, ++i) {
+      if (body[i] >= 224) {
+        useXsydUsage = true;
+      }
+    }
+  }
+  for (size_t i = 0; i + 4 <= body.size();) {
+    const Color color{body[i], body[i + 1], body[i + 2]};
+    const size_t count = body[i + 3];
+    i += 4;
+    for (size_t j = 0; j < count && i < body.size(); ++j, ++i) {
+      const uint8_t pos = body[i];
+      for (size_t k = 0; k < 68; ++k) {
+        const uint8_t expected = useXsydUsage ? xsydLayoutUsage[k] : positions[k];
+        if (expected == pos) {
+          frame.keys[k] = color;
+          break;
+        }
+      }
+    }
+  }
+  return frame;
+}
+
 inline Encoded encodeXsyd(const Frame& f, std::array<Color, 68>& previous, bool& primed) {
   Encoded out;
   out.keys = f.keys;

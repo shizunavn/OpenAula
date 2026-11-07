@@ -401,15 +401,7 @@ export default function CustomRgbEditor({
         if (Object.values(nextFrame.keys).some(c => c !== '#000000')) {
           publishLightingFrame(nextFrame.keys);
         }
-        if (isWin68 && live && xsydDeviceManager.connected && !streamingBusyRef.current) {
-          streamingBusyRef.current = true;
-          void streamerRef.current
-            ?.pushFrameDelta(xsydDeviceManager, nextFrame.keys)
-            .catch(() => {})
-            .finally(() => {
-              streamingBusyRef.current = false;
-            });
-        }
+
       } catch (reason) {
         setPreviewError(String(reason));
       }
@@ -547,7 +539,7 @@ export default function CustomRgbEditor({
         <button className="secondary-button" disabled={disabled} onClick={playback.restoreDraft}>{tr('Restore draft')}</button>
       </div>}
       {(playback.error || previewError) && <p className="stream-error" role="alert">{tr(playback.error || previewError || '')}</p>}
-      {status?.enabled && status.mode === 'custom' && status.lastError && <p className="stream-error" role="alert">{status.lastError}</p>}
+      {status?.enabled && status.mode === 'custom' && status.lastError && !(isWin68 && status.lastError.includes('RGB write failed')) && <p className="stream-error" role="alert">{status.lastError}</p>}
     </RgbToolbarSlot>
     <div className={`custom-rgb-content ${locked ? 'is-locked' : ''}`} inert={locked}>
       <RgbPreviewPanel source={demo ? tr('Simulation') : live ? synced ? tr('Live keyboard') : tr('Waiting for live frames') : tr('Draft preview')} hint={perKey ? tr('Select keys on the preview to paint.') : layer ? tr('Select the LED region for this layer.') : tr('Side lights keep their onboard effect.')} actions={!live && samplePreview ? <button className="secondary-button" disabled={disabled} onClick={() => setReplay(n => n + 1)}><RotateCcw size={15} />{tr('Try effect')}</button> : undefined} footer={perKey ? <RgbKeyPaintTools selected={selected} onSelect={setSelected} color={paint} onColor={setPaint} disabled={disabled} onPaint={() => {
