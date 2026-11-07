@@ -4,7 +4,7 @@ An open-source, browser-based configurator for **AULA HERO68 / HERO84 / WIN 68 H
 
 Formerly OpenHero68; the rename reflects support for the wider AULA line. Existing installs upgrade in place and keep their settings.
 
-[**Website**](https://openhero68-site.pages.dev/) · [Open the web app](https://www.google.com/search?q=https://open-aula.pages.dev/) · [Download the Windows service](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest) · [Release notes](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest)
+[**Website**](https://open-aula.pages.dev/) · [Open the web app](https://www.google.com/search?q=https://open-aula.pages.dev/) · [Download the Windows service](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest) · [Release notes](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest)
 
 **Found a problem? [Report a bug](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dbug-report.yml)** — web app, keyboard features, Windows service or installer.
 
