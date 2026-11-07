@@ -20,9 +20,9 @@ function snapToStep(value: number, min: number, max: number, step: number) {
   const snapped = Math.round((clamped - min) / step) * step + min;
   return Number(snapped.toFixed(decimals));
 }
-const RAPID_TRIGGER_VALUES = ([0.01, ...Array.from({
-  length: 68
-}, (_, index) => Number(((index + 1) * 0.05).toFixed(2)))] as const);
+const RAPID_TRIGGER_VALUES = (Array.from({
+  length: 340
+}, (_, index) => Number(((index + 1) * 0.01).toFixed(2))) as readonly number[]);
 function snapToAllowedValue(value: number, allowedValues: readonly number[]) {
   if (!allowedValues.length) {
     return value;

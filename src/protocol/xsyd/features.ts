@@ -1,62 +1,90 @@
-// Per-key field bank of the XSYD `0x5C` protocol (AULA WIN 68 HE MAX).
+// Per-key field bank (`0x23`) and Global Actuation (`0x29`) of the XSYD `0x5C`
+// protocol (AULA WIN 68 HE MAX, firmware `XS105_SI2828C_WIN 68 HE MAX_App_v1.1.4_20260204a.bin`).
 //
-// `0x23` is NOT a "remap" opcode: it writes one row of a per-key field table.
-// Handler 0xACE0 reads each slot as four bytes and jumps through the field
-// table at VA 0x1C744:
+// `0x23` reads (`payload[0] = 0x00`) or writes (`payload[0] = 0x01`) up to 14
+// `(pos, field, u16_le)` slots per frame (`VA 0x0ACE0..0x0B4B8`):
+//   - Write jump table at `VA 0x1C6DC` (26 entries, `field = 0x00..0x19`)
+//   - Read jump table at `VA 0x1C744` (49 entries, `field = 0x00..0x30`)
 //
-//   payload[0]        flag: 0 -> only slots with pos != 0xFF, 1 -> all 14 slots
-//   payload[1+4k]     pos   (wire key id, see keymap.ts)
-//   payload[2+4k]     field (index into 0x1C744)
+//   payload[0]        mode: 0x00 = Read from SRAM, 0x01 = Write to SRAM (+ 500ms Flash flush at VA 0x07E28)
+//   payload[1+4k]     pos   (1-byte HID usage / keyValue, translated via VA 0x0D0A8 -> cell 0..125)
+//   payload[2+4k]     field (index into 0x1C6DC / 0x1C744)
 //   payload[3+4k]     value low byte
 //   payload[4+4k]     value high byte
-//
-// Every accepted field is one u16 per key, addressed by the firmware as
-// `0x20003220 + 2 * ((pos >> 5) * 0x15 + (pos & 0x1F) + WINDOW)`, i.e. a 6x21
-// array. Remap (field 0) is the exception: its value is a single byte.
-//
-// Verified against 9 USBPcap sessions: tests/xsyd-features.test.mjs.
 
-import {buildXsydFrame} from './codec'
+import {buildXsydFrame, type XsydReply} from './codec'
 import {XSYD_KEYS} from './keymap'
 
 export {XSYD_KEYS}
 
-/** Field ids accepted by the `0x23` jump table (VA 0x1C744). */
+export const XSYD_GLOBAL_ACTUATION_OPCODE = 0x29
+export const XSYD_GLOBAL_ACTUATION_REPLY_OPCODE = 0xa9
+
+/**
+ * Field IDs verified against firmware v1.1.4 (`VA 0x1C6DC` write table,
+ * `VA 0x1C744` read table, and `VA 0x12FE8..0x13636` Hall scan engine) and
+ * USBPcap captures (`profile_1_2_3_4.pcapng`, `actutation2.0global_...pcapng`).
+ */
 export const XsydFeatureField = {
-  /** Action code of the key (byte). 0x4A20 maps pos -> default action. */
+  /** Layer 0 key action byte (`0x20003220 + 2*cell`, write `0x0B01A`, read `0x0B2B2`). */
   Remap: 0x00,
-  /** Actuation travel in micrometres. Verified: WASD 1000, Space 1510, M/N 200. */
+  /** Per-key actuation point in micrometres (`0x2000341A + 2*cell`, write `0x0B0AA`, read `0x0B358`, scan `0x13206`). */
   Travel: 0x04,
-  /** Key header. Every capture writes 0x20. */
+  /** Multi-Point Trigger (MPT) depth 1 in µm (`0x20003516 + 2*cell`, write `0x0B0CE`, read `0x0B376`). */
+  MptDepth1: 0x05,
+  /** Multi-Point Trigger (MPT) depth 2 in µm (`0x20003612 + 2*cell`, write `0x0B0EA`, read `0x0B390`). */
+  MptDepth2: 0x06,
+  /** Multi-Point Trigger (MPT) depth 3 in µm (`0x2000370E + 2*cell`, write `0x0B106`, read `0x0B3AA`). */
+  MptDepth3: 0x07,
+  /**
+   * Key mode / header byte (`0x200051CC + cell`, write `0x0B122`, read `0x0B3C4`):
+   * - `bit 5 (0x20)`: Rapid Trigger enabled (`VA 0x13504..0x13510`) and per-key travel lock vs `0x29` (`VA 0x0C0DC`)
+   * - `0x00`: Rapid Trigger disabled (standard actuation mode)
+   * - `bits 0..3`: Advanced Key type (`1=DKS, 2=MPT, 3=MT, 4=TGL, 5=END, 7=SOCD`)
+   */
   Header: 0x08,
-  /** Rapid trigger. Verified: 100 (0.1 mm) in the actuation capture. */
-  RapidTrigger: 0x16,
-  /** Dead zone. Verified: 100 (0.1 mm) in the actuation capture. */
-  Deadzone: 0x17,
-  /** Switch type. Verified: yongchun capture writes A=1, Z=1, Q=2, W=3, E=0. */
+  /** Rapid Trigger Press sensitivity in µm (`0x2000380A + 2*cell`, write `0x0B150`, read `0x0B402`, scan `0x1352E`). */
+  RapidTriggerPress: 0x14,
+  /** Rapid Trigger Release sensitivity in µm (`0x20003906 + 2*cell`, write `0x0B16A`, read `0x0B41C`, scan `0x13538`). */
+  RapidTriggerRelease: 0x15,
+  /** Top Deadzone in µm (`0x20003FEC + 2*cell`, write `0x0B19C`, read `0x0B44E`, scan `0x13202` & `0x13572`). */
+  TopDeadzone: 0x16,
+  /** Bottom Deadzone in µm (`0x200040E8 + 2*cell`, write `0x0B1B6`, read `0x0B468`, scan `0x1357C`). */
+  BottomDeadzone: 0x17,
+  /**
+   * Per-key magnetic switch calibration curve ID (`0x200045F4 + 2*cell`, write `0x0B1CE`, read `0x0B482`, scan `0x130C6`):
+   * - `0`: Wing Chun / Graywood (`3400 µm` max travel, curve 0 at `VA 0x04E44`)
+   * - `1`: Jade Pro / Magnetic Jade (`3400 µm` max travel, curve 0 at `VA 0x04E44`)
+   * - `2`: Black King / Black Emperor / Uranus (`3300 µm` max travel, curve 1 at `VA 0x05644`)
+   * - `3`: Meteor Magnetic / TTC King (`3300 µm` max travel, curve 1 at `VA 0x05644`)
+   */
   SwitchType: 0x19,
+  /** Backwards-compatible alias for `RapidTriggerPress` (`0x14`). */
+  RapidTrigger: 0x14,
+  /** Backwards-compatible alias for `TopDeadzone` (`0x16`). */
+  Deadzone: 0x16,
 } as const
 
 export type XsydFeatureFieldId = (typeof XsydFeatureField)[keyof typeof XsydFeatureField]
 
-/** Slots per `0x23` frame. Handler 0xAD7C walks exactly 14. */
+/** Slots per `0x23` frame. Handler `0x0AD7C` / `0x0ADEC` walks 14 slots. */
 export const XSYD_FEATURE_SLOTS = 14
 
 /** Empty slot marker: `pos = 0xFF`, nothing else. */
 const EMPTY_SLOT = [0xff, 0xff, 0x00, 0x00] as const
 
 export interface XsydFieldWrite {
-  /** Wire key id (keymap.ts `index`). */
+  /** 1-byte XSYD keyValue (HID usage low byte, `0x01` for Fn). */
   pos: number
   field: number
-  /** u16 value; for `Remap` only the low byte is used. */
+  /** u16 value; for `Remap` and `Header` only the low byte is used by hardware. */
   value: number
 }
 
 /** Total micrometres of travel the firmware can address with a u16. */
 export const XSYD_TRAVEL_MAX_UM = 0xffff
 
-/** Micrometres -> millimetres (the UI speaks mm, the wire speaks um). */
+/** Micrometres -> millimetres (the UI speaks mm, the wire speaks µm). */
 export function umToMm(um: number): number {
   return um / 1000
 }
@@ -66,15 +94,56 @@ export function mmToUm(mm: number): number {
 }
 
 /**
- * Build an `0x23` payload.
+ * Build an `0x29` Global Actuation read frame (`LEN = 0x0F`, `payload[0] = 0x00`).
+ * Verified at firmware `VA 0x0C092..0x0C12E` and `profile_1_2_3_4.pcapng`:
+ * `5C 0F 29 C9 | 00 ...` -> `5C 0F A9 49 | 00 00 00 <u16_le global_travel_um> 00 ...`.
+ */
+export function buildGlobalActuationReadFrame(): Uint8Array {
+  const payload = new Uint8Array(0x0f)
+  payload[0] = 0x00
+  return buildXsydFrame(XSYD_GLOBAL_ACTUATION_OPCODE, payload)
+}
+
+/**
+ * Build an `0x29` Global Actuation write frame (`LEN = 0x0F`, `payload[0] = 0x01`).
+ * Verified at firmware `VA 0x0C092..0x0C10A` and `actutation2.0global_...pcapng`:
+ * `5C 0F 29 C9 | 01 00 00 <u16_le global_travel_um> 00 ...`.
+ * Note: Firmware `VA 0x0C0D8` also copies `travelUm` into `field 0x04` for all keys
+ * whose `Header (field 0x08)` has `(Header & 0x30) == 0`.
+ */
+export function buildGlobalActuationWriteFrame(travelUm: number): Uint8Array {
+  if (!Number.isInteger(travelUm) || travelUm < 100 || travelUm > 3400) {
+    throw new RangeError(`Global actuation travel must be 100..3400 µm, got ${travelUm}`)
+  }
+  const payload = new Uint8Array(0x0f)
+  payload[0] = 0x01
+  payload[3] = travelUm & 0xff
+  payload[4] = (travelUm >> 8) & 0xff
+  return buildXsydFrame(XSYD_GLOBAL_ACTUATION_OPCODE, payload)
+}
+
+/**
+ * Decode an `0xA9` reply to `0x29` Global Actuation read/write, returning the
+ * global actuation point in micrometres (`payload[3..4]` u16_le).
+ */
+export function decodeGlobalActuationReply(reply: XsydReply): number {
+  if (reply.opcode !== XSYD_GLOBAL_ACTUATION_REPLY_OPCODE || !reply.checksumValid) {
+    throw new Error('Invalid XSYD 0x29 global actuation reply')
+  }
+  if (reply.payload.length < 5) {
+    throw new Error(`Incomplete XSYD 0xA9 payload: ${reply.payload.length} bytes`)
+  }
+  return (reply.payload[3] ?? 0) | ((reply.payload[4] ?? 0) << 8)
+}
+
+/**
+ * Build an `0x23` write payload (`payload[0] = 0x01`).
  *
- * Always uses flag 1 (scan all 14 slots) because that is what the vendor app
- * sends; a slot left unspecified is padded with `ff ff 00 00`, which the
- * firmware skips (`0xADB8`).
+ * Unused slots are padded with `ff ff 00 00`, which the firmware skips (`VA 0x0ADB8`).
  */
 export function buildFieldWritePayload(writes: readonly XsydFieldWrite[]): Uint8Array {
   if (writes.length > XSYD_FEATURE_SLOTS) {
-    throw new RangeError(`at most ${XSYD_FEATURE_SLOTS} slots per frame`);
+    throw new RangeError(`at most ${XSYD_FEATURE_SLOTS} slots per frame`)
   }
   const payload = new Uint8Array(1 + 4 * XSYD_FEATURE_SLOTS).fill(0)
   payload[0] = 0x01
@@ -103,7 +172,7 @@ export function buildFieldWritePayload(writes: readonly XsydFieldWrite[]): Uint8
   return payload
 }
 
-/** Full 64-byte report body for one `0x23` frame. */
+/** Full 64-byte report body for one `0x23` write frame. */
 export function buildFieldWriteFrame(writes: readonly XsydFieldWrite[]): Uint8Array {
   return buildXsydFrame(0x23, buildFieldWritePayload(writes))
 }
@@ -111,8 +180,8 @@ export function buildFieldWriteFrame(writes: readonly XsydFieldWrite[]): Uint8Ar
 /**
  * Build an `0x23` readback request payload (`payload[0] = 0x00`).
  *
- * Queries up to 14 `(pos, field)` slots without mutating other slots; unused
- * slots are padded with `ff ff 00 00`.
+ * Queries up to 14 `(pos, field)` slots from SRAM (`VA 0x0ADEC`); unused slots
+ * are padded with `ff ff 00 00`.
  */
 export function buildFieldReadPayload(
   queries: readonly {pos: number; field: number}[] = []
@@ -151,7 +220,7 @@ export function buildFieldReadFrame(
   return buildXsydFrame(0x23, buildFieldReadPayload(queries))
 }
 
-/** Decode an `0x23` payload back into live slots (padding dropped). */
+/** Decode an `0x23` / `0xA3` payload back into live slots (padding dropped). */
 export function decodeFieldWritePayload(payload: ArrayLike<number>): XsydFieldWrite[] {
   const slots: XsydFieldWrite[] = []
   for (let k = 0; k < XSYD_FEATURE_SLOTS; k++) {

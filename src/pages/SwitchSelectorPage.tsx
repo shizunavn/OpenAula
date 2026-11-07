@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { SwitchSelectorBoard } from '../app/components/SwitchSelectorBoard';
 import { SwitchStemMenuIcon } from '../app/components/SwitchStemMenuIcon';
-import { SWITCH_OPTIONS, type SwitchOption, type SwitchTone } from '../app/switchAssets';
+import { switchOptionsForModel, type SwitchOption, type SwitchTone } from '../app/switchAssets';
 import { useT } from '../i18n';
 import type { HeroDeviceModelId } from '../keyboard/devices';
 export type SwitchSelectorPageProps = {
@@ -50,12 +50,13 @@ export function SwitchSelectorPage({
   const tr = useT();
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const brandFilterRef = useRef<HTMLDivElement>(null);
-  const filteredSwitchOptions = useMemo(() => SWITCH_OPTIONS.filter(option => {
+  const modelOptions = useMemo(() => switchOptionsForModel(model), [model]);
+  const filteredSwitchOptions = useMemo(() => modelOptions.filter(option => {
     const matchesSearch = !switchSearch || option.fullName.toLowerCase().includes(switchSearch.toLowerCase()) || option.name.toLowerCase().includes(switchSearch.toLowerCase());
     const matchesBrand = switchBrandFilter === 'all' || option.brand === switchBrandFilter;
     return matchesSearch && matchesBrand;
-  }), [switchSearch, switchBrandFilter]);
-  const switchBrands = useMemo(() => Array.from(new Set(SWITCH_OPTIONS.map(option => option.brand))), []);
+  }), [modelOptions, switchSearch, switchBrandFilter]);
+  const switchBrands = useMemo(() => Array.from(new Set(modelOptions.map(option => option.brand))), [modelOptions]);
   const brandFilterLabel = switchBrandFilter === 'all' ? 'Filter by brand' : switchBrandFilter;
   useEffect(() => {
     if (!brandMenuOpen) {
@@ -145,7 +146,7 @@ export function SwitchSelectorPage({
             }}>
                   {option.top ? <img src={option.top} alt={option.fullName} /> : <SwitchStemMenuIcon />}
                 </span>
-                <span className="switch-profile-brand">{tr(option.brand)}</span>
+                <span className="switch-profile-brand">{option.note ? `${tr(option.brand)} · ${option.note}` : tr(option.brand)}</span>
                 <strong>{option.fullName}</strong>
               </button>)}
             {!filteredSwitchOptions.length && <div className="switch-profile-empty">{tr('No switch profiles match the current search.')}</div>}

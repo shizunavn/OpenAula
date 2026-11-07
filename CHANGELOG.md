@@ -3,6 +3,17 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.3.3.0 - WIN 68 HE MAX Disassembly Protocol: Global Actuation, Switch Calibration & SRAM Guard
+
+- Global Actuation (`0x29` / `0xA9`) implementation for WIN 68 HE MAX: read and write global actuation point in micrometres (100..3400 µm range) across all non-overridden keys (`Header & 0x30 == 0`).
+- Complete per-key field table verified against firmware disassembly (`VA 0x1C6DC` write table, `VA 0x1C744` read table):
+  - Split Rapid Trigger Press sensitivity (`0x14`) and Release sensitivity (`0x15`).
+  - Top Deadzone (`0x16`) and Bottom Deadzone (`0x17`) in micrometres.
+  - Key mode header (`0x08`) with Rapid Trigger toggle (bit 5 `0x20`) and advanced key types.
+  - Per-key magnetic switch curve ID (`0x19`) and travel sanitization (3400 µm for Wing Chun / Jade Pro, 3300 µm for Black King / Meteor Magnetic).
+- Profile slot protection: guarded `0x00 0x70` profile selection against firmware's 500 ms deferred Flash flush (`VA 0x07E28`), preventing stale Flash reload over uncommitted SRAM writes.
+- Switch selector UI and per-key performance hooks updated with accurate switch limits and asset mappings.
+
 ## 1.3.2.1 - RGB color controls and 1.0 mm dead zone limit
 
 - The dead zone slider limit in both Rapid Trigger and Quick Settings is raised from 0.5 mm to 1.0 mm, matching the firmware range without protocol changes.

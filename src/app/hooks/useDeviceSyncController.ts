@@ -423,7 +423,7 @@ export function useDeviceSyncController({
       if (isWin68HeMaxModel(targetModel) && xsydDeviceManager.connected) {
         const hydrated = await hydrateFromXsydDevice(xsydDeviceManager, slot, activeKeyIds);
         const mappings = await readXsydRemapLayers(xsydDeviceManager, activeKeyIds);
-        const savedSlotRgb = loadXsydSavedRgb(slot) ?? draft?.rgb;
+        const savedSlotRgb = loadXsydSavedRgb(slot);
         const rawFreshRgb = await readXsydRgbProfile(xsydDeviceManager, activeKeyIds).catch(
           () => savedSlotRgb ?? defaultXsydRgb(activeKeyIds)
         );
@@ -444,7 +444,7 @@ export function useDeviceSyncController({
           setAdvancedBindings(draft.advancedBindings);
         }
         setRgbBaseline(freshRgb);
-        setRgb(mergeRgb(freshRgb, draft?.rgb ?? savedSlotRgb, draft?.rgbDirty));
+        setRgb(savedSlotRgb ? mergeRgb(freshRgb, savedSlotRgb) : freshRgb);
         setRgbHydratedSlot(slot);
         remapBaselineRef.current = structuredClone(mappings);
         applyHydratedPerformance(hydrated, draft);
@@ -638,6 +638,8 @@ export function useDeviceSyncController({
       if (isWin68HeMaxModel(deviceModel) && xsydDeviceManager.connected) {
         if (dirtyKeys.size) {
           await saveDeviceConfiguration(snapshot);
+          const readback = await hydrateFromXsydDevice(xsydDeviceManager, profileSlot, [...dirtyKeys]);
+          applyHydratedPerformance(readback);
         }
         if (dirtyRemaps.size) {
           await saveXsydRemapChanges(xsydDeviceManager, profileSlot, remapLayers, dirtyRemaps);

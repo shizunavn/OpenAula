@@ -8,7 +8,10 @@ await build.close()
 const {
   buildFieldWriteFrame,
   buildFieldWritePayload,
+  buildGlobalActuationReadFrame,
+  buildGlobalActuationWriteFrame,
   decodeFieldWritePayload,
+  decodeGlobalActuationReply,
   chunkFieldWrites,
   XsydFeatureField,
   XSYD_FEATURE_SLOTS,
@@ -52,7 +55,25 @@ test('switching one key type (yongchun capture) round-trips', () => {
   )
 })
 
-test('actuation travel frame matches the capture byte for byte', () => {
+test('actuation travel frame and 0x29 global actuation match capture byte for byte', () => {
+  // actutation2.0global_wasd1.0RT..., frame 0: Global actuation 2.0 mm (2000 um = 0x07d0)
+  assert.equal(
+    hex(buildGlobalActuationWriteFrame(2000)),
+    '5c0f29c9' + '010000d007' + '00'.repeat(10)
+  )
+  assert.equal(
+    hex(buildGlobalActuationReadFrame()),
+    '5c0f29c9' + '00'.repeat(15)
+  )
+  assert.equal(
+    decodeGlobalActuationReply({
+      opcode: 0xa9,
+      checksumValid: true,
+      payload: Uint8Array.from([0x00, 0x00, 0x00, 0xf4, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    }),
+    500
+  )
+
   // actutation2.0global_wasd1.0RT..., frame 1: W/A/S/D 1.0 mm plus the 0x20 header.
   const frame = buildFieldWriteFrame([
     {pos: 0x1a, field: XsydFeatureField.Header, value: 0x20},
@@ -83,10 +104,26 @@ test('actuation travel frame matches the capture byte for byte', () => {
   )
 })
 
+test('verified 0x23 field IDs match firmware VA 0x1C6DC / 0x1C744', () => {
+  assert.equal(XsydFeatureField.Remap, 0x00)
+  assert.equal(XsydFeatureField.Travel, 0x04)
+  assert.equal(XsydFeatureField.MptDepth1, 0x05)
+  assert.equal(XsydFeatureField.MptDepth2, 0x06)
+  assert.equal(XsydFeatureField.MptDepth3, 0x07)
+  assert.equal(XsydFeatureField.Header, 0x08)
+  assert.equal(XsydFeatureField.RapidTriggerPress, 0x14)
+  assert.equal(XsydFeatureField.RapidTriggerRelease, 0x15)
+  assert.equal(XsydFeatureField.TopDeadzone, 0x16)
+  assert.equal(XsydFeatureField.BottomDeadzone, 0x17)
+  assert.equal(XsydFeatureField.SwitchType, 0x19)
+})
+
 test('mm and um helpers keep the capture values', () => {
   assert.equal(mmToUm(1), 1000)
   assert.equal(mmToUm(1.51), 1510)
   assert.equal(mmToUm(0.2), 200)
+  assert.equal(mmToUm(0.15), 150)
+  assert.equal(mmToUm(0.02), 20)
   assert.equal(umToMm(1510), 1.51)
 })
 
@@ -99,8 +136,10 @@ test('the payload is always 57 bytes, padding is ff ff 00 00', () => {
 
 test('decode drops padding and restores values', () => {
   const writes = [
-    {pos: 0x11, field: XsydFeatureField.RapidTrigger, value: 100},
-    {pos: 0x10, field: XsydFeatureField.Deadzone, value: 100},
+    {pos: 0x11, field: XsydFeatureField.RapidTriggerPress, value: 150},
+    {pos: 0x11, field: XsydFeatureField.RapidTriggerRelease, value: 150},
+    {pos: 0x10, field: XsydFeatureField.TopDeadzone, value: 1000},
+    {pos: 0x10, field: XsydFeatureField.BottomDeadzone, value: 300},
   ]
   assert.deepEqual(decodeFieldWritePayload(buildFieldWritePayload(writes)), writes)
 })
@@ -125,15 +164,7 @@ test('wirePosForCode maps layout codes to capture positions', () => {
 })
 
 test('wire pos decodes to the firmware cell', () => {
-  // Firmware: cell = (pos >> 5) * 0x15 + (pos & 0x1F), max 0x100. The `0x23`
-  // handler resolves each slot twice through 0xD11C (`a0 = table + pos`,
-  // returns `lbu -0x80(a0)` = the HID usage), first for `pos - 1`, then for
-  // `pos`, and stores both. So the byte a capture writes is the wire index
-  // minus one, and the cell that gets written is `cell(capturePos)`.
   const cell = pos => (pos >> 5) * 0x15 + (pos & 0x1f)
-  // `capturePos` is the byte observed in a real capture
-  // (`tools/capture_23_pos.py`); `ring` is the index of the `pos` slot in the
-  // frame, which must match the position of that key on the board.
   const rows = [
     ['KeyA', 0x40, 0x00, 0x00],
     ['KeyS', 0x41, 0x01, 0x01],
@@ -147,10 +178,8 @@ test('wire pos decodes to the firmware cell', () => {
     assert.equal(wirePosForCode(code), wire, code)
     assert.equal(cell(capturePos), expectedCell, `${code}: cell`)
   }
-  // N/M sit in the same capture row (capture pos 0x11/0x10; wire 0x5C/0x5D).
   assert.equal(wirePosForCode('KeyN'), 0x5b)
   assert.equal(wirePosForCode('KeyM'), 0x5c)
-  // Any accepted wire index stays inside the 6x21 cell array.
   for (const key of XSYD_KEYS) assert.ok(key.index - 1 < 126, key.code)
 })
 

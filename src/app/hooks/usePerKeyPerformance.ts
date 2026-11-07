@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { mergeHydratedBooleans, mergeHydratedNumbers, mergePerKeyState, RAPID_TRIGGER_VALUES, selectionHasMixedValues, snapToAllowedValue, snapToStep } from '../helpers';
-import { SWITCH_OPTIONS, type SwitchOption, type SwitchTone } from '../switchAssets';
+import { SWITCH_IMAGES, SWITCH_OPTIONS, WIN68_SWITCH_OPTIONS, type SwitchOption, type SwitchTone } from '../switchAssets';
 import type { HydratedKeySettings } from '../../protocol/hero68/hero68Encoder';
-import { isSwitchProfileId, switchProfileLabel } from '../../protocol/hero68/switchProfiles';
+import { isSwitchProfileId, normalizeSwitchProfileId, switchProfileLabel } from '../../protocol/hero68/switchProfiles';
 import type { PersistedOpenHeroState, ProfileDraft } from '../../state/persistence';
 export type UsePerKeyPerformanceOptions = {
   persistedState: PersistedOpenHeroState | null | undefined;
@@ -42,18 +42,36 @@ export function usePerKeyPerformance({
   const [topDeadzoneByKey, setTopDeadzoneByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.topDeadzoneByKey, 0, modelKeyIds));
   const [bottomDeadzoneByKey, setBottomDeadzoneByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.bottomDeadzoneByKey, 0, modelKeyIds));
   const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(() => new Set(persistedState?.profileDrafts?.[persistedState?.profileSlot ?? 1]?.dirtyKeys ?? []));
-  const [selectedSwitchId, setSelectedSwitchId] = useState<SwitchTone>(() => isSwitchProfileId(persistedState?.selectedSwitchId) ? persistedState.selectedSwitchId : 'white');
+  const [selectedSwitchId, setSelectedSwitchId] = useState<SwitchTone>(() => isSwitchProfileId(persistedState?.selectedSwitchId) ? normalizeSwitchProfileId(persistedState.selectedSwitchId) : 'white');
   const [assignedSwitchesByKey, setAssignedSwitchesByKey] = useState<Record<string, SwitchTone>>(() => mergePerKeyState((persistedState?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined), ('white' as SwitchTone), modelKeyIds));
-  const selectedSwitch: SwitchOption = SWITCH_OPTIONS.find(option => option.id === selectedSwitchId) ?? {
-    id: selectedSwitchId,
-    name: switchProfileLabel(selectedSwitchId),
-    fullName: switchProfileLabel(selectedSwitchId),
-    brand: 'Stored keyboard profile',
-    accent: '#9ba3a8',
-    note: ''
-  };
-  const switchTopImageById = useMemo(() => (Object.fromEntries(SWITCH_OPTIONS.map(option => [option.id, option.top ?? ''])) as Record<SwitchTone, string>), []);
-  const switchPreviewByKey = useMemo(() => (Object.fromEntries(modelKeyIds.map(keyId => [keyId, switchTopImageById[assignedSwitchesByKey[keyId] ?? 'white']])) as Record<string, string>), [modelKeyIds, assignedSwitchesByKey, switchTopImageById]);
+  const normalizedSelectedSwitchId = normalizeSwitchProfileId(selectedSwitchId);
+  const selectedSwitch: SwitchOption =
+    WIN68_SWITCH_OPTIONS.find(option => option.id === normalizedSelectedSwitchId) ??
+    SWITCH_OPTIONS.find(option => option.id === normalizedSelectedSwitchId) ?? {
+      id: normalizedSelectedSwitchId,
+      name: switchProfileLabel(normalizedSelectedSwitchId),
+      fullName: switchProfileLabel(normalizedSelectedSwitchId),
+      brand: 'Stored keyboard profile',
+      accent: '#9ba3a8',
+      note: '',
+      ...SWITCH_IMAGES[normalizedSelectedSwitchId],
+    };
+  const switchTopImageById = useMemo(() => {
+    const entries: Record<string, string> = {};
+    for (const option of [...SWITCH_OPTIONS, ...WIN68_SWITCH_OPTIONS]) {
+      entries[option.id] = option.top ?? '';
+    }
+    for (const [key, img] of Object.entries(SWITCH_IMAGES)) {
+      if (img?.top) {
+        entries[key] = img.top;
+      }
+    }
+    return entries as Record<SwitchTone, string>;
+  }, []);
+  const switchPreviewByKey = useMemo(() => (Object.fromEntries(modelKeyIds.map(keyId => {
+    const sw = normalizeSwitchProfileId(assignedSwitchesByKey[keyId] ?? 'white');
+    return [keyId, switchTopImageById[sw] ?? switchTopImageById.white ?? ''];
+  })) as Record<string, string>), [modelKeyIds, assignedSwitchesByKey, switchTopImageById]);
   const rapidPreviewByKey = useMemo(() => (Object.fromEntries(modelKeyIds.map(keyId => {
     const split = splitSensitivityByKey[keyId] ?? false;
     const primary = split ? pressSensitivityByKey[keyId] ?? 0.5 : rapidSensitivityByKey[keyId] ?? 0.65;
@@ -106,7 +124,7 @@ export function usePerKeyPerformance({
     setBottomDeadzone(bottomDeadzoneByKey[firstSelectedKey] ?? 0);
     const assignedSwitch = assignedSwitchesByKey[firstSelectedKey];
     if (assignedSwitch) {
-      setSelectedSwitchId(assignedSwitch);
+      setSelectedSwitchId(normalizeSwitchProfileId(assignedSwitch));
     }
   }, [selectedKeys, actuationByKey, rapidTriggerByKey, splitSensitivityByKey, rapidSensitivityByKey, pressSensitivityByKey, releaseSensitivityByKey, deadzoneEnabledByKey, topDeadzoneByKey, bottomDeadzoneByKey, assignedSwitchesByKey]);
   function markSelectedKeysDirty() {
@@ -120,7 +138,8 @@ export function usePerKeyPerformance({
     });
   }
   function assignSwitchProfile(switchId: SwitchTone) {
-    setSelectedSwitchId(switchId);
+    const normalized = normalizeSwitchProfileId(switchId);
+    setSelectedSwitchId(normalized);
     if (selectedKeys.size === 0) {
       return;
     }
@@ -130,7 +149,7 @@ export function usePerKeyPerformance({
         ...previous
       };
       selectedKeys.forEach(keyId => {
-        next[keyId] = switchId;
+        next[keyId] = normalized;
       });
       return next;
     });
@@ -334,7 +353,7 @@ export function usePerKeyPerformance({
       };
       for (const [keyId, settings] of hydrated) {
         if (isSwitchProfileId(settings.switchProfile)) {
-          next[keyId] = (settings.switchProfile as SwitchTone);
+          next[keyId] = normalizeSwitchProfileId(settings.switchProfile);
         }
       }
       return preserveEdits(next, (draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined));

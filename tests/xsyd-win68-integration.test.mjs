@@ -56,11 +56,6 @@ async function bundle(input) {
 
 /**
  * Render a component that uses hooks, then hand the element tree back.
- *
- * The bundled React is the one the test process requires, so installing a
- * dispatcher on its client internals is enough for one synchronous render.
- * State setters are no-ops and effects never run: the assertions below only
- * read the markup produced by the first render.
  */
 function renderComponent(element) {
   const internals = React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE
@@ -238,10 +233,6 @@ test('SOCD, disable-binding, handshake, polling rate, and 0x23 readback frames m
   assert.equal(xsydDevice.decodeXsydProfileReply(profileReply), 3)
 
   // Polling rate 0x00 subcmd 0x50 verified on 4k_to_2k_to_1k.pcapng:
-  // #0:   out 5c 04 00 94 | 50 01 ff ff (set 4000 Hz)
-  // #636: out 5c 04 00 94 | 50 02 ff ff (set 2000 Hz)
-  // #996: out 5c 04 00 94 | 50 03 ff ff (set 1000 Hz)
-  // #14:  out 5c 04 00 94 | 50 07 ff ff (read polling rate)
   assert.equal(hex(xsydDevice.buildXsydWritePollingRateFrame(8000)), '5c0400945000ffff')
   assert.equal(hex(xsydDevice.buildXsydWritePollingRateFrame(4000)), '5c0400945001ffff')
   assert.equal(hex(xsydDevice.buildXsydWritePollingRateFrame(2000)), '5c0400945002ffff')
@@ -275,7 +266,7 @@ test('SOCD, disable-binding, handshake, polling rate, and 0x23 readback frames m
   assert.deepEqual([...readFrame.slice(9, 13)], [0xff, 0xff, 0x00, 0x00])
 })
 
-test('XsydDeviceManager connects without reopening an open handle, reassembles multi-report replies, and handles 4k->2k->1k polling-rate USB re-enumeration', async () => {
+test('XsydDeviceManager connects without reopening an open handle, reassembles multi-report replies, guards Profile 0 0x00 0x70 reloads, and handles 4k->2k->1k polling-rate USB re-enumeration', async () => {
   const oldNav = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
   let activeRateCode = 0x00 // Initially 8000 Hz (dev3 in 4k_to_2k_to_1k.pcapng)
   let openCallsOnAlreadyOpened = 0
@@ -325,18 +316,22 @@ test('XsydDeviceManager connects without reopening an open handle, reassembles m
             const ascii = [...Buffer.from('WIN 68 HE MAX', 'ascii')]
             const r = makeReply(0x00, [0x00, 0x26, ...ascii])
             for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+          } else if (op === 0x00 && sub === 0x70) {
+            const slot = bytes[5] === 0x04 ? 0x00 : bytes[5]
+            const r = makeReply(0x00, [0x00, 0x70, slot, 0xff])
+            for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+          } else if (op === 0x23) {
+            const r = makeReply(0x23, bytes.slice(4, 4 + bytes[1]))
+            for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
           } else if (op === 0x00 && sub === 0x50) {
             const code = bytes[5]
             if (code === 0x07) {
-              // Read current polling rate (50 07 ff ff -> 00 50 <code> ff)
               const r = makeReply(0x00, [0x00, 0x50, activeRateCode, 0xff])
               for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
             } else {
-              // Write polling rate (50 <code> ff ff -> 00 50 <code> ff + USB re-enumeration)
               activeRateCode = code
               const r = makeReply(0x00, [0x00, 0x50, activeRateCode, 0xff])
               for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
-              // Simulate USB disconnect + re-enumeration as a new device handle
               this.opened = false
               currentDevice = createMockHidDevice(false)
             }
@@ -356,7 +351,6 @@ test('XsydDeviceManager connects without reopening an open handle, reassembles m
             const bad = makeReply(0x00, [0x00])
             for (const l of listeners) l({ reportId: 0, data: new DataView(bad.buffer) })
           } else if (op === 0x25) {
-            // A late reply for a previous opcode arrives before the real one.
             const stale = makeReply(0x00, [0x00, 0x70, 0x01, 0xff])
             const real = makeReply(0x25, [0x00])
             for (const l of listeners) l({ reportId: 0, data: new DataView(stale.buffer) })
@@ -388,6 +382,21 @@ test('XsydDeviceManager connects without reopening an open handle, reassembles m
       name: 'WIN 68 HE MAX',
     })
 
+    // Verify 0x00 0x70 0x00 guard after a 0x23 write on Profile 0:
+    sentHexFrames.length = 0
+    await mgr.request(xsydDevice.buildXsydSelectProfileFrame(0))
+    await mgr.request(
+      xsydFeatures.buildFieldWriteFrame([{ pos: 0x1a, field: xsydFeatures.XsydFeatureField.Travel, value: 1000 }])
+    )
+    // Subsequent redundant 0x00 0x70 0x00 (e.g. from saveXsydRgbProfile or hydrateFromXsydDevice) must NOT be sent on wire
+    const guardedReply = await mgr.request(xsydDevice.buildXsydSelectProfileFrame(0))
+    assert.equal(guardedReply.opcode, 0x80)
+    assert.equal(
+      sentHexFrames.filter(f => f === '5c0400947000ffff').length,
+      1,
+      'Redundant 0x00 0x70 0x00 after a 0x23 write must be suppressed so firmware VA 0x12AF4 does not wipe SRAM before 500ms Flash flush'
+    )
+
     // Multi-report reply reassembly (3 chunks -> 1 XsydReply)
     const hallReply = await mgr.request(xsydCodec.buildXsydFrame(0x12, [0x07, 0x01]))
     assert.equal(hallReply.opcode, 0x92)
@@ -409,9 +418,6 @@ test('XsydDeviceManager connects without reopening an open handle, reassembles m
       '5c0400945007ffff',
     ])
 
-    // A reply for another opcode is discarded, not turned into a request failure:
-    // the mock answers 0x24 with opcode 0x80, so the request has to time out on
-    // its own opcode instead of rejecting with "Unexpected ... opcode".
     const staleReplyStarted = Date.now()
     await assert.rejects(
       () => mgr.request(xsydAdvanced.buildMtFrame({ key: 26, hold: 29, tap: 8, delayMs: 200 }), 300),
@@ -419,7 +425,6 @@ test('XsydDeviceManager connects without reopening an open handle, reassembles m
     )
     assert.ok(Date.now() - staleReplyStarted >= 250, 'the mismatched reply must not settle the request early')
 
-    // A stale reply followed by the real one resolves with the real one.
     const reply = await mgr.request(xsydCodec.buildXsydFrame(0x25, [0x00]), 500)
     assert.equal(reply.opcode, 0xa5)
     assert.equal(reply.checksumValid, true)
@@ -464,7 +469,6 @@ test('GeneralSettingsPage enables Polling Rate on WIN 68 HE MAX while keeping HE
   btn2000.props.onClick()
   assert.deepEqual(selectedRates, [2000])
 
-  // OS mode radio buttons remain disabled on WIN 68 HE MAX
   const osModeButtons = radioButtons.filter(b => !textContent(b).includes('Hz'))
   assert.equal(osModeButtons.length, 2)
   for (const btn of osModeButtons) {
@@ -472,7 +476,7 @@ test('GeneralSettingsPage enables Polling Rate on WIN 68 HE MAX while keeping HE
   }
 })
 
-test('saveXsydAdvancedBindings and xsydProtocolEncoder use micrometres, verify readback, and reject DKS/unverified SOCD', async () => {
+test('saveXsydAdvancedBindings, xsydProtocolEncoder, and hydrateFromXsydDevice round-trip Profile 0 Actuation, 0.15mm/0.02mm RT Press/Release, Top/Bottom Deadzones, and Switch Types', async () => {
   const sentFrames = []
   const fieldMemory = new Map()
 
@@ -494,6 +498,11 @@ test('saveXsydAdvancedBindings and xsydProtocolEncoder use micrometres, verify r
       }
       if (op === 0x00 && sub === 0x70) {
         return xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x70, frame[5], 0x00]))
+      }
+      if (op === 0x29) {
+        return xsydCodec.decodeXsydFrame(
+          makeReply(0x29, [0x00, 0x00, 0x00, 0xf4, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        )
       }
       if (op === 0x23) {
         const flag = frame[4]
@@ -523,7 +532,8 @@ test('saveXsydAdvancedBindings and xsydProtocolEncoder use micrometres, verify r
     },
   }
 
-  // 1. Performance encoder converts mm -> micrometres (1.50 mm = 1500 um, never 150)
+  // 1. Performance encoder writes 0x08 (Header), 0x04 (Travel), 0x14 (RT Press), 0x15 (RT Release),
+  //    0x16 (TopDeadzone), 0x17 (BottomDeadzone), and 0x19 (SwitchType) independently.
   const snapshot = {
     profileSlot: 0,
     tachyon: false,
@@ -536,13 +546,28 @@ test('saveXsydAdvancedBindings and xsydProtocolEncoder use micrometres, verify r
         actuationMm: 1.51,
         rapidTriggerEnabled: true,
         splitSensitivity: false,
-        rapidSensitivityMm: 0.1,
-        pressSensitivityMm: 0.1,
-        releaseSensitivityMm: 0.1,
+        rapidSensitivityMm: 0.15,
+        pressSensitivityMm: 0.15,
+        releaseSensitivityMm: 0.15,
         deadzoneEnabled: true,
-        topDeadzoneMm: 0.1,
-        bottomDeadzoneMm: 0.1,
+        topDeadzoneMm: 1.0,
+        bottomDeadzoneMm: 0.3,
         switchProfile: 'jade-pro',
+      },
+      {
+        keyId: 'KeyW',
+        matrixKey: 0,
+        matrixHex: '0x0000',
+        actuationMm: 3.4, // Must be clamped to 3300 um for 'white' (SwitchType = 3)
+        rapidTriggerEnabled: false,
+        splitSensitivity: true,
+        rapidSensitivityMm: 0.02,
+        pressSensitivityMm: 0.02,
+        releaseSensitivityMm: 0.25,
+        deadzoneEnabled: true,
+        topDeadzoneMm: 0.2,
+        bottomDeadzoneMm: 0.3,
+        switchProfile: 'white',
       },
     ],
   }
@@ -551,12 +576,51 @@ test('saveXsydAdvancedBindings and xsydProtocolEncoder use micrometres, verify r
   const fieldFrame = Buffer.from(packets[1], 'hex')
   const decodedWrites = xsydFeatures.decodeFieldWritePayload(fieldFrame.subarray(4, 4 + fieldFrame[1]))
   assert.deepEqual(decodedWrites, [
+    // Space: RT ON (0x20), Travel 1510 um, RT Press/Release 150 um (0.15 mm), Top DZ 1000 um (1.0 mm), Bottom DZ 300 um (0.3 mm), Switch 1 (Jade Pro)
     { pos: 0x2c, field: xsydFeatures.XsydFeatureField.Header, value: 0x20 },
     { pos: 0x2c, field: xsydFeatures.XsydFeatureField.Travel, value: 1510 },
-    { pos: 0x2c, field: xsydFeatures.XsydFeatureField.RapidTrigger, value: 100 },
-    { pos: 0x2c, field: xsydFeatures.XsydFeatureField.Deadzone, value: 100 },
+    { pos: 0x2c, field: xsydFeatures.XsydFeatureField.RapidTriggerPress, value: 150 },
+    { pos: 0x2c, field: xsydFeatures.XsydFeatureField.RapidTriggerRelease, value: 150 },
+    { pos: 0x2c, field: xsydFeatures.XsydFeatureField.TopDeadzone, value: 1000 },
+    { pos: 0x2c, field: xsydFeatures.XsydFeatureField.BottomDeadzone, value: 300 },
     { pos: 0x2c, field: xsydFeatures.XsydFeatureField.SwitchType, value: 1 },
+    // KeyW: RT OFF (0x00), Travel clamped to 3300 um for Switch 3 ('white'), RT Press 20 um (0.02 mm), RT Release 250 um (0.25 mm), Top DZ 200 um (0.2 mm), Bottom DZ 300 um (0.3 mm), Switch 3
+    { pos: 0x1a, field: xsydFeatures.XsydFeatureField.Header, value: 0x00 },
+    { pos: 0x1a, field: xsydFeatures.XsydFeatureField.Travel, value: 3300 },
+    { pos: 0x1a, field: xsydFeatures.XsydFeatureField.RapidTriggerPress, value: 20 },
+    { pos: 0x1a, field: xsydFeatures.XsydFeatureField.RapidTriggerRelease, value: 250 },
+    { pos: 0x1a, field: xsydFeatures.XsydFeatureField.TopDeadzone, value: 200 },
+    { pos: 0x1a, field: xsydFeatures.XsydFeatureField.BottomDeadzone, value: 300 },
+    { pos: 0x1a, field: xsydFeatures.XsydFeatureField.SwitchType, value: 3 },
   ])
+
+  // Apply those writes into fieldMemory and verify hydrateFromXsydDevice on Profile 0
+  await requester.request(fieldFrame)
+  const hydrated = await xsydDevice.hydrateFromXsydDevice(requester, 0, ['Space', 'KeyW'])
+  assert.deepEqual(hydrated.get('Space'), {
+    switchProfile: 'switch-1',
+    actuationMm: 1.51,
+    rapidTriggerEnabled: true,
+    splitSensitivity: false,
+    rapidSensitivityMm: 0.15,
+    pressSensitivityMm: 0.15,
+    releaseSensitivityMm: 0.15,
+    topDeadzoneMm: 1.0,
+    bottomDeadzoneMm: 0.3,
+    deadzoneEnabled: true,
+  })
+  assert.deepEqual(hydrated.get('KeyW'), {
+    switchProfile: 'white',
+    actuationMm: 3.3,
+    rapidTriggerEnabled: false,
+    splitSensitivity: true,
+    rapidSensitivityMm: 0.02,
+    pressSensitivityMm: 0.02,
+    releaseSensitivityMm: 0.25,
+    topDeadzoneMm: 0.2,
+    bottomDeadzoneMm: 0.3,
+    deadzoneEnabled: true,
+  })
 
   // 2. Save MT, TGL, MPT, END, and SOCD (mode=0) and verify exact wire bytes
   const draft = [
@@ -641,7 +705,6 @@ test('DKS unsupported modal and badges appear on win68/win68HeMax and never exis
     const AdvancedKeysPage = advancedPageMod.default
     const { DksUnsupportedModal, XSYD_DKS_DOC_URL } = advancedPageMod
 
-    // 1. Model win68 / win68HeMax: DKS card has Unsupported badge and modal renders with required copy and doc link
     const win68Tree = renderComponent({
       type: AdvancedKeysPage,
       props: {
@@ -665,7 +728,6 @@ test('DKS unsupported modal and badges appear on win68/win68HeMax and never exis
     assert.equal(win68DksButton.props['aria-disabled'], 'true')
     assert.match(textContent(win68DksButton), /Unsupported|Chưa hỗ trợ/)
 
-    // RS and DDKS have no card at all: their layouts are not part of this page.
     assert.equal(win68Buttons.find(b => b.props['data-mode'] === 'RS'), undefined)
     assert.equal(win68Buttons.find(b => b.props['data-mode'] === 'DDKS'), undefined)
 
@@ -683,7 +745,6 @@ test('DKS unsupported modal and badges appear on win68/win68HeMax and never exis
     )
     assert.equal(docLinks.length, 1, 'Modal links to docs/xsyd-protocol.md §7')
 
-    // Verify Vietnamese translations for the modal
     const trVi = i18nMod.createTranslator('vi')
     assert.equal(
       trVi('DKS is not supported on WIN 68 HE MAX'),
@@ -695,7 +756,6 @@ test('DKS unsupported modal and badges appear on win68/win68HeMax and never exis
     assert.equal(trVi('View documentation'), 'Xem tài liệu')
     assert.ok(renderComponent({ type: DksUnsupportedModal, props: { open: false, onClose() {} } }) === null)
 
-    // 2. Model hero68 / hero84: DKS card is normal and DKS unsupported modal does NOT exist
     for (const heroModel of ['hero68', 'hero84']) {
       const heroTree = renderComponent({
         type: AdvancedKeysPage,
@@ -732,16 +792,11 @@ test('DKS unsupported modal and badges appear on win68/win68HeMax and never exis
   }
 })
 
-
 test('WIN 68 HE MAX 0x12 / 0x92 Hall travel & pressed-state stream matches travel_test_press_randomkey.pcapng', async () => {
   const hallMod = await bundle('src/protocol/xsyd/hall.ts')
   const deviceMod = await bundle('src/protocol/xsyd/device.ts')
   const codecMod = await bundle('src/protocol/xsyd/codec.ts')
 
-  // 1. Verify request frames match travel_test_press_randomkey.pcapng byte for byte:
-  //    - 5c 04 12 a6 | 03 01 ff ff (pressed flags)
-  //    - 5c 04 12 a6 | 02 01 ff ff (travel table 1: matrix indices 0..62)
-  //    - 5c 04 12 a6 | 02 02 ff ff (travel table 2: matrix indices 63..125)
   const pressedReq = hallMod.buildXsydHallPressedFrame()
   const travel1Req = hallMod.buildXsydHallTravelFrame(1)
   const travel2Req = hallMod.buildXsydHallTravelFrame(2)
@@ -750,16 +805,11 @@ test('WIN 68 HE MAX 0x12 / 0x92 Hall travel & pressed-state stream matches trave
   assert.deepEqual([...travel1Req.slice(0, 8)], [0x5c, 0x04, 0x12, 0xa6, 0x02, 0x01, 0xff, 0xff])
   assert.deepEqual([...travel2Req.slice(0, 8)], [0x5c, 0x04, 0x12, 0xa6, 0x02, 0x02, 0xff, 0xff])
 
-  // 2. Verify table routing for specific keys:
-  //    KeyW is at matrixIndex 44 (< 63 -> table 1); KeyS is at 65 and KeyM is at 92 (>= 63 -> table 2)
   assert.deepEqual(hallMod.xsydTableIdsForKeys(['KeyW', 'KeyQ']), [1])
   assert.deepEqual(hallMod.xsydTableIdsForKeys(['KeyS', 'KeyM']), [2])
   assert.deepEqual(hallMod.xsydTableIdsForKeys(['KeyW', 'KeyS']), [1, 2])
   assert.deepEqual(hallMod.xsydTableIdsForKeys([]), [1, 2])
 
-  // 3. Reconstruct exact capture replies from travel_test_press_randomkey.pcapng:
-  //    - pkt 4588 (KeyM bottomed out at 3400 um = 0x0D48 at table 2 slot 29 -> matrixIndex 92, pressed flag at body[92] = 2)
-  //    - pkt 16294 (KeyS pressed to 1783 um = 0x06F7 at table 2 slot 2 -> matrixIndex 65, pressed flag at body[65] = 2)
   const pressedPayload = new Uint8Array(0x82)
   pressedPayload[0] = 0x00
   pressedPayload[1] = 0x03
@@ -772,15 +822,12 @@ test('WIN 68 HE MAX 0x12 / 0x92 Hall travel & pressed-state stream matches trave
   const travel2Payload = new Uint8Array(0x80)
   travel2Payload[0] = 0x00
   travel2Payload[1] = 0x02
-  // Slot 2 (matrixIndex 65 = KeyS): 1783 um (0x06F7 -> F7 06)
   travel2Payload[2 + 2 * 2] = 247
   travel2Payload[2 + 2 * 2 + 1] = 6
-  // Slot 29 (matrixIndex 92 = KeyM): 3400 um (0x0D48 -> 48 0D)
   travel2Payload[2 + 29 * 2] = 72
   travel2Payload[2 + 29 * 2 + 1] = 13
   const travel2ReplyFrame = codecMod.buildXsydFrame(0x92, travel2Payload)
 
-  // Verify 3-report reassembly via XsydFrameAssembler
   const assembler = new codecMod.XsydFrameAssembler()
   const pReports = codecMod.xsydReports(pressedReplyFrame)
   assert.equal(pReports.length, 3)
@@ -796,7 +843,6 @@ test('WIN 68 HE MAX 0x12 / 0x92 Hall travel & pressed-state stream matches trave
   const decodedTravel2 = assembler.push(tReports[2])
   assert.ok(decodedTravel2 && decodedTravel2.checksumValid)
 
-  // 4. Verify readXsydHallSnapshot end-to-end with a mock requester
   const sentFrames = []
   const samples = await deviceMod.readXsydHallSnapshot(
     {
@@ -837,7 +883,6 @@ test('WIN 68 HE MAX 0x18 Global RGB & 0x2A Per-Key RGB match USB captures byte-f
 
   const defaultPaletteHex = '0000ffff00ff00ff007f7fffff0000ff7f007fff7f7f00ff7f7f7fff'
 
-  // 1. Verify 0x18 read frames match connect_keyboard_to_webhidofficial.txt (idx=20) & profile_1_2_3_4.txt (idx=2)
   assert.equal(
     hex(rgbMod.buildXsydRgbReadFrame(false)),
     '5c2b18d4' + '0000000000' + 'ff'.repeat(28) + '00'.repeat(10)
@@ -847,45 +892,37 @@ test('WIN 68 HE MAX 0x18 Global RGB & 0x2A Per-Key RGB match USB captures byte-f
     '5c2b18d4' + '0000000000' + defaultPaletteHex + '00'.repeat(10)
   )
 
-  // 2. Verify 0x18 write frames match tideflux_softripple_snippingstorm_...pcapng byte-for-byte
   const writeCases = [
-    // Tide Flux (0x02), brightness=4, speed=3, reverse=off (0x01), multicolor (0x00) -> pkt=2274
     {
       zone: { mode: 0x02, brightness: 4, speed: 3, reverse: false, mix: true, colorIndex: 0, rgb: [255, 0, 0] },
       expectedTail: '01040203020000',
       expectedCk: 'd5',
     },
-    // Soft Ripple (0x03), brightness=4, speed=3, reverse=off, multicolor -> pkt=3798
     {
       zone: { mode: 0x03, brightness: 4, speed: 3, reverse: false, mix: true, colorIndex: 0, rgb: [255, 0, 0] },
       expectedTail: '01040303020000',
       expectedCk: 'd5',
     },
-    // Snipping Storm (0x04), brightness=0, speed=3, reverse=off, multicolor -> pkt=7782
     {
       zone: { mode: 0x04, brightness: 0, speed: 3, reverse: false, mix: true, colorIndex: 0, rgb: [255, 0, 0] },
       expectedTail: '01000403020000',
       expectedCk: 'd5',
     },
-    // Snipping Storm (0x04), brightness=4, speed=4, reverse=on (0x03), multicolor -> pkt=23676
     {
       zone: { mode: 0x04, brightness: 4, speed: 4, reverse: true, mix: true, colorIndex: 0, rgb: [255, 0, 0] },
       expectedTail: '03040404020000',
       expectedCk: 'd5',
     },
-    // Smooth Flow (0x0C), brightness=4, speed=4, reverse=off, color=Red (0x01) -> pkt=36682
     {
       zone: { mode: 0x0c, brightness: 4, speed: 4, reverse: false, mix: false, colorIndex: 1, rgb: [255, 0, 0] },
       expectedTail: '01040c04020001',
       expectedCk: 'd6',
     },
-    // Smooth Flow (0x0C), brightness=4, speed=4, reverse=off, color=Blue (0x04) -> pkt=38840
     {
       zone: { mode: 0x0c, brightness: 4, speed: 4, reverse: false, mix: false, colorIndex: 4, rgb: [0, 0, 255] },
       expectedTail: '01040c04020004',
       expectedCk: 'd9',
     },
-    // Custom Per-Key RGB (0x15), brightness=4, speed=3, reverse=off, color=0 -> Q(green)-E(red)_-Z(yellow)-P(Pink).txt idx=0
     {
       zone: { mode: 0x15, brightness: 4, speed: 3, reverse: false, mix: true, colorIndex: 0, rgb: [255, 255, 255] },
       expectedTail: '01041503020000',
@@ -899,7 +936,6 @@ test('WIN 68 HE MAX 0x18 Global RGB & 0x2A Per-Key RGB match USB captures byte-f
       hex(frame),
       `5c2c18${tc.expectedCk}0100000000${defaultPaletteHex}00000000${tc.expectedTail}`
     )
-    // Roundtrip decode via 0x98 reply (LEN = 0x2D)
     const replyPayload = new Uint8Array(0x2d)
     replyPayload.set(frame.slice(4, 4 + 0x2c), 0)
     replyPayload[0] = 0x00
@@ -911,13 +947,11 @@ test('WIN 68 HE MAX 0x18 Global RGB & 0x2A Per-Key RGB match USB captures byte-f
     assert.equal(decoded.colorIndex, tc.zone.colorIndex)
   }
 
-  // 3. Verify 0x2A single-key write frames match Q(green)-E(red)_-Z(yellow)-P(Pink).txt (idx=6, 8, 10, 13)
   assert.equal(hex(rgbMod.buildXsydPerKeyWriteFrame(0x14, [7, 255, 0])), '5c052ac0011407ff00')
   assert.equal(hex(rgbMod.buildXsydPerKeyWriteFrame(0x08, [255, 0, 0])), '5c052ac00108ff0000')
   assert.equal(hex(rgbMod.buildXsydPerKeyWriteFrame(0x1d, [232, 255, 0])), '5c052ac0011de8ff00')
   assert.equal(hex(rgbMod.buildXsydPerKeyWriteFrame(0x13, [255, 0, 206])), '5c052a8e0113ff00ce')
 
-  // 4. Verify 0x2A 5-frame batch read matches connect_keyboard_to_webhidofficial.txt (idx=290..298)
   const readFrames = rgbMod.buildXsydPerKeyReadFrames()
   assert.equal(readFrames.length, 5)
   for (const rf of readFrames) {
@@ -927,10 +961,8 @@ test('WIN 68 HE MAX 0x18 Global RGB & 0x2A Per-Key RGB match USB captures byte-f
     assert.equal(rf[3], 0xf4)
     assert.equal(rf[4], 0x00)
   }
-  // Last 2 slots of frame 5 are padded with ff 00 00 00
   assert.equal(hex(readFrames[4]).slice(-16), 'ff000000ff000000')
 
-  // 5. Verify saveXsydRgbProfile & XsydCustomRgbStreamer delta streaming
   const sent = []
   const mockRequester = {
     async request(frame) {
@@ -970,14 +1002,13 @@ test('WIN 68 HE MAX 0x18 Global RGB & 0x2A Per-Key RGB match USB captures byte-f
   assert.deepEqual(verifiedSnapshot.colors.KeyP, [255, 0, 206])
   assert.equal(verifiedSnapshot.keys.mode, 0x15)
 
-  // Delta streamer only sends changed keys
   sent.length = 0
   const streamer = new rgbMod.XsydCustomRgbStreamer()
   const count1 = await streamer.pushFrameDelta(mockRequester, { KeyQ: '#07ff00', KeyE: '#ff0000' })
   assert.equal(count1, 2)
-  assert.equal(sent.length, 3) // 1 x 0x18 start + 2 x 0x2A key writes
+  assert.equal(sent.length, 3)
   const count2 = await streamer.pushFrameDelta(mockRequester, { KeyQ: '#07ff00', KeyE: '#0000ff' })
-  assert.equal(count2, 1) // Only KeyE changed
+  assert.equal(count2, 1)
 })
 
 test('AulaWin68ExactRgbEngine & XsydFirmwareRgbPreview execute all 28 internal modes and 27 external modes', async () => {
@@ -989,11 +1020,10 @@ test('AulaWin68ExactRgbEngine & XsydFirmwareRgbPreview execute all 28 internal m
   assert.equal(catalogMod.WIN68_KEY_RGB_MODES.length, 27)
   assert.equal(previewMod.KEYS_68.length, 68)
 
-  // Verify integer math helpers (VA 0x113E6, 0x11412, 0x1142C, 0x114C6)
   const engine = new previewMod.AulaWin68ExactRgbEngine(1)
   assert.equal(engine.isqrt32(0), 0)
   assert.equal(engine.isqrt32(65536), 256)
-  assert.equal(engine.hypot256(3, 4), 1280) // 5 * 256
+  assert.equal(engine.hypot256(3, 4), 1280)
   assert.equal(engine.sin720(0), 0)
   assert.equal(engine.sin720(180), 255)
   assert.equal(engine.sin720(360), 0)
@@ -1002,7 +1032,6 @@ test('AulaWin68ExactRgbEngine & XsydFirmwareRgbPreview execute all 28 internal m
   assert.equal(engine.hsvToRgb(120, 255, 255) & 0xffffff, 0x00ff00)
   assert.equal(engine.hsvToRgb(240, 255, 255) & 0xffffff, 0x0000ff)
 
-  // Verify all 27 external modes (0..26) run cleanly in XsydFirmwareRgbPreview
   const baseProfile = rgbMod.defaultXsydRgb()
   const preview = new previewMod.XsydFirmwareRgbPreview(baseProfile)
   for (const modeInfo of catalogMod.WIN68_KEY_RGB_MODES) {
@@ -1029,7 +1058,6 @@ test('AulaWin68ExactRgbEngine & XsydFirmwareRgbPreview execute all 28 internal m
     )
   }
 
-  // Verify brightness 0 (Internal Mode 0) turns all 68 keys off (#000000)
   const offProfile = structuredClone(baseProfile)
   offProfile.keys.brightness = 0
   preview.configure(offProfile)
@@ -1062,11 +1090,11 @@ test('RgbSettingsPage renders WIN 68 HE MAX 27 modes, Reverse toggle, and 8 Colo
     DeviceModelContext._currentValue = 'win68HeMax'
     try {
       const profile = rgbMod.defaultXsydRgb()
-      profile.keys.mode = 2 // Tide Flux (supports speed, reverse, color)
+      profile.keys.mode = 2
       const tree = renderComponent({
         type: RgbSettingsPage,
         props: {
-          model: "win68HeMax",
+          model: 'win68HeMax',
           value: profile,
           onChange() {},
           busy: false,
@@ -1092,7 +1120,6 @@ test('RgbSettingsPage renders WIN 68 HE MAX 27 modes, Reverse toggle, and 8 Colo
     else delete globalThis.document
   }
 })
-
 
 test('WIN 68 HE MAX GamepadPage & BackgroundServicePage work without timeout when Windows service is running', async () => {
   const registryMod = await bundle('src/keyboard/registry/index.ts')

@@ -34,6 +34,7 @@ import {
   decodeXsydFrame,
   SILENT_REPLY,
   XsydFrameAssembler,
+  xsydChecksum,
   xsydReports,
   XSYD_MAGIC,
   XSYD_REPORT_LENGTH,
@@ -42,9 +43,11 @@ import {
 import {
   buildFieldReadFrame,
   buildFieldWriteFrame,
+  buildGlobalActuationReadFrame,
   chunkFieldWrites,
   codeForKeyValue,
   decodeFieldWritePayload,
+  decodeGlobalActuationReply,
   keyValueForCode,
   mmToUm,
   umToMm,
@@ -455,19 +458,35 @@ export async function readXsydFieldTable(
   return results
 }
 
+/**
+ * Switch ID table verified against WIN 68 HE MAX firmware v1.1.4 (`VA 0x1D48C`,
+ * `0x04E44`, `0x05644`, `0x12CEA..0x12D14`) and `yongchun` USBPcap capture:
+ * - `0`: Wing Chun / Graywood (`switch-4`, Curve 0, max travel `3400 µm`)
+ * - `1`: Jade Pro / Magnetic Jade (`switch-1`, Curve 0, max travel `3400 µm`)
+ * - `2`: Black King / Black Emperor / Uranus (`black`, Curve 1, max travel `3300 µm`)
+ * - `3`: Meteor Magnetic / TTC King (`white`, Curve 1, max travel `3300 µm`)
+ */
 const XSYD_SWITCH_ID_BY_PROFILE: Readonly<Record<string, number>> = {
+  'switch-4': 0,
   'wing-chun': 0,
-  'jade-pro': 1,
-  black: 2,
-  white: 3,
   clear: 0,
+  'switch-5': 0,
+  'switch-22': 0,
+  'switch-1': 1,
+  'jade-pro': 1,
+  'switch-14': 1,
   blue: 1,
+  'switch-24': 1,
+  black: 2,
+  'switch-3': 2,
   uranus: 2,
+  white: 3,
+  'switch-2': 3,
 }
 
 const XSYD_PROFILE_BY_SWITCH_ID: Readonly<Record<number, string>> = {
-  0: 'wing-chun',
-  1: 'jade-pro',
+  0: 'switch-4',
+  1: 'switch-1',
   2: 'black',
   3: 'white',
 }
@@ -478,6 +497,14 @@ export function xsydSwitchTypeId(switchProfile: string): number {
 
 export function xsydSwitchProfileId(switchType: number): string {
   return XSYD_PROFILE_BY_SWITCH_ID[switchType] ?? 'white'
+}
+
+/**
+ * Maximum actuation/RT travel in micrometres enforced by firmware sanitizer
+ * `VA 0x12CEA..0x12D14` (`3400 µm` for switch IDs `0, 1`; `3300 µm` for `2, 3`).
+ */
+export function xsydSwitchMaxTravelUm(switchType: number): number {
+  return switchType === 2 || switchType === 3 ? 3300 : 3400
 }
 
 export function toXsydActionByte(action: number): number {
@@ -790,7 +817,9 @@ export async function saveXsydRemapChanges(
 
 /**
  * Encode a `DeviceConfigurationSnapshot` into XSYD `0x5C` hex packets.
- * Uses micrometres (`mmToUm`) for actuation travel, rapid trigger, and deadzone.
+ * Uses micrometres (`mmToUm`) for actuation travel (`0x04`), Rapid Trigger
+ * Press/Release (`0x14` / `0x15`), Top/Bottom Deadzone (`0x16` / `0x17`),
+ * Header (`0x08`), and SwitchType (`0x19`).
  */
 const xsydWrittenFieldCache = new Map<string, number>()
 
@@ -804,19 +833,26 @@ export const xsydProtocolEncoder: Hero68ProtocolEncoder = {
       if (travelUm < 100 || travelUm > 3400) {
         throw new RangeError(`Actuation depth ${key.actuationMm} mm (${travelUm} µm) is outside 100..3400 µm`)
       }
-      const rtMm = key.rapidTriggerEnabled
-        ? key.splitSensitivity
-          ? key.pressSensitivityMm
-          : key.rapidSensitivityMm
-        : 0
-      const rtUm = key.rapidTriggerEnabled ? mmToUm(rtMm) : 0
-      const dzUm = key.deadzoneEnabled ? mmToUm(key.topDeadzoneMm) : 0
       const swId = xsydSwitchTypeId(key.switchProfile)
+      const switchMaxUm = xsydSwitchMaxTravelUm(swId)
+      const effectiveTravelUm = Math.max(100, Math.min(switchMaxUm, travelUm))
+      const headerValue = key.rapidTriggerEnabled ? 0x20 : 0x00
+
+      const rawPressMm = key.splitSensitivity ? key.pressSensitivityMm : key.rapidSensitivityMm
+      const rawReleaseMm = key.splitSensitivity ? key.releaseSensitivityMm : key.rapidSensitivityMm
+      const pressRtUm = Math.max(10, Math.min(switchMaxUm, mmToUm(rawPressMm > 0 ? rawPressMm : 0.3)))
+      const releaseRtUm = Math.max(10, Math.min(switchMaxUm, mmToUm(rawReleaseMm > 0 ? rawReleaseMm : 0.3)))
+
+      const topDzUm = key.deadzoneEnabled ? Math.max(0, Math.min(1000, mmToUm(key.topDeadzoneMm))) : 0
+      const bottomDzUm = key.deadzoneEnabled ? Math.max(0, Math.min(1000, mmToUm(key.bottomDeadzoneMm))) : 0
+
       const keyWrites: XsydFieldWrite[] = [
-        { pos, field: XsydFeatureField.Header, value: 0x20 },
-        { pos, field: XsydFeatureField.Travel, value: travelUm },
-        { pos, field: XsydFeatureField.RapidTrigger, value: rtUm },
-        { pos, field: XsydFeatureField.Deadzone, value: dzUm },
+        { pos, field: XsydFeatureField.Header, value: headerValue },
+        { pos, field: XsydFeatureField.Travel, value: effectiveTravelUm },
+        { pos, field: XsydFeatureField.RapidTriggerPress, value: pressRtUm },
+        { pos, field: XsydFeatureField.RapidTriggerRelease, value: releaseRtUm },
+        { pos, field: XsydFeatureField.TopDeadzone, value: topDzUm },
+        { pos, field: XsydFeatureField.BottomDeadzone, value: bottomDzUm },
         { pos, field: XsydFeatureField.SwitchType, value: swId },
       ]
       for (const w of keyWrites) {
@@ -833,11 +869,9 @@ export const xsydProtocolEncoder: Hero68ProtocolEncoder = {
 }
 
 /**
- * Hydrate per-key actuation, Rapid Trigger, deadzone, and switch settings from
+ * Hydrate per-key actuation (`0x04`), Rapid Trigger (`0x08`, `0x14`, `0x15`),
+ * Top/Bottom deadzone (`0x16`, `0x17`), and switch settings (`0x19`) from
  * a WIN 68 HE MAX via `0x23` (`payload[0] = 0x00`), converting µm -> mm.
- * When the board echoes `0x0000` for unqueried/write-only slots, falls back to
- * the last written value cached in `xsydWrittenFieldCache` and leaves unverified
- * zero echoes undefined so saved draft settings are never overwritten.
  */
 export async function hydrateFromXsydDevice(
   requester: XsydRequester,
@@ -847,54 +881,87 @@ export async function hydrateFromXsydDevice(
   const handshake = await readXsydHandshake(requester)
   await requester.request(buildXsydSelectProfileFrame(profileSlot))
 
+  let globalActuationUm: number | undefined
+  try {
+    const globalReply = await requester.request(buildGlobalActuationReadFrame())
+    globalActuationUm = decodeGlobalActuationReply(globalReply)
+  } catch {
+    // Optional if mock requester does not implement 0x29
+  }
+
   const queries: { pos: number; field: number }[] = []
   for (const keyId of keyIds) {
     const pos = keyValueForCode(keyId)
     if (pos === undefined) continue
     queries.push(
+      { pos, field: XsydFeatureField.Header },
       { pos, field: XsydFeatureField.Travel },
-      { pos, field: XsydFeatureField.RapidTrigger },
-      { pos, field: XsydFeatureField.Deadzone },
+      { pos, field: XsydFeatureField.RapidTriggerPress },
+      { pos, field: XsydFeatureField.RapidTriggerRelease },
+      { pos, field: XsydFeatureField.TopDeadzone },
+      { pos, field: XsydFeatureField.BottomDeadzone },
       { pos, field: XsydFeatureField.SwitchType }
     )
   }
 
   const records = await readXsydFieldTable(requester, queries)
-  const hydrated = new Map<string, HydratedKeySettings>()
+  const fieldsByPos = new Map<number, Map<number, number>>()
   for (const record of records) {
-    const keyId = codeForKeyValue(record.pos)
+    let fieldMap = fieldsByPos.get(record.pos)
+    if (!fieldMap) {
+      fieldMap = new Map<number, number>()
+      fieldsByPos.set(record.pos, fieldMap)
+    }
+    fieldMap.set(record.field, record.value)
+  }
+
+  const hydrated = new Map<string, HydratedKeySettings>()
+  for (const [pos, fieldMap] of fieldsByPos) {
+    const keyId = codeForKeyValue(pos)
     if (!keyId) continue
-    const entry = hydrated.get(keyId) ?? {}
+    const entry: HydratedKeySettings = {}
     hydrated.set(keyId, entry)
-    const cached =
-      xsydWrittenFieldCache.get(`${profileSlot}:${record.pos}:${record.field}`) ??
-      xsydWrittenFieldCache.get(`${record.pos}:${record.field}`)
-    const effectiveValue = record.value > 0 ? record.value : cached
-    if (record.field === XsydFeatureField.Travel) {
-      if (effectiveValue !== undefined && effectiveValue > 0) {
-        const clampedUm = Math.max(handshake.minTravelUm, Math.min(handshake.maxTravelUm, effectiveValue))
-        entry.actuationMm = umToMm(clampedUm)
-      }
-    } else if (record.field === XsydFeatureField.RapidTrigger) {
-      if (effectiveValue !== undefined) {
-        const rtMm = umToMm(effectiveValue)
-        entry.rapidTriggerEnabled = effectiveValue > 0
-        entry.splitSensitivity = false
-        entry.rapidSensitivityMm = rtMm > 0 ? rtMm : 0.1
-        entry.pressSensitivityMm = rtMm
-        entry.releaseSensitivityMm = rtMm
-      }
-    } else if (record.field === XsydFeatureField.Deadzone) {
-      if (effectiveValue !== undefined) {
-        const dzMm = umToMm(effectiveValue)
-        entry.deadzoneEnabled = effectiveValue > 0
-        entry.topDeadzoneMm = dzMm
-        entry.bottomDeadzoneMm = dzMm
-      }
-    } else if (record.field === XsydFeatureField.SwitchType) {
-      if (effectiveValue !== undefined) {
-        entry.switchProfile = xsydSwitchProfileId(effectiveValue)
-      }
+
+    const swVal = fieldMap.get(XsydFeatureField.SwitchType)
+    if (swVal !== undefined) {
+      entry.switchProfile = xsydSwitchProfileId(swVal)
+    }
+
+    const rawTravel = fieldMap.get(XsydFeatureField.Travel)
+    const fallbackTravel =
+      globalActuationUm ??
+      xsydWrittenFieldCache.get(`${profileSlot}:${pos}:${XsydFeatureField.Travel}`) ??
+      xsydWrittenFieldCache.get(`${pos}:${XsydFeatureField.Travel}`)
+    const effectiveTravel = rawTravel && rawTravel > 0 ? rawTravel : fallbackTravel
+    if (effectiveTravel !== undefined && effectiveTravel > 0) {
+      const clampedUm = Math.max(handshake.minTravelUm, Math.min(handshake.maxTravelUm, effectiveTravel))
+      entry.actuationMm = umToMm(clampedUm)
+    }
+
+    const headerVal = fieldMap.get(XsydFeatureField.Header)
+    const pressVal = fieldMap.get(XsydFeatureField.RapidTriggerPress)
+    const releaseVal = fieldMap.get(XsydFeatureField.RapidTriggerRelease)
+    if (headerVal !== undefined || pressVal !== undefined || releaseVal !== undefined) {
+      const rtEnabled = headerVal !== undefined ? (headerVal & 0x30) === 0x20 : (pressVal ?? 0) > 0
+      const pressUm = pressVal && pressVal > 0 ? pressVal : 300
+      const releaseUm = releaseVal && releaseVal > 0 ? releaseVal : pressUm
+      const pressMm = umToMm(pressUm)
+      const releaseMm = umToMm(releaseUm)
+      entry.rapidTriggerEnabled = rtEnabled
+      entry.splitSensitivity = Math.abs(pressMm - releaseMm) >= 0.005
+      entry.rapidSensitivityMm = pressMm
+      entry.pressSensitivityMm = pressMm
+      entry.releaseSensitivityMm = releaseMm
+    }
+
+    const topDzVal = fieldMap.get(XsydFeatureField.TopDeadzone)
+    const bottomDzVal = fieldMap.get(XsydFeatureField.BottomDeadzone)
+    if (topDzVal !== undefined || bottomDzVal !== undefined) {
+      const topUm = topDzVal ?? 0
+      const bottomUm = bottomDzVal ?? topUm
+      entry.topDeadzoneMm = umToMm(topUm)
+      entry.bottomDeadzoneMm = umToMm(bottomUm)
+      entry.deadzoneEnabled = topUm > 0 || bottomUm > 0
     }
   }
   return hydrated
@@ -913,6 +980,10 @@ function errorMessage(error: unknown): string {
  * - Reassembles multi-packet replies using `XsydFrameAssembler` (by `LEN` at byte 1).
  * - Resolves the waiter whose `expectedOpcode` matches; a reply for another
  *   request is discarded, so a late or unsolicited frame cannot fail the request.
+ * - Guards `0x00` subcmd `0x70` profile selection against the firmware's 500 ms
+ *   deferred Flash flush (`VA 0x07E28` -> `0x11914` vs `VA 0x16342` -> `0x12AF4`),
+ *   so redundant `0x00 0x70 <slot>` frames during a multi-step save never reload
+ *   stale Flash over uncommitted SRAM writes.
  */
 export class XsydDeviceManager implements Hero68Transport, XsydRequester {
   #device: HIDDeviceLike | undefined
@@ -922,6 +993,8 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
   #requestTail: Promise<unknown> = Promise.resolve()
   #handshake: XsydHandshakeInfo | null = null
   #reenumerating = false
+  #activeProfileSlot: number | null = null
+  #lastSramWriteAt = 0
   #snapshot: Hero68DeviceSnapshot = {
     state: getHid() ? 'disconnected' : 'unsupported',
     deviceName: WIN68_HE_MAX_DEVICE_MODEL.label,
@@ -939,6 +1012,10 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
 
   get handshake(): XsydHandshakeInfo | null {
     return this.#handshake
+  }
+
+  invalidateActiveProfileSlot(): void {
+    this.#activeProfileSlot = null
   }
 
   getSnapshot = (): Hero68DeviceSnapshot => this.#snapshot
@@ -1010,6 +1087,8 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
         await device.open()
       }
       this.#assembler.reset()
+      this.#activeProfileSlot = null
+      this.#lastSramWriteAt = 0
       device.removeEventListener('inputreport', this.#onInputReport)
       device.addEventListener('inputreport', this.#onInputReport)
       this.#device = device
@@ -1030,6 +1109,8 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
       }
       this.#device = undefined
       this.#handshake = null
+      this.#activeProfileSlot = null
+      this.#lastSramWriteAt = 0
       this.#setSnapshot({
         state: 'error',
         error: errorMessage(error),
@@ -1049,6 +1130,8 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     const device = this.#device
     this.#device = undefined
     this.#handshake = null
+    this.#activeProfileSlot = null
+    this.#lastSramWriteAt = 0
     this.#assembler.reset()
     this.#rejectWaiters(new Error('WIN 68 HE MAX disconnected'))
     if (device) {
@@ -1227,7 +1310,48 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
         await this.send(frame)
         return SILENT_REPLY
       }
-      return this.#requestOnce(frame, timeoutMs)
+      const op = frame[2]
+      const sub = frame[4]
+      // Guard `0x00` subcmd `0x70` profile select against firmware `VA 0x16342` -> `0x12AF4`:
+      // In firmware v1.1.4, `0x00 0x70 <slot>` unconditionally reloads Flash into SRAM.
+      // Because `0x23`/`0x29`/`0x18`/`0x2A` writes only flush SRAM -> Flash after a
+      // 500 ms timer (`VA 0x07E28` -> `0x11914`), sending `0x00 0x70 <slot>` again for
+      // the already-active slot wipes out uncommitted SRAM writes!
+      if (op === 0x00 && sub === 0x70) {
+        const slotArg = frame[5] ?? 0xff
+        if (slotArg >= 0 && slotArg <= 3) {
+          if (this.#activeProfileSlot === slotArg && this.#lastSramWriteAt > 0) {
+            const synthetic = buildXsydFrame(0x80, [0x00, 0x70, slotArg, 0xff])
+            synthetic[3] = xsydChecksum(synthetic, 'in')
+            return decodeXsydFrame(synthetic)
+          }
+          const elapsed = Date.now() - this.#lastSramWriteAt
+          if (this.#lastSramWriteAt > 0 && elapsed < 600) {
+            const setTimer = typeof window !== 'undefined' && window.setTimeout ? window.setTimeout.bind(window) : setTimeout
+            await new Promise(resolve => setTimer(resolve, 600 - elapsed))
+          }
+          const reply = await this.#requestOnce(frame, timeoutMs)
+          this.#activeProfileSlot = slotArg
+          this.#lastSramWriteAt = 0
+          return reply
+        }
+        if (slotArg === XSYD_PROFILE_SLOT_QUERY) {
+          const reply = await this.#requestOnce(frame, timeoutMs)
+          const queriedSlot = reply.payload[2]
+          if (queriedSlot !== undefined && queriedSlot >= 0 && queriedSlot <= 3) {
+            this.#activeProfileSlot = queriedSlot
+          }
+          return reply
+        }
+      }
+      const reply = await this.#requestOnce(frame, timeoutMs)
+      if (
+        [0x18, 0x23, 0x24, 0x25, 0x27, 0x28, 0x29, 0x2a, 0x2c].includes(op) &&
+        frame[4] === 0x01
+      ) {
+        this.#lastSramWriteAt = Date.now()
+      }
+      return reply
     })
   }
 
@@ -1338,6 +1462,8 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     }
     this.#device.removeEventListener('inputreport', this.#onInputReport)
     this.#device = undefined
+    this.#activeProfileSlot = null
+    this.#lastSramWriteAt = 0
     this.#assembler.reset()
     this.#rejectWaiters(new Error('WIN 68 HE MAX disconnected'))
     if (this.#reenumerating) {
