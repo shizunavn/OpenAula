@@ -252,7 +252,7 @@ export function usePerKeyPerformance({
     });
   }
   function setTopDeadzoneForSelection(value: number) {
-    const nextValue = snapToStep(value, 0, 0.5, 0.01);
+    const nextValue = snapToStep(value, 0, 1, 0.01);
     setTopDeadzone(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -269,7 +269,7 @@ export function usePerKeyPerformance({
     });
   }
   function setBottomDeadzoneForSelection(value: number) {
-    const nextValue = snapToStep(value, 0, 0.5, 0.01);
+    const nextValue = snapToStep(value, 0, 1, 0.01);
     setBottomDeadzone(nextValue);
     if (!selectedKeys.size) {
       return;

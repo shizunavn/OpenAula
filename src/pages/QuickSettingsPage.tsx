@@ -213,12 +213,12 @@ function QuickSettingsPage({
                   </div>
                   <div className="deadzone-grid standalone-deadzone-grid">
                     <div className="deadzone-card">
-                      <div className="deadzone-head">{tr('Top dead zone')}</div>
-                      <VerticalRangeControl value={topDeadzone} min={0} max={0.5} step={0.01} suffix="mm" disabled={!deadzoneControlsEnabled} mixed={topDeadzoneMixed} direction="top" onChange={setTopDeadzoneForSelection} />
-                    </div>
-                    <div className="deadzone-card">
-                      <div className="deadzone-head">{tr('Bottom dead zone')}</div>
-                      <VerticalRangeControl value={bottomDeadzone} min={0} max={0.5} step={0.01} suffix="mm" disabled={!deadzoneControlsEnabled} mixed={bottomDeadzoneMixed} direction="bottom" onChange={setBottomDeadzoneForSelection} />
+                        <div className="deadzone-head">{tr('Top dead zone')}</div>
+                        <VerticalRangeControl value={topDeadzone} min={0} max={1} step={0.01} suffix="mm" disabled={!deadzoneControlsEnabled} mixed={topDeadzoneMixed} direction="top" onChange={setTopDeadzoneForSelection} />
+                      </div>
+                      <div className="deadzone-card">
+                        <div className="deadzone-head">{tr('Bottom dead zone')}</div>
+                        <VerticalRangeControl value={bottomDeadzone} min={0} max={1} step={0.01} suffix="mm" disabled={!deadzoneControlsEnabled} mixed={bottomDeadzoneMixed} direction="bottom" onChange={setBottomDeadzoneForSelection} />
                     </div>
                   </div>
                 </article>
