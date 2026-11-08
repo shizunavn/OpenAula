@@ -867,7 +867,9 @@ export default function CustomRgbEditor({
               ? tr('Select keys on the preview to paint.')
               : layer
                 ? tr('Select the LED region for this layer.')
-                : tr('Side lights keep their onboard effect.')
+                : live
+                  ? tr('Keys, side and colors you export to Custom Effects.')
+                  : tr('Side lights keep their onboard effect.')
           }
           actions={
             !live && samplePreview ? (
@@ -1881,7 +1883,8 @@ export default function CustomRgbEditor({
             </div>
           </details>
           <p className="rgb-preview-note">
-            {!isWin68 && `${tr('Side lights keep their onboard effect.')} `}
+            {!isWin68 &&
+              `${tr(live ? 'Custom Effects runs on the keys. Side Light stays on the keyboard.' : 'Side lights keep their onboard effect.')} `}
             {demo
               ? tr('Demo only changes the preview.')
               : tr('Custom runs in the background; changes sync automatically.')}
