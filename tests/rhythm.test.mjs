@@ -54,3 +54,19 @@ test('live renderRhythmAudioFrame stays 100% dark with 0% level across all modes
     assert.ok(zeroAudio.side.every(c=>c==='#181c20'),`mode ${mode.id} with silent audio must keep side LEDs dark`)
   }
 })
+test('Spectrum Bars draws a bar from the bottom row up to the number row as loudness rises',()=>{
+  const fft=new Uint8Array(512)
+  for(let i=0;i<fft.length;i++)fft[i]=Math.max(0,120*Math.pow(1-i/fft.length,1.4)+10)
+  const lit=(amplitude,cfg)=>{
+    const wave=new Uint8Array(1024)
+    for(let i=0;i<wave.length;i++)wave[i]=128+Math.round(amplitude*128*Math.sin(2*Math.PI*5*i/256))
+    const frame=renderRhythmAudioFrame(cfg,1000,fft,wave,'win68HeMax',false)
+    return Object.values(frame.keys).filter(c=>c!=='#000000').length
+  }
+  const cfg={...defaultRhythm(),keyMode:429}
+  // The number row sits at bar height 1, so it only lights when the loudest band fills the column.
+  const quiet=lit(0.15,cfg),loud=lit(0.5,cfg)
+  assert.ok(quiet>0,'a normal window must light some keys')
+  assert.ok(loud>quiet,'louder audio must raise the bars')
+  assert.ok(loud>=40,'a loud window must reach the number row instead of stopping at the Tab row')
+})

@@ -57,7 +57,7 @@ thêm bảng ánh xạ mới.
 | --- | --- | --- | --- |
 | 429 | Spectrum Bars | Audio Visualizer | 16 dải chia theo **log**, không chia tuyến tính |
 | 432 | Audio Marquee | Hành vi marquee/cuộn | Thêm số hạng cuộn theo `level` (OpenAula trước đây không có) |
-| 434 | Radial Chase | Audio Sync `RollMode::RADIAL` | Trường khoảng cách từ tâm, mặt sáng tiến theo `level` |
+| 434 | Radial Chase | Audio Sync `RollMode::RADIAL` | Trường khoảng cách từ tâm, mặt sáng tiến theo độ to |
 
 ### 429 — Spectrum Bars
 
@@ -75,15 +75,25 @@ thêm bảng ánh xạ mới.
   cũng phi tuyến như vậy.
 - Decay từng dải theo `releaseMs`, keyed trên `a.sequence` riêng
   (`spectrumSequence_`) để không ăn mất packet của chế độ 428.
-- Render: chia bàn phím thành 16 cột (`nx·16`), cột có năng lượng luôn chạm hàng
-  dưới; mép trên làm mờ dần theo năng lượng dải.
+- Dải được **chuẩn hoá theo dải mạnh nhất mỗi frame**, còn **độ to của cửa sổ** quyết
+  định dải mạnh nhất cao tới đâu (`loudness = inputPeak·0.4·max(1, sensitivity) + 0.35`,
+  chặn trên 1). Nhờ vậy nhạc nhỏ thì cột thấp, nhạc to thì cột chạm hàng phím số; trước
+  đây dải mạnh nhất bị ghim ở một chiều cao cố định nên hàng số không bao giờ sáng.
+  Bản copy đã decay (`bandState_`) nằm ngoài block `spectrumAt_` vì block đó chỉ chạy khi
+  có packet mới.
+- Render: chia bàn phím thành 16 cột (`nx·16`, `nx` là vị trí chuẩn hoá **trong
+  từng hàng**), cột có năng lượng luôn chạm hàng dưới; mép trên làm mờ dần theo
+  năng lượng dải. Một hàng sáng khi độ cao `1 - ny` (hàng 0 là hàng số) không vượt quá
+  chiều cao dải — dùng `ny` trực tiếp là ngược dấu và chỉ sáng hàng số khi dải đầy 100%.
 
 ### 432 — Audio Marquee
 
-- `cell = fmod(ny + elapsed/speed, 1)`, sáng khi `level_ > 0` và `cell < level_`.
+- `cell = fmod(ny + elapsed/speed, 1)`, sáng khi `amount > 0` và `cell < amount`.
+- `amount` là **độ to thô** chứ không phải `level_`: `level_` đã nhân `sensitivity`
+  (mặc định 4), nên thanh cuộn luôn cao hết bàn phím và không thấy chuyển động.
 - `speed` là độ dài **một vòng cuộn đầy đủ (ms)**, mặc định 1300; engine và trình duyệt
   cùng đơn vị ms (`elapsed` từ engine, `timeMs` từ Web Audio).
-- Điều kiện `level_ > 0` là bắt buộc: ở pha 0 hàng dưới có `cell == 0`, nếu thiếu
+- Điều kiện `amount > 0` là bắt buộc: ở pha 0 hàng dưới có `cell == 0`, nếu thiếu
   điều kiện thì im lặng vẫn sáng một hàng.
 - Marquee là hiệu ứng **theo vị trí**, không dùng release: thanh release bị ẩn trong UI
   và cả hai renderer bỏ qua `releaseMs` cho chế độ này.
@@ -92,9 +102,11 @@ thêm bảng ánh xạ mới.
 
 - `distance = hypot((column-0.5)·16, (k.y-2)·2)` — trường khoảng cách lấy tâm giữa
   bàn phím; `column` là vị trí chuẩn hoá trong từng hàng.
-- `travel = fmod(elapsed/speed·16, 16)`; `phase = distance - travel` (cộng 16 nếu âm).
-- Mặt sáng có bề rộng `level_·16`; trong mặt sáng giá trị bão hoà 1, mép giảm
-  dần trong 2 đơn vị cuối.
+- `travel = fmod(elapsed/speed·16·2, 32)`; `phase = distance - travel` (cộng 16 nếu âm).
+  Hệ số 2 khiến một vòng bằng đúng `speed`; biên cuộn là 16 vì bàn phím chỉ rộng
+  ~16 đơn vị tính từ tâm (biên 32 từng để mặt sáng nằm ngoài bàn, không sáng gì).
+- Mặt sáng có bề rộng `amount·16` (độ to thô, không nhân `sensitivity`); trong mặt
+  sáng giá trị bão hoà 1, mép giảm dần trong 2 đơn vị cuối.
 - Cùng `speed` (mặc định 1300 ms cho một vòng từ tâm ra), không dùng release.
 
 ### Cột phổ và hình học phím

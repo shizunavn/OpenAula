@@ -10,11 +10,14 @@ their original validation scope; they are not claims of new hardware testing.
   - Upgraded `RhythmConfiguration` to `version: 2` with automatic backwards-compatible migration of v1 drafts.
   - Extended native rhythm IPC command to 15 fields (`rhythm:<keyMode>;<sideMode>;<brightness>;<sensitivity>;<releaseMs>;<speed>;...`).
   - Corrected Marquee phase cycle calculation to advance directly with millisecond timestamps (`elapsed / speed`), guaranteeing that 1300 ms yields a 1300 ms cycle.
-  - Position-driven modes (432 Audio Marquee & 434 Radial Chase) bypass envelope release smoothing (`fixedRelease`), eliminating lagging delay artifacts.
+  - Position-driven modes (432 Audio Marquee & 434 Radial Chase) scale with raw audio window loudness (`amount`) rather than saturated `level_`, maintaining visual motion even at high sensitivity.
+  - Radial Chase (Mode 434) ring wrap adjusted to 16 units with doubled speed factor, ensuring continuous outward waves across keyboard dimensions without blank gaps.
+  - Position-driven modes bypass envelope release smoothing (`fixedRelease`), eliminating lagging delay artifacts.
   - Automatically hidden release / smoothing slider for modes where envelope smoothing does not apply (Modes 169, 432, 434).
-- Row-Normalized Equalizer Columns (`service/native/rhythm_core.h`, `rhythm.ts`):
+- Row-Normalized Equalizer Columns & Dynamic Spectrum Bars (`service/native/rhythm_core.h`, `rhythm.ts`):
   - Introduced `Key::nx` (row-relative horizontal position `0..1`) into key geometry calculations.
   - Spectrum Bars (Mode 429) and Audio Marquee (Mode 432) now index equalizer columns using row-normalized coordinates, ensuring all 16 frequency bands span each row evenly regardless of physical key count/width differences.
+  - Spectrum Bars dynamically scale bar height from baseline up to the number row based on window loudness (`inputPeak * 0.4 * max(1, sensitivity) + 0.35`), and preserve decayed spectrum state (`bandState_`) without dropping frames.
 - Side Light Hardware Isolation (`useDeviceSyncController.ts`, `CustomRgbEditor.tsx`, `RgbSettingsPage.tsx`):
   - Saving side light settings from non-Onboard tabs no longer calls `rgbService.mode('onboard')`, preventing active Custom Effects and Rhythm streaming sessions from being interrupted.
   - Added contextual UI guidance explaining that Side Light persists on keyboard hardware while Custom Effects and Rhythm run independently on keys.

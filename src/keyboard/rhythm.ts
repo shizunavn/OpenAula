@@ -290,6 +290,10 @@ export function renderRhythmAudioFrame(
   const phase = (t * 2) % 1;
 
   let level = 0;
+  // Marquee and Radial scale their travel by this value, so `sensitivity` would stretch them past
+  // the whole board: at 4x any normal track kept every key lit and no motion was visible. They
+  // track the raw loudness instead, which is what makes them read as a VU meter.
+  let amount = 0;
   const colBins: number[] = Array(16).fill(0);
   const bands: number[] = Array(16).fill(0);
   let meter = 0;
@@ -315,13 +319,29 @@ export function renderRhythmAudioFrame(
       colBins[c] = boosted;
       energySum += boosted;
     }
-    // Spectrum Bars bypass the linear colBins; apply the same sensitivity the native engine
-    // gets from `value` so both renderers answer the slider identically.
+    // Spectrum Bars bypass the linear colBins. Mirror `logBands` + the engine's normalisation:
+    // the spectrum supplies the shape, while the waveform peak raises the cap so loud music fills
+    // the column up to the number row.
     const bandsRaw = logSpectrumBands(frequencyData);
+    let inputPeak = 0;
+    if (timeDomainData) {
+      for (let i = 0; i < timeDomainData.length; i++) {
+        inputPeak = Math.max(inputPeak, Math.abs(((timeDomainData[i] ?? 128) - 128) / 128));
+      }
+    }
+    const peak = Math.max(...bandsRaw, 0);
+    // The loudest band lands on `loudness / (1 - eps)`: a full column (bar height 1) reaches the
+    // number row, which sits at height above the bottom row of exactly 1.
+    const loudness = Math.min(
+      1,
+      Math.max(0, inputPeak * 0.4 * Math.max(1, config.sensitivity) + 0.35)
+    );
+    const span = peak > 1e-6 ? Math.min(1.5, loudness / peak) / (1 - 1e-9) : 0;
     for (let c = 0; c < 16; c++) {
-      bands[c] = bandsRaw[c] > 0 ? Math.min(1, bandsRaw[c] * dbGain * sensGain) : 0;
+      bands[c] = bandsRaw[c] > 0 ? Math.min(1, bandsRaw[c] * span) : 0;
     }
     level = Math.min(1, (energySum / 16) * 1.25);
+    amount = level;
     if (timeDomainData && timeDomainData.length > 0) {
       let rmsAcc = 0;
       for (let i = 0; i < timeDomainData.length; i++) {
@@ -331,6 +351,7 @@ export function renderRhythmAudioFrame(
       const rms = Math.sqrt(rmsAcc / timeDomainData.length);
       const gatedRms = rms > 0.005 ? rms : 0;
       level = Math.min(1, Math.max(level, gatedRms * sensGain * 2.2));
+      amount = gatedRms;
     }
     // Peak-hold is applied over the rendered (attack-smoothed) level by the playback loop;
     // here the meter is the raw attack value so a loud hit raises it above `level`.
@@ -340,6 +361,7 @@ export function renderRhythmAudioFrame(
     meter = Math.max(level, meter);
   } else if (allowSynthFallback) {
     level = Math.exp(-phase * 7) * (0.75 + 0.25 * Math.sin(t * 0.7));
+    amount = level;
     meter = Math.max(meter, level);
     for (let c = 0; c < 16; c++) {
       const nx = c / 15;
@@ -368,6 +390,7 @@ export function renderRhythmAudioFrame(
   const isSilentLive = !allowSynthFallback && level < 0.008 && (!isSpectrumMode || maxBin < 0.012);
   if (isSilentLive) {
     level = 0;
+    amount = 0;
     meter = 0;
   }
 
@@ -426,27 +449,32 @@ export function renderRhythmAudioFrame(
           // `MAX_ROW` only: key `x` is an index into a variable-width row, so the gap above the
           // number row would otherwise leave a band with no key to light.
           const band = Math.max(0, Math.min(15, Math.floor(nx * 16)));
+          // Energy is a bar height measured from the bottom row, so the threshold for a row is
+          // `1 - ny` (rows are 0 at the top). Comparing against `1 - energy` inverted the bar and
+          // left the number row dark until the band was completely full.
           const energy = bands[band] ?? 0;
           value = allowSynthFallback
-            ? ny >= 1 - energy
+            ? 1 - ny <= energy
               ? 1
               : 0.02
-            : energy >= 0.012 && ny >= 1 - energy
+            : energy >= 0.012 && 1 - ny <= energy
               ? 1
               : 0;
           break;
         }
         case 432: {
-          // Audio Marquee: a band of height `level` scrolls down and wraps every `speed` ms.
+          // Audio Marquee: a band of height `amount` scrolls down and wraps every `speed` ms.
           const cell = (((ny + (t * 1000) / config.speed) % 1) + 1) % 1;
-          value = level > 0 && cell < level ? Math.max(0, 1 - (level - cell) * 3) : 0;
+          value = amount > 0 && cell < amount ? Math.max(0, 1 - (amount - cell) * 3) : 0;
           break;
         }
         case 434: {
-          // Audio Sync radial roll: a front travels outward and stops at `level * 16` keys.
+          // Audio Sync radial roll: a front travels outward and stops at `amount * 16` keys.
           const distance = Math.hypot((nx - 0.5) * 16, (y - 2) * 2);
-          const front = level * 16;
-          let travel = distance - ((t * 1000) / config.speed) * 16;
+          const front = amount * 16;
+          let travel = distance - ((t * 1000) / config.speed) * 16 * 2;
+          // The board spans ~16 units from the centre, so the ring has to wrap there; wrapping at
+          // 32 left a dead stretch where the front sat outside the board and nothing lit up.
           if (travel < 0) {
             travel = (travel % 16) + 16;
           }
