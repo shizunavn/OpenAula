@@ -91,7 +91,7 @@
 .rgb-swatch-chip[aria-pressed=true] {border-color:#ffd95a;background:#363527;color:#ffe484;box-shadow:inset 0 0 0 1px #ffd95a26}
 .rgb-swatch-dot {flex:0 0 14px;width:14px;height:14px;border-radius:50%;border:1px solid #ffffff38;box-shadow:0 0 6px #0006}
 .rgb-swatch-chip[aria-pressed=true] .rgb-swatch-dot {border-color:#fff;box-shadow:0 0 8px currentColor}
-.rgb-swatch-dot.is-rainbow {background:conic-gradient(#ff375f,#ff9633,#f9e547,#49d963,#21c8ec,#5265ff,#c44aff,#ff375f);border-color:#ffffff55}
+.rgb-swatch-dot.is-rainbow,.layer-color-dot.is-rainbow {background:conic-gradient(#ff375f,#ff9633,#f9e547,#49d963,#21c8ec,#5265ff,#c44aff,#ff375f);border-color:#ffffff55}
 .rgb-swatch-name {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Compact circular palette for Per-key painting footer */

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Lightbulb, Sparkles, Waves, Palette, RotateCcw, ArrowLeftRight, Save, Trash2 } from 'lucide-react';
 import CustomRgbEditor from './CustomRgbEditor';
 import RhythmSyncEditor from './RhythmSyncEditor';
@@ -16,6 +16,7 @@ import { acceptsRgbPreviewKey } from '../keyboard/rgbPreviewInput';
 import { BRAND } from '../brand';
 import { rgbPreviewDarkReason } from '../keyboard/rgbPreviewDefaults';
 import { isWin68PerKeyMode, mergedKeyRgbModesForModel, SIDE_RGB_MODES, WIN68_KEY_RGB_MODES } from '../keyboard/rgbCatalog';
+import { isPerKeyRgbMode, normalizeGamingPresetMode, resolvePresetColors } from '../keyboard/gamingPresets';
 import { publishLightingFrame, type LightingFrame } from '../keyboard/lightingPreviewBus';
 import type { RgbColor, RgbProfile, RgbZone } from '../protocol/hero68/rgb';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
@@ -129,6 +130,7 @@ function ActiveRgbSettingsPage({
   const contextModel = useContext(DeviceModelContext);
   const model = modelProp ?? contextModel;
   const isWin68 = isWin68HeMaxModel(model);
+  const modelKeyIds = useMemo(() => isWin68 ? heroLayout(model).keyIds : HERO68_KEY_IDS, [isWin68, model]);
   useEffect(() => {
     onEntered?.();
   }, []);
@@ -256,9 +258,39 @@ function ActiveRgbSettingsPage({
         mixValue: undefined
       } : {})
     };
+    let nextColors = value.colors;
+    let nextPresetColors = value.presetColors ? { ...value.presetColors } : undefined;
+    if (patch.mode !== undefined && activeZone === 'keys') {
+      const prevMode = config.mode;
+      const prevCanonical = normalizeGamingPresetMode(prevMode);
+      const nextCanonical = normalizeGamingPresetMode(patch.mode);
+      nextPresetColors = {
+        ...(value.presetColors ?? {}),
+        ...(value.custom?.presetColors ?? {}),
+      };
+      if (isPerKeyRgbMode(prevMode, isWin68)) {
+        nextPresetColors[prevCanonical] = { ...value.colors };
+      }
+      if (isPerKeyRgbMode(patch.mode, isWin68)) {
+        nextColors = resolvePresetColors(patch.mode, value.colors, nextPresetColors, modelKeyIds);
+        nextPresetColors[nextCanonical] = { ...nextColors };
+      }
+    }
     const nextProfile: RgbProfile = {
       ...value,
-      [activeZone]: nextZone
+      [activeZone]: nextZone,
+      ...(nextPresetColors ? { presetColors: nextPresetColors } : {}),
+      ...(nextColors !== value.colors ? { colors: nextColors } : {}),
+      ...(value.custom && nextPresetColors ? {
+        custom: {
+          ...value.custom,
+          presetColors: nextPresetColors,
+          base: {
+            ...value.custom.base,
+            mode: patch.mode !== undefined ? patch.mode : value.custom.base.mode,
+          }
+        }
+      } : {}),
     };
     onChange(nextProfile);
     if (isWin68) {
@@ -505,7 +537,7 @@ function ActiveRgbSettingsPage({
   );
   return <RgbWorkspace tab={tab} onTab={setTab} disabled={busy || playback.busy} output={customActive ? 'custom' : rhythmActive ? 'rhythm' : 'onboard'}>
     {(rhythmMode || rhythmVisited) && <RhythmSyncEditor onSetup={onSetup} visible={rhythmMode} advancedBindings={advancedBindings} onboardProfile={value} />}
-    <CustomRgbEditor value={value} onChange={onChange} busy={busy} advancedBindings={advancedBindings} visible={customMode} onSetup={onSetup} playback={playback} savedPresets={savedPresets} onSaveRgbPreset={handleSaveRgbPreset} onApplySavedPreset={handleApplySavedPreset} onDeleteSavedPreset={handleDeleteSavedPreset} savedNotice={savedNotice} />
+    <CustomRgbEditor value={value} onChange={onChange} busy={busy} advancedBindings={advancedBindings} visible={customMode} onSetup={onSetup} playback={playback} savedPresets={savedPresets} onSaveRgbPreset={handleSaveRgbPreset} onApplySavedPreset={handleApplySavedPreset} onDeleteSavedPreset={handleDeleteSavedPreset} savedNotice={savedNotice} slot={slot} />
     {!customMode && !rhythmMode && <>
     <RgbToolbarSlot>
       {(status?.enabled || playback.applied || xsydRhythmStats.active) && <button className="apply-button" disabled={busy || playback.busy} onClick={() => {
@@ -533,9 +565,22 @@ function ActiveRgbSettingsPage({
             }
           }
         }
-        const nextProfile = {
+        const currentCanonical = normalizeGamingPresetMode(config.mode);
+        const nextPresetColors: Record<number, Record<string, RgbColor>> = {
+          ...(value.presetColors ?? {}),
+          ...(value.custom?.presetColors ?? {}),
+          [currentCanonical]: { ...colors },
+        };
+        const nextProfile: RgbProfile = {
           ...value,
-          colors
+          colors,
+          presetColors: nextPresetColors,
+          ...(value.custom ? {
+            custom: {
+              ...value.custom,
+              presetColors: nextPresetColors,
+            }
+          } : {}),
         };
         onChange(nextProfile);
         if (isWin68) {

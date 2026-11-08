@@ -312,6 +312,7 @@ export type CustomRgbConfiguration = {
   enabled: boolean;
   base: RgbZone;
   baseEffect?: CustomRgbBaseEffect;
+  presetColors?: Record<number, Record<string, RgbColor>>;
   layers: CustomRgbLayer[];
 };
 export const MAX_RGB_LAYERS = 8;
@@ -396,6 +397,21 @@ export function restoreCustomRgb(value: unknown, profile: RgbProfile, validKeyId
         width: finite(v.baseEffect.width, 2.5, .25, 12),
         speed: finite(v.baseEffect.speed, .5, .5, 30)
       }
+    } : {}),
+    ...(v.presetColors && typeof v.presetColors === 'object' ? {
+      presetColors: Object.fromEntries(
+        Object.entries(v.presetColors).flatMap(([modeKey, cols]) => {
+          const modeNum = Number(modeKey);
+          if (!Number.isFinite(modeNum) || !cols || typeof cols !== 'object') {
+            return [];
+          }
+          const restoredEntries = Object.entries(cols).flatMap(([keyId, c]) => {
+            if (!Array.isArray(c) || c.length < 3) return [];
+            return [[keyId, [0, 1, 2].map(i => Math.round(finite(c[i], 0, 0, 255))) as RgbColor]];
+          });
+          return [[modeNum, Object.fromEntries(restoredEntries)]];
+        })
+      )
     } : {}),
     layers: v.layers.slice(0, MAX_RGB_LAYERS).flatMap(layer => {
       if (!layer || !CUSTOM_RGB_EFFECTS.some(e => e.id === layer.effect)) {

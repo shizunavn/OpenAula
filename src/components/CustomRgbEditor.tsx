@@ -18,13 +18,18 @@ import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import { rgbService } from '../protocol/rgbService';
 import { refreshRgbService } from '../protocol/rgbServiceState';
 import {
+  buildXsydPerKeyWriteFrame,
+  buildXsydRgbWriteFrame,
   closestXsydColorSlot,
   normalizeXsydBrightness,
+  saveXsydSavedRgb,
   useXsydDevice,
   XSYD_COLOR_SLOTS,
   xsydDeviceManager,
   XsydCustomRgbStreamer,
 } from '../protocol/xsyd/device';
+import { keyValueForCode } from '../protocol/xsyd/features';
+import { isPerKeyRgbMode, normalizeGamingPresetMode, resolvePresetColors } from '../keyboard/gamingPresets';
 import type { useCustomRgbPlayback } from './useCustomRgbPlayback';
 import type { SavedRgbPresetItem } from './RgbSettingsPage';
 import { useI18n } from '../i18n';
@@ -77,6 +82,7 @@ type Props = {
   onApplySavedPreset?: (item: SavedRgbPresetItem) => void;
   onDeleteSavedPreset?: (id: string) => void;
   savedNotice?: string | null;
+  slot?: number;
 };
 export default function CustomRgbEditor({
   value,
@@ -90,7 +96,8 @@ export default function CustomRgbEditor({
   onSaveRgbPreset,
   onApplySavedPreset,
   onDeleteSavedPreset,
-  savedNotice
+  savedNotice,
+  slot = 1
 }: Props) {
   const {
     tr
@@ -142,7 +149,7 @@ export default function CustomRgbEditor({
   const baseCatalog = useMemo(() => mergedKeyRgbModesForModel(isWin68), [isWin68]);
   const mode = baseCatalog.find(m => m.id === config.base.mode) ?? baseCatalog[0]!;
   const auroraBase = config.baseEffect?.effect === 'aurora';
-  const perKey = active === 'base' && !adding && !auroraBase && (isWin68 ? isWin68PerKeyMode(config.base.mode) : (config.base.mode === 19 || (config.base.mode >= 221 && config.base.mode <= 226)));
+  const perKey = active === 'base' && !adding && !auroraBase && isPerKeyRgbMode(config.base.mode, isWin68);
   const selectable = !adding && (perKey || !!layer);
   const samplePreview = !auroraBase && mode.reactive || config.layers.some(layer => layer.enabled && ['pressure-wave', 'jelly', 'ripple', 'touch', 'reaction', 'aoe', 'mixing', 'trail', 'rt', 'afterglow'].includes(layer.effect));
   const effectiveBaseBrightness = isWin68 ? normalizeXsydBrightness(config.base.brightness) : config.base.brightness;
@@ -196,18 +203,36 @@ export default function CustomRgbEditor({
               ? config.base.colorIndex
               : closestXsydColorSlot(nextRgb)
           : config.base.colorIndex;
-    change({
+    const nextBaseZone = {
+      ...config.base,
+      ...patch,
+      mix: nextMix,
+      ...(nextColorIndex !== undefined ? { colorIndex: nextColorIndex } : {}),
+      ...(patch.mix !== undefined || patch.rgb !== undefined ? {
+        mixValue: undefined
+      } : {})
+    };
+    const nextConfig: CustomRgbConfiguration = {
       ...config,
-      base: {
-        ...config.base,
-        ...patch,
-        mix: nextMix,
-        ...(nextColorIndex !== undefined ? { colorIndex: nextColorIndex } : {}),
-        ...(patch.mix !== undefined || patch.rgb !== undefined ? {
-          mixValue: undefined
-        } : {})
+      base: nextBaseZone
+    };
+    const nextProfile: RgbProfile = {
+      ...value,
+      keys: {
+        ...value.keys,
+        ...nextBaseZone
+      },
+      custom: nextConfig
+    };
+    onChange(nextProfile);
+    if (isWin68) {
+      if (slot !== undefined) {
+        saveXsydSavedRgb(slot, nextProfile);
       }
-    });
+      if (xsydDeviceManager.connected) {
+        void xsydDeviceManager.request(buildXsydRgbWriteFrame(nextBaseZone)).catch(() => {});
+      }
+    }
   }
   function choose(effect: CustomRgbEffect) {
     if (adding) {
@@ -231,7 +256,7 @@ export default function CustomRgbEditor({
   function chooseBase(effect: number | 'aurora') {
     if (effect === 'aurora') {
       if (!auroraBase) {
-        change({
+        const nextConfig: CustomRgbConfiguration = {
           ...config,
           base: {
             ...config.base,
@@ -244,17 +269,71 @@ export default function CustomRgbEditor({
             width: 2.5,
             speed: .5
           }
-        });
+        };
+        const nextProfile: RgbProfile = {
+          ...value,
+          custom: nextConfig
+        };
+        onChange(nextProfile);
+        if (isWin68 && slot !== undefined) {
+          saveXsydSavedRgb(slot, nextProfile);
+        }
       }
     } else {
-      change({
+      const prevMode = config.base.mode;
+      const prevCanonical = normalizeGamingPresetMode(prevMode);
+      const nextCanonical = normalizeGamingPresetMode(effect);
+      const currentPresetColors: Record<number, Record<string, RgbColor>> = {
+        ...(value.presetColors ?? {}),
+        ...(config.presetColors ?? {}),
+      };
+
+      if (isPerKeyRgbMode(prevMode, isWin68)) {
+        currentPresetColors[prevCanonical] = { ...value.colors };
+      }
+
+      const isTargetPerKey = isPerKeyRgbMode(effect, isWin68);
+      const nextColors = isTargetPerKey
+        ? resolvePresetColors(effect, value.colors, currentPresetColors, modelKeyIds)
+        : value.colors;
+
+      if (isTargetPerKey) {
+        currentPresetColors[nextCanonical] = { ...nextColors };
+      }
+
+      const nextBaseZone = {
+        ...config.base,
+        mode: effect,
+      };
+
+      const nextConfig: CustomRgbConfiguration = {
         ...config,
         baseEffect: undefined,
-        base: {
-          ...config.base,
-          mode: effect
+        base: nextBaseZone,
+        presetColors: currentPresetColors,
+      };
+
+      const nextProfile: RgbProfile = {
+        ...value,
+        keys: {
+          ...value.keys,
+          ...nextBaseZone,
+          mode: effect,
+        },
+        colors: nextColors,
+        presetColors: currentPresetColors,
+        custom: nextConfig,
+      };
+
+      onChange(nextProfile);
+      if (isWin68) {
+        if (slot !== undefined) {
+          saveXsydSavedRgb(slot, nextProfile);
         }
-      });
+        if (xsydDeviceManager.connected) {
+          void xsydDeviceManager.request(buildXsydRgbWriteFrame(nextBaseZone)).catch(() => {});
+        }
+      }
     }
     setChoosing(false);
   }
@@ -546,13 +625,41 @@ export default function CustomRgbEditor({
         const colors = {
           ...value.colors
         };
+        const paintRgb = rgb(paint);
         for (const id of selected) {
-          colors[id] = rgb(paint);
+          colors[id] = paintRgb;
+          if (isWin68 && xsydDeviceManager.connected) {
+            const kv = keyValueForCode(id);
+            if (kv !== undefined) {
+              void xsydDeviceManager.request(buildXsydPerKeyWriteFrame(kv, paintRgb)).catch(() => {});
+            }
+          }
         }
-        onChange({
+        const currentMode = config.base.mode;
+        const canonical = normalizeGamingPresetMode(currentMode);
+        const nextPresetColors: Record<number, Record<string, RgbColor>> = {
+          ...(value.presetColors ?? {}),
+          ...(config.presetColors ?? {}),
+          [canonical]: { ...colors },
+        };
+        const nextConfig: CustomRgbConfiguration = {
+          ...config,
+          presetColors: nextPresetColors,
+        };
+        const nextProfile: RgbProfile = {
           ...value,
-          colors
-        });
+          keys: {
+            ...value.keys,
+            mode: currentMode,
+          },
+          colors,
+          presetColors: nextPresetColors,
+          custom: nextConfig,
+        };
+        onChange(nextProfile);
+        if (isWin68 && slot !== undefined) {
+          saveXsydSavedRgb(slot, nextProfile);
+        }
       }} /> : layer && !adding ? <div className="rgb-key-scope-tools">
           <RgbKeySelectionTools selected={selected} onSelect={setSelected} disabled={disabled} />
           <div className="rgb-key-scope-actions">
@@ -600,7 +707,7 @@ export default function CustomRgbEditor({
                 setActive(item.id);
                 setAdding(false);
                 setChoosing(false);
-              }}><span className="layer-color-dot" style={{
+              }}><span className={`layer-color-dot ${item.multicolor ? 'is-rainbow' : ''}`} style={item.multicolor ? undefined : {
                   background: hex(item.color)
                 }} /><span>{tr(CUSTOM_RGB_EFFECTS.find(e => e.id === item.effect)?.name ?? '')}</span><small>{i + 1}</small></button>
               <input type="checkbox" aria-label={`Enable ${CUSTOM_RGB_EFFECTS.find(e => e.id === item.effect)?.name} layer ${i + 1}`} checked={item.enabled} disabled={disabled} onChange={e => change({
@@ -654,58 +761,11 @@ export default function CustomRgbEditor({
                       speed: v
                     })} />
                   </div>
-            <div className="custom-rgb-direction">
-                    <span>{tr('Color mode')}</span>
-                    <div>
-                      <button disabled={disabled} aria-pressed={!config.base.mix} onClick={() => base({
-                        mix: false
-                      })}>{tr('Single color')}</button>
-                      <button disabled={disabled} aria-pressed={config.base.mix} onClick={() => base({
-                        mix: true
-                      })}>{tr('Palette')}</button>
-                    </div>
-                  </div>
-            {config.base.mix ? <div className="custom-palette-options">{Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => <button key={id} disabled={disabled} aria-pressed={config.baseEffect?.palette === id} onClick={() => animation({
+            <div className="custom-palette-options">{Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => <button key={id} disabled={disabled} aria-pressed={config.baseEffect?.palette === id} onClick={() => animation({
                       palette: (id as RgbGradientPalette)
                     })}><span style={{
                         background: `linear-gradient(90deg,${palette.colors.join(',')})`
-                      }} />{tr(palette.name)}</button>)}</div> : <div className="rgb-color-controls">
-                      <div className="rgb-color-header">
-                        <span className="rgb-color-label">{tr('Base color')}</span>
-                        <div className="rgb-custom-color-box is-active">
-                          <label className="rgb-color-picker-trigger" title={tr('Base effect color')}>
-                            <RgbColorPicker label={tr('Base effect color')} value={baseHex} disabled={disabled} onChange={v => base({
-                              rgb: rgb(v),
-                              mix: false
-                            })} />
-                          </label>
-                          <span className="rgb-color-hex-readout">{baseHex.toUpperCase()}</span>
-                        </div>
-                      </div>
-                      <div className="rgb-swatch-grid is-seven" role="group" aria-label={tr('Color slot')}>
-                        {XSYD_COLOR_SLOTS.filter(slotInfo => slotInfo.index > 0).map(slotInfo => {
-                          const presetHex = hex(slotInfo.rgb);
-                          return (
-                            <button
-                              key={slotInfo.index}
-                              type="button"
-                              className="rgb-swatch-chip"
-                              disabled={disabled}
-                              aria-pressed={!config.base.mix && baseHex.toLowerCase() === presetHex.toLowerCase()}
-                              title={tr(slotInfo.name)}
-                              onClick={() => base({
-                                mix: false,
-                                colorIndex: slotInfo.index,
-                                rgb: [...slotInfo.rgb] as RgbColor
-                              })}
-                            >
-                              <span className="rgb-swatch-dot" style={{ background: presetHex }} aria-hidden="true" />
-                              <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>}
+                      }} />{tr(palette.name)}</button>)}</div>
           </> : <>{mode.speed && <Slider label="Base speed" value={config.base.speed + 1} min={1} max={5} unit="/ 5" disabled={disabled} onChange={v => base({
                     speed: v - 1
                   })} />} {mode.color && <div className="rgb-color-controls">
@@ -762,20 +822,8 @@ export default function CustomRgbEditor({
                   </div>}</>}</> : layer && metadata && <><p className="custom-rgb-description">{tr(definition?.detail ?? '')}</p>{layer.effect === "aurora" && <div className="custom-rgb-base-migration">
                   <p>{tr('Aurora is now a Base effect. Move this layer to cover all keys and control its brightness directly.')}</p>
                   <button className="secondary-button" disabled={disabled} onClick={moveAuroraToBase}>{tr('Move Aurora to Base')}</button>
-                </div>}{!metadata.semanticColor && <>
-                  <div className="custom-rgb-direction">
-                    <span>{tr('Color mode')}</span>
-                    <div>
-                      <button disabled={disabled} aria-pressed={!layer.multicolor} onClick={() => patchLayer({
-                        multicolor: false
-                      })}>{tr('Single color')}</button>
-                      <button disabled={disabled} aria-pressed={layer.multicolor} onClick={() => patchLayer({
-                        multicolor: true,
-                        palette: layer.palette ?? metadata.defaults?.palette ?? 'aurora'
-                      })}>{tr('Palette')}</button>
-                    </div>
-                  </div>
-                  {layer.multicolor ? (
+                </div>}{!metadata.semanticColor && (
+                  metadata.gradient ? (
                     <div className="custom-palette-options">{Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => <button key={id} disabled={disabled} aria-pressed={layer.multicolor && (layer.palette ?? metadata.defaults?.palette ?? 'aurora') === id} onClick={() => patchLayer({
                       multicolor: true,
                       palette: (id as RgbGradientPalette)
@@ -783,44 +831,71 @@ export default function CustomRgbEditor({
                       background: `linear-gradient(90deg,${palette.colors.join(',')})`
                     }} />{tr(palette.name)}</button>)}</div>
                   ) : (
-                    <div className="rgb-color-controls">
-                      <div className="rgb-color-header">
-                        <span className="rgb-color-label">{tr('Effect color')}</span>
-                        <div className="rgb-custom-color-box is-active">
-                          <label className="rgb-color-picker-trigger" title={tr('Layer color')}>
-                            <RgbColorPicker label={tr('Layer color')} value={layerHex} disabled={disabled} onChange={v => patchLayer({
-                              color: rgb(v),
-                              multicolor: false
-                            })} />
-                          </label>
-                          <span className="rgb-color-hex-readout">{layerHex.toUpperCase()}</span>
+                    <>
+                      <div className="custom-rgb-direction">
+                        <span>{tr('Color mode')}</span>
+                        <div>
+                          <button disabled={disabled} aria-pressed={!layer.multicolor} onClick={() => patchLayer({
+                            multicolor: false
+                          })}>{tr('Single color')}</button>
+                          <button disabled={disabled} aria-pressed={layer.multicolor} onClick={() => patchLayer({
+                            multicolor: true
+                          })}>{tr('Multicolor')}</button>
                         </div>
                       </div>
-                      <div className="rgb-swatch-grid is-seven" role="group" aria-label={tr('Color slot')}>
-                        {XSYD_COLOR_SLOTS.filter(slotInfo => slotInfo.index > 0).map(slotInfo => {
-                          const presetHex = hex(slotInfo.rgb);
-                          return (
-                            <button
-                              key={slotInfo.index}
-                              type="button"
-                              className="rgb-swatch-chip"
-                              disabled={disabled}
-                              aria-pressed={!layer.multicolor && layerHex.toLowerCase() === presetHex.toLowerCase()}
-                              title={tr(slotInfo.name)}
-                              onClick={() => patchLayer({
-                                color: [...slotInfo.rgb] as RgbColor,
+                      <div className="rgb-color-controls">
+                        <div className="rgb-color-header">
+                          <span className="rgb-color-label">{tr('Effect color')}</span>
+                          <div className={`rgb-custom-color-box ${!layer.multicolor ? 'is-active' : 'is-multicolor'}`}>
+                            <label className="rgb-color-picker-trigger" title={tr('Layer color')}>
+                              <RgbColorPicker label={tr('Layer color')} value={layerHex} disabled={disabled} onChange={v => patchLayer({
+                                color: rgb(v),
                                 multicolor: false
-                              })}
-                            >
-                              <span className="rgb-swatch-dot" style={{ background: presetHex }} aria-hidden="true" />
-                              <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
-                            </button>
-                          );
-                        })}
+                              })} />
+                            </label>
+                            <span className="rgb-color-hex-readout">{layerHex.toUpperCase()}</span>
+                          </div>
+                        </div>
+                        <div className="rgb-swatch-grid" role="group" aria-label={tr('Color slot')}>
+                          {XSYD_COLOR_SLOTS.map(slotInfo => {
+                            const isMulticolor = slotInfo.index === 0;
+                            const presetHex = hex(slotInfo.rgb);
+                            const selectedSlot = isMulticolor
+                              ? Boolean(layer.multicolor)
+                              : !layer.multicolor && layerHex.toLowerCase() === presetHex.toLowerCase();
+                            return (
+                              <button
+                                key={slotInfo.index}
+                                type="button"
+                                className={`rgb-swatch-chip ${isMulticolor ? 'is-multicolor' : ''}`}
+                                disabled={disabled}
+                                aria-pressed={selectedSlot}
+                                title={tr(slotInfo.name)}
+                                onClick={() => {
+                                  if (isMulticolor) {
+                                    patchLayer({ multicolor: true });
+                                  } else {
+                                    patchLayer({
+                                      color: [...slotInfo.rgb] as RgbColor,
+                                      multicolor: false
+                                    });
+                                  }
+                                }}
+                              >
+                                <span
+                                  className={`rgb-swatch-dot ${isMulticolor ? 'is-rainbow' : ''}`}
+                                  style={isMulticolor ? undefined : { background: presetHex }}
+                                  aria-hidden="true"
+                                />
+                                <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </>}<div className="custom-slider-grid">
+                    </>
+                  )
+                )}<div className="custom-slider-grid">
                   <Slider label="Opacity" value={layer.opacity} min={0} max={100} unit="%" disabled={disabled} onChange={v => patchLayer({
                     opacity: v
                   })} />

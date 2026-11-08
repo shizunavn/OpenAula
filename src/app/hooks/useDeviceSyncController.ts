@@ -735,7 +735,7 @@ export function useDeviceSyncController({
         const verified = await saveAdvancedBindings(hero68DeviceManager, profileSlot, advancedBindings, advancedBaseline, deviceModel);
         setAdvancedBaseline(verified);
       }
-      if (rgbPending && !tachyon) {
+      if ((rgbPending || customRgbChanged) && !tachyon) {
         if (activePage === 'rgb' && activeRgbTab === 'onboard' && hero68DeviceManager.viaService) {
           const result = await rgbService.mode('onboard');
           publishRgbServiceStatus(result);

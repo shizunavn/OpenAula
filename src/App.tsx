@@ -240,7 +240,7 @@ function App() {
     };
   }, [ui.activeRail, ui.activePage, workspace.profileSlot, workspace.profileBusy, tachyon, deviceSettings.setDeviceActionError]);
   const deviceConnected = deviceConnectionState === 'connected';
-  const customRgbPending = isWin68HeMaxModel(deviceModel) && JSON.stringify(workspace.rgb.custom ?? null) !== JSON.stringify(workspace.rgbBaseline.custom ?? null);
+  const customRgbPending = JSON.stringify(workspace.rgb.custom ?? null) !== JSON.stringify(workspace.rgbBaseline.custom ?? null);
   const canSaveAll = deviceConnected && workspace.loadedProfileSlot === workspace.profileSlot && (perf.dirtyKeys.size > 0 || workspace.dirtyRemaps.size > 0 || workspace.rgbPending > 0 || customRgbPending || workspace.advancedPending);
   const devicePanel = <DeviceConnectionPanel deviceConnectionState={deviceConnectionState} deviceModel={deviceModel} selectedModel={selectedModel} onSelectDeviceModel={selectDeviceModel} onConnectOrDisconnect={() => void sync.handleDeviceConnection()} profileSlot={workspace.profileSlot} onSelectProfileSlot={slot => void sync.selectOnboardProfile(slot)} onReadFromDevice={() => void sync.handleReadFromDevice()} profileBusy={workspace.profileBusy} deviceReadState={deviceSettings.deviceReadState} deviceActionError={deviceSettings.deviceActionError} deviceError={activeDevice.error} />;
   return <I18nProvider language={ui.resolvedLanguage}>

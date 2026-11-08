@@ -23,6 +23,7 @@ export type RgbProfile = {
   keys: RgbZone;
   side: RgbZone;
   colors: Record<string, RgbColor>;
+  presetColors?: Record<number, Record<string, RgbColor>>;
   custom?: CustomRgbConfiguration;
 };
 export type RgbDirty = {
@@ -97,6 +98,9 @@ export function rgbChanges(draft: RgbProfile, baseline: RgbProfile, keyIds?: rea
 export const rgbDirtyCount = (dirty: RgbDirty) => Number(!!dirty.keys) + Number(!!dirty.side) + dirty.colors.length;
 export function mergeRgb(fresh: RgbProfile, draft?: RgbProfile, dirty?: RgbDirty): RgbProfile {
   const result = structuredClone(fresh);
+  if (draft?.presetColors) {
+    result.presetColors = structuredClone(draft.presetColors);
+  }
   if (draft?.custom) {
     result.custom = restoreCustomRgb(draft.custom, result);
   }
@@ -215,6 +219,9 @@ export async function readRgbProfile(device: RgbTransport, ids: readonly string[
 }
 export async function saveRgbProfile(device: RgbTransport, draft: RgbProfile, baseline: RgbProfile, verified: (baseline: RgbProfile) => void, keyIds?: readonly string[], model?: HeroDeviceModelId) {
   const next = structuredClone(baseline);
+  if (draft.presetColors) {
+    next.presetColors = structuredClone(draft.presetColors);
+  }
   if (draft.custom) {
     next.custom = restoreCustomRgb(draft.custom, next);
   }
