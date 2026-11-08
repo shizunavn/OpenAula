@@ -26,7 +26,7 @@ their original validation scope; they are not claims of new hardware testing.
 - 200 Hz High-Speed XSYD Hall Sensor Streaming:
   - Streamlined Hall polling sequence in `src/protocol/hero68/hallStream.ts`, `service/hall/hallController.ts`, and `service/native/hid_bridge.cpp`.
   - Implemented single `0x12 0x03` initial seed for pressed state, followed by 1-round-trip steady-state polling with 3:1 prioritized sampling of depressed keys over idle keys, achieving stable ~200 Hz Hall streaming.
-- Firmware static analysis synthesis (`KNOWN_STATE.md`):
+- Firmware static analysis synthesis (`docs/xsyd_knownstate.md`):
   - Added comprehensive 1286-line verified technical specification covering MCU XS105 / SI2828C memory map, Flash sector layouts, jump tables, and HID descriptors for AULA WIN 68 HE MAX (`App v1.1.4_20260204a`).
 
 ## 1.4.3 — WIN 68 HE MAX DKS & 4-Mode SOCD Support
