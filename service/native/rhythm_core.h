@@ -243,6 +243,7 @@ inline std::array<double, 16> logBands(const std::array<float, 256>& input, int 
     odd[2 * n] = b;
   }
   auto transform = [](std::array<double, half * 2>& a) {
+    constexpr size_t half = 128;
     for (size_t i = 1, j = 0; i < half; ++i) {
       size_t bit = half / 2;
       while (bit && (j & bit)) {
