@@ -1,6 +1,6 @@
 # OpenAula
 
-An open-source, browser-based configurator for **AULA HERO68 / HERO84 / WIN 68 HE MAX** Hall-effect keyboards, plus an optional **Windows tray service** that keeps custom RGB, Rhythm Sync and analog Xbox gamepad output running after the browser is closed.
+An open-source, browser-based configurator for **AULA HERO68 / HERO84 / HERO 68 XS / WIN 68 HE MAX** Hall-effect keyboards, plus an optional **Windows tray service** that keeps custom RGB, Rhythm Sync and analog Xbox gamepad output running after the browser is closed.
 
 Formerly OpenHero68; the rename reflects support for the wider AULA line. Existing installs upgrade in place and keep their settings.
 
@@ -15,7 +15,7 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 >
 > No coding needed. Share your exact model, firmware version, USB IDs and a layout photo; write **Unknown** if you need help. Protocol captures are optional. Owners who can test on real hardware are especially welcome.
 >
-> **Currently verified: AULA HERO68/HERO84(ONLY VERIFIED LIGHTING,RT,AP)/WIN68 MAX.** Other models still need protocol and hardware validation. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings, Rapid Trigger, 4-mode SOCD, 7-node visual DKS, Custom Effects, and Rhythm Sync are fully supported.
+> **Currently verified: AULA HERO68 / HERO84 (verified lighting, RT, AP) / HERO 68 XS (5 µm high precision, 8K receiver) / WIN 68 HE MAX.** Other models still need protocol and hardware validation. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings, Rapid Trigger, 4-mode SOCD, 7-node visual DKS, OS switching, WinLock, and WebHID configuration are fully supported.
 
 
 
@@ -41,19 +41,22 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 
 | Area | What you can do |
 | --- | --- |
-| Profiles | Switch between 3 on-board profile slots, read from and save to device; displays dynamic key counts and model names for recognized boards (e.g. HERO68, HERO84, WIN 68 HE MAX) |
-| Actuation Point | Per-key or multi-key actuation from 0.10 to 3.40 mm, with a live Hall test overlay on the keyboard |
-| Rapid Trigger | Rapid Trigger and deadzone settings |
+| Profiles | Switch between 3 on-board profile slots, read from and save to device; displays dynamic key counts and model names for recognized boards (e.g. HERO68, HERO84, HERO 68 XS, WIN 68 HE MAX) |
+| Actuation Point | Per-key or multi-key actuation from 0.10 to 3.40 mm (with fine 0.005 mm / 5 µm resolution on HERO 68 XS), live Hall test overlay on the keyboard |
+| Rapid Trigger | Rapid Trigger and deadzone settings with up to 0.005 mm sensitivity steps on supported hardware (HERO 68 XS) |
 | Key Remap | Remap keys across layers, with a searchable icon catalog |
 | Advanced Keys | SOCD (4 priority modes), DKS (7-node visual track & official keycap palette), Mod Tap, Toggle, MPT and END bindings (Main Layer) |
 | Macros | Macro editor with a local library synced to the keyboard |
 | RGB Settings | On-board effects for keys and side light, plus **Custom Effects** (Dynamic Wave across 9 directions, Trigger Response, Aurora, and 16 FX layers) and **Rhythm Sync** (with 16 log-spaced equalizer bands, Spectrum Bars, Audio Marquee, Radial Chase & Peak-hold side meters); per-key painting tools sit directly below the keyboard preview |
 | Gamepad | Setup & Remap with automatic saves, analog response curves/travel, digital AP/RT, Snappy, circle/square, angle adjustment, live tester with XInput verification, and **custom toggle keybinding** to start/stop emulation in-game |
-| Device settings | Polling rate (125 Hz – 8000 Hz), Tachyon Mode, OS mode, Windows key lock, Hall debounce, auto calibration, switch selector |
+| Device settings | Polling rate (125 Hz – 8000 Hz, with 8K wireless receiver support), Tachyon Mode, OS mode (Windows/macOS), Windows key lock, Hall debounce, auto calibration, authentic switch selector with photo assets |
 | Interface | English and Vietnamese UI, optional advanced pages (Hall Stream), compact sidebar |
 
 **RGB tray service** (Windows x64, installed)
 
+- **Native System Tray Flyout:** custom dark-themed Win32 GDI flyout with live status cards (ViGEm driver status, WebHID bridge connection, active profile slot, RT/AP mode, and RGB/Gamepad state) and one-click quick action buttons.
+- **Service Control Panel:** responsive dark-mode diagnostic and management dashboard at `http://127.0.0.1:16868/` with real-time telemetry, profile switching, and updater integration.
+- **HERO 68 XS Wire Travel Normalization:** high-resolution 5 µm wire travel normalized across Gamepad analog output and RGB pressure waves.
 - **Custom Effects:** an Aurora or Dynamic Wave base with composable effects (Dynamic Wave, Trigger Response, Comet, Pressure Wave, Ripple, Reaction, Touch, Jelly, AOE, Scan, Breath, Mixing, Trail, RT Display, plus the ambient Ember, Starlight, Afterglow and Tempo Pulse (BPM)) and a layer editor with 9-direction control and smooth circular palette transitions. Start/Stop controls with automatic live updates, session recovery and preserved drafts.
 - **Rhythm Sync:** 10 key modes driven by native system-audio capture with 16 log-spaced FFT bands, 7 side meter modes (including Peak-hold & Far-end), live preview and a 60 FPS USB scheduler shared with Custom Effects.
 - **Gamepad:** one virtual Xbox controller through ViGEmBus 1.22.0, up to 200 Hz analog output, automatically saved configurations for three profile slots, tray Start/Stop, and keybind toggle (`POST /gamepad/toggle`) with `expectedEnabled` state guard and automatic Xbox attach retry. Curve edits save on release; digital buttons follow keyboard AP/RT. The tester has a separate fast input stream; assigned keyboard keys can use firmware empty action with automatic remap recovery.
@@ -91,9 +94,9 @@ Open the HTTPS URL printed by Vite. WebHID requires a secure context, so Vite cr
 2. Open OpenAula from Start Menu or the Desktop shortcut. An **H** icon appears in the system tray.
 3. Open the web app and choose **Allow** if the browser asks for access to apps and services on this device.
 4. Go to **RGB Settings → Custom Effects** or **Rhythm Sync**, pick a preset and click **Start Custom** or **Start Rhythm Sync**. Running edits sync automatically; returning to the editor joins existing playback.
-5. Close the browser if you like — playback continues. Right-click the tray icon for controls.
+5. Close the browser if you like — playback continues. Click or right-click the tray icon to open the native status flyout.
 
-**Tray menu:** Open web app · Open control panel · Start saved RGB · Stop RGB · Start saved Gamepad · Stop Gamepad · Check for updates · Open log folder · Auto-start · Quit.
+**Tray flyout & actions:** Live status cards (ViGEm driver presence, WebHID bridge connection, device profile slot, RT/AP mode, RGB/Gamepad status) · Open web app · Open control panel · Start saved RGB · Stop RGB · Start saved Gamepad · Stop Gamepad · Check for updates · Open log folder · Auto-start · Quit.
 
 Gamepad starts disabled whenever the service starts. Once enabled, it keeps running when the browser closes. Its independent 50 ms watchdog neutralizes stale input and waits for all assigned keys to rest before rearming. Start/Stop can also be toggled with your configured hotkey or shortcut.
 
@@ -226,8 +229,8 @@ docs/                Reverse-engineering notes, feature docs, release notes
 
 ## Known limitations
 
-- **Gamepad v1** supports one HERO68 and one Xbox controller on Windows x64. Firmware blocking saves exact original remaps before writing zero and recovers them after service restart. Advanced Keys on assigned keys must be removed first. Windows hook fallback affects matching keys on other keyboards, may not block Raw Input, and displays an anti-cheat warning when selected. No suppression method guarantees anti-cheat approval. DirectInput, mouse-to-stick and kernel keyboard filters are outside v1.
-- **WIN 68 HE MAX** is a separate protocol stack, so Gamepad, RGB, Rhythm Sync and Hall Stream are HERO68/HERO84 features and do not apply to it yet. DKS, Rappy Snappy, DDKS and non-default SOCD modes are blocked until a USB capture proves their frame layout; the UI explains this instead of guessing.
+- **Gamepad v1** supports one HERO68 / HERO 68 XS and one Xbox controller on Windows x64. Firmware blocking saves exact original remaps before writing zero and recovers them after service restart. Advanced Keys on assigned keys must be removed first. Windows hook fallback affects matching keys on other keyboards, may not block Raw Input, and displays an anti-cheat warning when selected. No suppression method guarantees anti-cheat approval. DirectInput, mouse-to-stick and kernel keyboard filters are outside v1.
+- **WIN 68 HE MAX** operates on a separate XSYD 0x5C protocol stack. While per-key AP/RT, 4-mode SOCD, 7-node visual DKS, OS mode switching, WinLock, and WebHID configuration are fully supported, background service features (virtual Gamepad and service RGB streaming) currently target the HERO68 / HERO 68 XS family.
 - **Rhythm side-light modes** work in the demo only. Live side output stays disabled until the HERO68 LED count, order and protocol are verified; side LEDs keep their on-board effect while key playback runs.
 - **Tachyon Mode** (8000 Hz polling) turns key and side lighting off to minimize latency. Custom Effects, Rhythm Sync and automatic Hall polling are paused while it is on, and your previous lighting is restored when you turn it off.
 - The tray service supports **Windows x64 only**. The web app needs a WebHID browser (Chrome or Edge).
