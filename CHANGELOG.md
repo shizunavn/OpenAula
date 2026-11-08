@@ -3,6 +3,29 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.6.1 — Rhythm Equalizer Full-Scale Scaling, Audio Marquee Row Direction & Radial Chase Shockwave
+
+- Rhythm Sync Spectrum Bars (Mode 429) Full-Scale & Row Distribution (`service/native/rhythm_core.h`, `rhythm.ts`):
+  - Normalized magnitude curve by full-scale value at `m = 1.0` (`fullScale ≈ 0.920696`), allowing high-energy frequency bands to reach `1.0` and fully illuminate Row 0 (top number row).
+  - Divided height `[0, 1]` evenly across all 5 keyboard rows (`rowFloor = (4 - k.y) / 5`, from bottom row `0.0` to top number row `0.8`).
+  - Added sensitivity scaling (`sensitivity / 4.0`) so the UI Sensitivity slider directly and proportionally scales the frequency bands.
+  - Smooth edge transitions (`0.35 + 0.65 * edge`) per row.
+- Audio Marquee (Mode 432) Horizontal Multi-Directional Bars (`service/native/rhythm_core.h`, `rhythm.ts`):
+  - Converted Marquee from vertical time-scrolling to alternating-direction horizontal rhythm bars across each row (even rows `0, 2, 4` sweep left-to-right; odd rows `1, 3` sweep right-to-left).
+  - Bars respond dynamically to live volume (`level_`), per-row frequency bands (`bands_`), and beat history ripple (`history_`).
+  - Head of each bar shines at full intensity (`1.0`), smoothly fading along the body, and stays completely black (`#000000`) during silence (`level_ == 0`).
+- Radial Chase (Mode 434) Beat-Driven Concentric Shockwave Rings (`service/native/rhythm_core.h`, `rhythm.ts`):
+  - Replaced time-driven expansion with beat-driven concentric shockwave rings expanding from keyboard center (`distNorm = clamp(hypot((nx-0.5)*2, (k.y/4-0.5)*1.35) / 1.15, 0, 1)`).
+  - Shockwaves pulse outward on audio transients (`drive = clamp(bands_[band] > 0 ? level * 0.55 + bands_[band] * 0.65 : level, 0, 1)`).
+  - Generates secondary reverberation echo rings at the center on heavy beats (`drive > 0.5`).
+- Side Light Hardware Isolation (`useDeviceSyncController.ts`, `CustomRgbEditor.tsx`, `RgbSettingsPage.tsx`, `lighting.ts`):
+  - Saving side light edits from tabs other than `onboard` no longer calls `rgbService.mode('onboard')`, preserving running Custom Effects and Rhythm streaming sessions on keys.
+  - Added UI notices and Vietnamese localization explaining that Side Light settings are stored directly in keyboard hardware.
+- Test Coverage & Documentation:
+  - Added unit test in `tests/native-rhythm.test.cpp` verifying Spectrum Bars reach the top number row (keys 0..14) under loud audio.
+  - Added test in `tests/rhythm.test.mjs` verifying Spectrum Bars light up Row 0 and Marquee / Radial Chase scale with music energy.
+  - Updated architecture and behavior descriptions in `docs/RHYTHM_SYNC_OPENRGB.md`.
+
 ## 1.6.0 — Dynamic Wave 9-Direction, Trigger Response, Log-Spaced Rhythm Equalizer & Smooth Multi-Color Wraparound
 
 - Dynamic Wave (`wave`):

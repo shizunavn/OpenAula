@@ -239,12 +239,13 @@ export function hslToHex(h: number, sPct: number, lPct: number): string {
  * Log-spaced 16-band envelope from `AnalyserNode.getByteFrequencyData()`, mirroring
  * `logBands()` in `service/native/rhythm_core.h`. Voice and most music live under
  * ~2 kHz, so a linear bin-to-column map leaves everything in the first columns;
- * the log edges spread bass, mids and treble across the row.
+ * the log edges spread bass, mids and treble across the row, normalized to full scale [0, 1].
  */
 export function logSpectrumBands(frequencyData: ArrayLike<number>) {
   const bins = frequencyData.length;
   const usable = Math.max(16, Math.min(bins, Math.floor(bins * 0.65)));
   const edge = (band: number) => Math.min(usable - 1, Math.round(Math.pow(usable - 1, band / 16)));
+  const fullScale = 0.9 + 0.5 * Math.log10(1.1);
   const bands: number[] = [];
   for (let band = 0; band < 16; band++) {
     const start = edge(band);
@@ -254,8 +255,11 @@ export function logSpectrumBands(frequencyData: ArrayLike<number>) {
       const raw = frequencyData[b] ?? 0;
       energy += raw > 4 ? Math.pow((raw - 4) / 251, 2) : 0;
     }
-    const magnitude = Math.sqrt(energy);
-    bands.push(magnitude > 0 ? Math.min(1, 0.9 * magnitude + 0.5 * Math.log(1.1 * magnitude)) : 0);
+    const rms = Math.sqrt(energy / Math.max(1, stop - start));
+    const m = Math.min(1, rms * 1.35);
+    bands.push(
+      m > 0 ? Math.max(0, Math.min(1, (0.9 * m + 0.5 * Math.log10(1 + m * 0.1)) / fullScale)) : 0
+    );
   }
   return bands;
 }
@@ -305,8 +309,6 @@ export function renderRhythmAudioFrame(
       colBins[c] = boosted;
       energySum += boosted;
     }
-    // Spectrum Bars bypass the linear colBins; apply the same sensitivity the native engine
-    // gets from `value` so both renderers answer the slider identically.
     const bandsRaw = logSpectrumBands(frequencyData);
     for (let c = 0; c < 16; c++) {
       bands[c] = bandsRaw[c] > 0 ? Math.min(1, bandsRaw[c] * dbGain * sensGain) : 0;
@@ -322,18 +324,19 @@ export function renderRhythmAudioFrame(
       const gatedRms = rms > 0.005 ? rms : 0;
       level = Math.min(1, Math.max(level, gatedRms * sensGain * 2.2));
     }
-    // Peak-hold is applied over the rendered (attack-smoothed) level by the playback loop;
-    // here the meter is the raw attack value so a loud hit raises it above `level`.
     for (let c = 0; c < 16; c++) {
       meter = Math.max(meter, bands[c]);
     }
     meter = Math.max(level, meter);
   } else if (allowSynthFallback) {
-    level = Math.exp(-phase * 7) * (0.75 + 0.25 * Math.sin(t * 0.7));
+    level = Math.exp(-phase * 5) * (0.82 + 0.18 * Math.sin(t * 0.7));
     meter = Math.max(meter, level);
     for (let c = 0; c < 16; c++) {
       const nx = c / 15;
-      colBins[c] = Math.max(0, Math.min(1, Math.sin(nx * 9 + t * 3) * 0.4 + level * 0.6));
+      colBins[c] = Math.max(
+        0,
+        Math.min(1, (Math.sin(nx * 9 + t * 3) * 0.5 + 0.5) * 0.45 + level * 0.65)
+      );
       bands[c] = colBins[c];
     }
   }
@@ -353,7 +356,10 @@ export function renderRhythmAudioFrame(
     return sum / Math.max(1, weightSum);
   });
 
-  const maxBin = smoothedBins.reduce((m, v) => Math.max(m, v), 0);
+  const maxBin = Math.max(
+    smoothedBins.reduce((m, v) => Math.max(m, v), 0),
+    bands.reduce((m, v) => Math.max(m, v), 0)
+  );
   const isSpectrumMode = config.keyMode === 428 || config.keyMode === 429;
   const isSilentLive = !allowSynthFallback && level < 0.008 && (!isSpectrumMode || maxBin < 0.012);
   if (isSilentLive) {
@@ -362,7 +368,8 @@ export function renderRhythmAudioFrame(
   }
 
   const keys: Record<string, string> = {};
-  const maxRowIndex = Math.max(1, board.rows.length - 1);
+  const rowCount = Math.max(1, board.rows.length);
+  const maxRowIndex = Math.max(1, rowCount - 1);
   board.rows.forEach((row, y) =>
     row.forEach((key, x) => {
       if (key.spacer) {
@@ -374,9 +381,12 @@ export function renderRhythmAudioFrame(
       }
       const nx = x / Math.max(1, row.length - 1);
       const ny = y / maxRowIndex;
+      // Divide [0, 1] evenly across all rows (including y=0, the top number row, at rowFloor = 0.8 on 5-row boards)
+      const rowFloor = (rowCount - 1 - y) / rowCount;
       const colIdx = Math.max(0, Math.min(15, Math.round(nx * 15)));
       const colEnergy = smoothedBins[colIdx] ?? level;
       let value = 0;
+      let colorCoord = nx;
       switch (config.keyMode) {
         case 169:
           value = Math.hypot((nx - 0.5) * 1.6, ny - 0.5) < level ? 1 : 0;
@@ -405,50 +415,86 @@ export function renderRhythmAudioFrame(
           break;
         case 428:
           value = allowSynthFallback
-            ? ny >= 1 - colEnergy
+            ? colEnergy >= rowFloor
               ? 1
               : 0.02
-            : colEnergy >= 0.012 && ny >= 1 - colEnergy
+            : colEnergy >= 0.012 && colEnergy >= rowFloor
               ? 1
               : 0;
           break;
         case 429: {
           const band = Math.max(0, Math.min(15, Math.floor(nx * 16)));
           const energy = bands[band] ?? 0;
-          value = allowSynthFallback
-            ? ny >= 1 - energy
-              ? 1
-              : 0.02
-            : energy >= 0.012 && ny >= 1 - energy
-              ? 1
-              : 0;
+          if (energy >= 0.012 && energy >= rowFloor) {
+            const edge = Math.max(0, Math.min(1, (energy - rowFloor) * rowCount));
+            value = 0.35 + 0.65 * edge;
+          } else {
+            value = allowSynthFallback ? 0.02 : 0;
+          }
           break;
         }
         case 432: {
-          // Audio Marquee: a wrapping band of height `level` fills down each row.
-          const cell = (ny + t / 0.13) % 1;
-          value = cell <= level ? Math.max(0, 1 - (level - cell) * 3) : 0;
+          // Audio Marquee: alternating-direction horizontal bars per row synced to music level & frequency band.
+          const pos = y % 2 === 1 ? 1 - nx : nx;
+          const rowBand = Math.max(
+            0,
+            Math.min(15, Math.floor(((rowCount - 1 - y) / rowCount) * 12 + pos * 3.99))
+          );
+          const bandEnergy = bands[rowBand] ?? colEnergy;
+          const rowEnergy = Math.max(
+            0,
+            Math.min(
+              1,
+              bandEnergy > 0.01
+                ? level * 0.45 + bandEnergy * 0.75
+                : level * (1 - 0.1 * Math.abs(y - maxRowIndex / 2))
+            )
+          );
+          if (level > 0 && rowEnergy > 0.012 && pos <= rowEnergy) {
+            const headDist = rowEnergy - pos;
+            value = headDist < 0.14 ? 1 : Math.max(0.25, Math.min(0.95, 1 - headDist * 0.65));
+          } else {
+            value = 0;
+          }
+          colorCoord = (pos + y * 0.12) % 1;
           break;
         }
         case 434: {
-          // Audio Sync radial roll: a front travels outward and stops at `level * 16` keys.
-          const distance = Math.hypot((nx - 0.5) * 16, (y - 2) * 2);
-          const front = level * 16;
-          let travel = distance - t / 0.045;
-          if (travel < 0) {
-            travel = (travel % 16) + 16;
+          // Radial Chase: beat-driven concentric shockwave rings chasing outward from the centre.
+          if (level > 0) {
+            const dx = (nx - 0.5) * 2;
+            const dy = (ny - 0.5) * 1.35;
+            const distNorm = Math.max(0, Math.min(1, Math.hypot(dx, dy) / 1.15));
+            const band = Math.max(0, Math.min(15, Math.floor(nx * 16)));
+            const bandEnergy = bands[band] ?? colEnergy;
+            const drive = Math.max(
+              0,
+              Math.min(1, bandEnergy > 0.01 ? level * 0.55 + bandEnergy * 0.65 : level)
+            );
+            const ringWidth = 0.28;
+            const ringDist = Math.abs(distNorm - drive);
+            let ringVal = ringDist < ringWidth ? 1 - ringDist / ringWidth : 0;
+            if (drive > 0.5 && distNorm < drive - 0.25) {
+              const echoFront = ((drive * 1.75) % 1) * 0.65;
+              const echoDist = Math.abs(distNorm - echoFront);
+              if (echoDist < 0.22) {
+                ringVal = Math.max(ringVal, (1 - echoDist / 0.22) * 0.85);
+              }
+            }
+            value = distNorm <= drive + ringWidth * 0.5 ? Math.max(0, Math.min(1, ringVal)) : 0;
+            colorCoord = (distNorm + level * 0.25) % 1;
+          } else {
+            value = 0;
           }
-          value =
-            travel < front ? Math.max(0, Math.min(1, 1 - Math.max(0, travel - front + 2) / 2)) : 0;
           break;
         }
       }
       const hue =
         config.palette === 'fire'
-          ? nx * 45
+          ? colorCoord * 45
           : config.palette === 'aurora'
-            ? 160 + nx * 120
-            : (nx * 300 + t * 25) % 360;
+            ? 160 + colorCoord * 120
+            : (colorCoord * 300 + t * 25) % 360;
       const fullBrightness =
         config.keyMode === 429 || config.keyMode === 432 || config.keyMode === 434;
       keys[key.id] =

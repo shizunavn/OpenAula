@@ -55,9 +55,9 @@ thêm bảng ánh xạ mới.
 
 | ID | Tên | Gốc OpenRGB | Đã điều chỉnh cho 68 phím |
 | --- | --- | --- | --- |
-| 429 | Spectrum Bars | Audio Visualizer | 16 dải chia theo **log**, không chia tuyến tính |
-| 432 | Audio Marquee | Hành vi marquee/cuộn | Thêm số hạng cuộn theo `level` (OpenAula trước đây không có) |
-| 434 | Radial Chase | Audio Sync `RollMode::RADIAL` | Trường khoảng cách từ tâm, mặt sáng tiến theo `level` |
+| 429 | Spectrum Bars | Audio Visualizer | 16 dải chia theo **log**, chia đều 5 hàng phím (kể cả hàng phím số trên cùng) |
+| 432 | Audio Marquee | Hành vi marquee/cuộn | Các hàng chạy ngang đan xen trái/phải trực tiếp theo `level`, dải tần số từng hàng và `history_` |
+| 434 | Radial Chase | Audio Sync `RollMode::RADIAL` | Sóng vòng tròn đồng tâm bùng ra từ giữa bàn phím theo nhịp `level`, phổ tần số và lịch sử nhịp |
 
 ### 429 — Spectrum Bars
 
@@ -66,31 +66,39 @@ thêm bảng ánh xạ mới.
   thành 16 dải theo biên `pow(64, band/16)`. Mỗi dải lấy **RMS** các bin
   (`sqrt(Σ mag²)`) thay vì cộng thô.
 - Cửa sổ và gain dùng chung `windowFunction()` với FFT cũ, chuẩn hoá theo tổng
-  trọng số cửa sổ để Hann/Hamming/Blackman có cùng mức.
-- Đường cong độ lớn dùng `0.9m + 0.5·log10(1.1m)` như plugin, nhưng **giữ giá
-  trị dưới 1 thay vì bão hoà** (`m = min(1, mag)`) để các dải lân cận còn đọc
-  được.
+  trọng số cửa sổ để Hann/Hamming/Blackman có cùng mức, đồng thời nhân hệ số
+  `sensitivity / 4.0` để thanh trượt Sensitivity trong UI tác động đồng nhất.
+- Đường cong độ lớn dùng `(0.9m + 0.5·log10(1.1m)) / fullScale` (chuẩn hoá theo
+  giá trị tại `m = 1.0`, `fullScale ≈ 0.920696`) để các dải năng lượng cao đạt
+  đủ `1.0` thay vì bị kẹt ở ngưỡng `0.9207`.
 - Cổng im lặng: RMS dưới `1/32768` thì đặt toàn bộ dải về 0. Lý do: đường cong
   log khuếch đại bin nhiễu rất nhỏ thành cột sáng nhìn thấy được — plugin OpenRGB
   cũng phi tuyến như vậy.
 - Decay từng dải theo `releaseMs`, keyed trên `a.sequence` riêng
   (`spectrumSequence_`) để không ăn mất packet của chế độ 428.
-- Render: chia bàn phím thành 16 cột (`nx·16`), cột có năng lượng luôn chạm hàng
-  dưới; mép trên làm mờ dần theo năng lượng dải.
+- Render: chia bàn phím thành 16 cột (`nx·16`) và chia đều chiều cao `[0, 1]` cho
+  cả 5 hàng phím (`rowFloor = (4 - k.y) / 5`, từ hàng dưới cùng `0.0` đến hàng
+  phím số trên cùng `0.8`); mép trên của mỗi hàng làm mượt theo
+  `0.35 + 0.65 · clamp((bands_[band] - rowFloor) · 5, 0, 1)`.
 
 ### 432 — Audio Marquee
 
-- `cell = fmod(ny + elapsed/130, 1)`, cột sáng khi `cell < level_`.
-- Điều kiện `level_ > 0` là bắt buộc: ở pha 0 hàng dưới có `cell == 0`, nếu thiếu
-  điều kiện thì im lặng vẫn sáng một hàng.
+- Mỗi hàng phím (`y = 0..4`) là một thanh marquee chạy ngang đan xen chiều
+  (hàng chẵn `0, 2, 4` phóng từ trái sang phải `pos = nx`; hàng lẻ `1, 3` phóng
+  từ phải sang trái `pos = 1 - nx`).
+- Độ vươn `rowEnergy` của từng hàng bám trực tiếp theo `level_` kết hợp năng
+  lượng dải tần số tương ứng của hàng đó (`bands_`: hàng dưới theo âm trầm/bass,
+  hàng giữa theo mid, hàng phím số theo treble) và gợn sóng lịch sử nhịp
+  `history_`. Đầu thanh marquee (`headDist < 0.14`) sáng rực ở mức `1.0`, thân
+  thanh giảm nhẹ về phía gốc và tắt hoàn toàn (`#000000`) khi `level_ == 0`.
 
 ### 434 — Radial Chase
 
-- `distance = hypot((nx-0.5)·16, (k.y-2)·2)` — trường khoảng cách lấy tâm giữa
-  bàn phím.
-- `travel = fmod(elapsed/45, 16)`; `phase = distance - travel` (cộng 16 nếu âm).
-- Mặt sáng có bề rộng `level_·16`; trong mặt sáng giá trị bão hoà 1, mép giảm
-  dần trong 2 đơn vị cuối.
+- Khoảng cách bán kính chuẩn hoá từ tâm bàn phím `distNorm = clamp(hypot((nx-0.5)·2, (y/4-0.5)·1.35) / 1.15, 0, 1)`.
+- Thay vì chạy theo bộ đếm thời gian cố định gây sáng đặc cả bàn phím, mặt sóng
+  vòng tròn (`drive`) bung ra trực tiếp theo nhịp nhạc `level_` và năng lượng
+  dải tần `bands_[band]`, kết hợp vòng sóng âm vang thứ cấp ở tâm khi nhịp mạnh
+  (`drive > 0.5`) và lan truyền lịch sử nhịp `history_`.
 
 ### Side LED (chưa xác minh phần cứng)
 
@@ -125,10 +133,13 @@ thứ tự và kênh chưa được kiểm trên thiết bị thật:
 ## 6. Kiểm chứng
 
 - `tests/native-rhythm.test.cpp`: chế độ 429/432/434 phát packet hợp lệ,
-  checksum khớp, tắt hoàn toàn khi im lặng, đổi `generation` xoá sạch; `logBands`
-  đặt đúng dải cho tần số 3/17/40, im lặng cho toàn 0; side 504/505/506 có hành
-  vi đúng và encode thành report `14/1`.
+  checksum khớp, tắt hoàn toàn khi im lặng, đổi `generation` xoá sạch; `429`
+  sáng đủ hàng phím số trên cùng (`keys 0..14`) khi năng lượng cao; `432` và
+  `434` tăng số phím sáng tỷ lệ thuận với mức nhạc; `logBands` đặt đúng dải cho
+  tần số 3/17/40, im lặng cho toàn 0; side 504/505/506 có hành vi đúng và encode
+  thành report `14/1`.
 - `tests/rhythm.test.mjs`: catalogue 10 chế độ, side 504–506 được chặn ở service,
-  `validateRhythm` từ chối `sideMode: 507`.
+  `validateRhythm` từ chối `sideMode: 507`, `429` sáng hàng phím số trên cùng và
+  `432`/`434` phản hồi theo mức năng lượng nhạc.
 - Chạy: `g++ -std=c++17 -O2 -static tests/native-rhythm.test.cpp` (bắt buộc
   `-static` với MinGW 15.1.0 trên Windows), `npm test`, `npm run typecheck:service`.

@@ -52,3 +52,19 @@ test('live renderRhythmAudioFrame stays 100% dark with 0% level across all modes
     assert.ok(zeroAudio.side.every(c=>c==='#181c20'),`mode ${mode.id} with silent audio must keep side LEDs dark`)
   }
 })
+test('Spectrum Bars lights up top number row on strong bands and Audio Marquee / Radial Chase scale with music energy',()=>{
+  const topRowIds=['Escape','Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0','Minus','Equal','Backspace','Insert']
+  const loudFft=new Uint8Array(512).fill(220)
+  const loudWave=new Uint8Array(1024).map((_,i)=>i%2?220:36)
+  const sbFrame=renderRhythmAudioFrame({...defaultRhythm(),keyMode:429},200,loudFft,loudWave,'win68HeMax',false)
+  assert.ok(topRowIds.every(id=>sbFrame.keys[id]!=='#000000'),'Spectrum Bars must light the top number row when bands are strong')
+
+  const lowFft=new Uint8Array(512).fill(45)
+  const lowWave=new Uint8Array(1024).map((_,i)=>i%2?142:114)
+  for(const modeId of [432,434]){
+    const low=renderRhythmAudioFrame({...defaultRhythm(),keyMode:modeId},200,lowFft,lowWave,'win68HeMax',false)
+    const high=renderRhythmAudioFrame({...defaultRhythm(),keyMode:modeId},200,loudFft,loudWave,'win68HeMax',false)
+    const countLit=f=>Object.values(f.keys).filter(c=>c!=='#000000').length
+    assert.ok(countLit(low)>0&&countLit(high)>countLit(low),`mode ${modeId} must light more keys on louder beats`)
+  }
+})

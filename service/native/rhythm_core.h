@@ -299,10 +299,11 @@ inline std::array<double, 16> logBands(const std::array<float, 256>& input, int 
       mag += spectrum[size_t(j)] * spectrum[size_t(j)];
     }
     mag = std::sqrt(mag);
-    // OpenRGB / KeyboardVisualizer magnitude curve. Unlike its scalar path this keeps sub-1
-    // magnitudes instead of saturating them, so neighbouring bands stay readable at 1.0.
+    // OpenRGB / KeyboardVisualizer magnitude curve, normalized by full-scale value at m=1.0
+    // (.9 + .5 * log10(1.1) ≈ 0.920696) so full-energy bands reach 1.0 and light Row 0 (number row).
     const double m = std::min(1., mag);
-    result[band] = m > 0 ? std::clamp(.9 * m + .5 * std::log10(1.1 * m), 0., 1.) : 0;
+    constexpr double fullScale = .9 + .5 * 0.04139268515822504;
+    result[band] = m > 0 ? std::clamp((.9 * m + .5 * std::log10(1.1 * m)) / fullScale, 0., 1.) : 0;
   }
   return result;
 }
@@ -410,13 +411,13 @@ public:
     // OpenRGB Audio VU Meter peak-hold: jump straight up, decay at 0.1/speed per frame.
     meter_ = level_ >= meter_ ? level_ : std::max(level_, meter_ - .1 * dt * 60 / 1000);
 
-    if (config_.keyMode == 429) {
+    if (config_.keyMode == 429 || config_.keyMode == 432 || config_.keyMode == 434) {
       // Keyed on its own sequence: sharing `sequence_` with the 428 field meant a packet
       // consumed by 428 never refreshed these bands, leaving them frozen while live.
       // Gate on freshness, not on the shared envelope: with `envelope = 0` but fresh samples
       // the bands must still decay from the per-packet computation below.
       if (a.sequence && now - a.receivedMs < 100 && a.sequence != spectrumSequence_) {
-        auto bands = logBands(a.samples, config_.window, config_.db * 30);
+        auto bands = logBands(a.samples, config_.window, config_.db * 30 * (config_.sensitivity / 4.));
         // Digital silence still yields tiny non-zero FFT bins which the magnitude curve lifts
         // into visible bars. OpenRGB has the same non-linearity, so gate quiet windows to zero.
         double rms = 0;
@@ -549,32 +550,68 @@ public:
           continue;
         } else if (config_.keyMode == 429) {
           const int band = std::clamp(int(nx * 16), 0, 15);
-          const double ny = k.y / 4;
-          // The bottom row owns the baseline, so a band with any energy always reaches it.
-          if (bands_[band] > .001 && ny >= (1 - bands_[band]) * (1 - 1e-9)) {
-            const double edge = std::clamp((bands_[band] - (1 - ny)) * 16., 0., 1.);
+          const double rowFloor = (4. - k.y) / 5.;
+          // Divide [0, 1] evenly into 5 rows (bottom k.y=4 at 0.0 up to top number row k.y=0 at 0.8).
+          if (bands_[band] > .001 && bands_[band] >= rowFloor) {
+            const double edge = std::clamp((bands_[band] - rowFloor) * 5., 0., 1.);
             value = .35 + .65 * edge;
           }
         } else if (config_.keyMode == 432) {
-          const double ny = k.y / 4;
-          const double cell = std::fmod(ny + elapsed / 130, 1.);
-          // level_ == 0 must stay dark (the bottom row is exactly 0 at phase 0).
-          if (level_ > 0 && cell < level_) {
-            value = 1 - std::max(0., level_ - cell) * 3;
+          // Audio Marquee: alternating-direction horizontal rhythm bars across rows
+          // driven by live music level, per-row frequency bands, and beat history.
+          if (level_ > 0) {
+            const int row = int(k.y);
+            const double pos = (row & 1) ? (1. - nx) : nx;
+            const int band = std::clamp((4 - row) * 3 + int(pos * 3.99), 0, 15);
+            const double bandEnergy = bands_[band];
+            const double rowEnergy = std::clamp(
+                bandEnergy > .001 ? level_ * .45 + bandEnergy * .75
+                                  : level_ * (1. - .1 * std::abs(row - 2)),
+                0.,
+                1.);
+            const int histIdx = std::clamp(int(pos * 12), 0, 21);
+            const double ripple = .75 + .25 * std::min(1., history_[histIdx] / std::max(.05, level_));
+            if (rowEnergy > .01 && pos <= rowEnergy) {
+              const double headDist = rowEnergy - pos;
+              if (headDist < .14) {
+                value = 1.;
+                if (config_.palette != 0) {
+                  color = scale(color, 1.25);
+                }
+              } else {
+                value = std::clamp((1. - headDist * .65) * ripple, .25, .95);
+              }
+            }
+            if (config_.palette != 0) {
+              color = palette(std::fmod(pos + k.y * .12, 1.), elapsed);
+            }
           }
         } else if (config_.keyMode == 434) {
-          // OpenRGB Audio Sync radial roll: distance from centre, advanced by time, cut at the level.
-          const double distance = std::hypot((nx - .5) * 16, (k.y - 2) * 2);
-          const double travel = std::fmod(elapsed / 45, 16.);
-          double phase = distance - travel;
-          const double front = level_ * 16;
-          if (phase < 0) {
-            phase += 16;
-          }
-          if (phase < front) {
-            value = std::clamp(1 - std::max(0., phase - front + 2) / 2, 0., 1.);
-            if (phase < front - 2) {
-              value = 1;
+          // Radial Chase: beat-driven concentric shockwave rings chasing outward from the centre.
+          if (level_ > 0) {
+            const double dx = (nx - .5) * 2.;
+            const double dy = (k.y / 4. - .5) * 1.35;
+            const double distNorm = std::clamp(std::hypot(dx, dy) / 1.15, 0., 1.);
+            const int band = std::clamp(int(nx * 16), 0, 15);
+            const double drive = std::clamp(
+                bands_[band] > .001 ? level_ * .55 + bands_[band] * .65 : level_, 0., 1.);
+            const int histIdx = std::clamp(int(distNorm * 12), 0, 21);
+            const double histWave = history_[histIdx];
+            const double ringWidth = .28;
+            const double ringDist = std::abs(distNorm - drive);
+            double ringVal = ringDist < ringWidth ? 1. - ringDist / ringWidth : 0.;
+            if (drive > .5 && distNorm < drive - .25) {
+              const double echoFront = std::fmod(drive * 1.75, 1.) * .65;
+              const double echoDist = std::abs(distNorm - echoFront);
+              if (echoDist < .22) {
+                ringVal = std::max(ringVal, (1. - echoDist / .22) * .85);
+              }
+            }
+            if (distNorm <= std::max(drive + ringWidth * .5, histWave)) {
+              value = std::clamp(std::max(ringVal, histWave * (1. - distNorm * .35)), 0., 1.);
+            }
+            if (config_.palette != 0) {
+              color = palette(std::fmod(distNorm + level_ * .25, 1.), elapsed);
             }
           }
         }

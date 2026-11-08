@@ -94,8 +94,17 @@ int main() {
       audio.envelope=1;audio.receivedMs=2200;audio.sequence++;assert(engine.render(audio,2200).level>.9);
       audio={};audio.generation=2;frame=engine.render(audio,2217);assert(frame.level==0);for(auto c:frame.keys)assert(c==Color{});
     }
-    // Spectrum Bars must light something for a tone that lands outside the first band, and
+    // Spectrum Bars must light something for a tone that lands outside the first band,
+    // must light the top number row (keys 0..14) when band energy is high, and
     // silence must leave every band dark (log bands must not create DC energy).
+    {
+      Engine specBars;Config sbCfg;sbCfg.keyMode=429;sbCfg.palette=0;sbCfg.releaseMs=80;specBars.configure(sbCfg);
+      Audio loud;loud.envelope=1.0;loud.samples=sine;loud.sequence=1;loud.generation=1;loud.receivedMs=1000;
+      auto sbFrame=specBars.render(loud,1000);
+      bool topRowLit=false;
+      for(int k=0;k<15;++k)if(sbFrame.keys[k]!=Color{})topRowLit=true;
+      assert(topRowLit);
+    }
     for(int frequency:{3,17,40}) {
       std::array<float,256> tone{};for(int i=0;i<256;++i)tone[i]=float(.001*std::sin(2*pi*frequency*i/256));
       auto bands=logBands(tone,0,35*30);assert(*std::max_element(bands.begin(),bands.end())>0);for(auto b:bands)assert(std::isfinite(b)&&b>=0&&b<=1);
@@ -110,10 +119,19 @@ int main() {
       Audio quiet;quiet.generation=1;auto f=idle.render(quiet,1000);assert(f.level==0);
       for(auto c:f.keys)assert(c==Color{});
     }
-    // Marquee must stay black at level 0 even while its scroll phase advances.
-    Engine marquee;Config m;m.keyMode=432;m.palette=0;marquee.configure(m);
-    Audio idle;idle.generation=1;auto idleFrame=marquee.render(idle,5000);
-    assert(idleFrame.level==0);for(auto k:idleFrame.keys)assert(k==Color{});
+    // Marquee and Radial Chase must stay black at level 0 and scale lit keys with audio level.
+    for(int mode:{432,434}) {
+      Engine eng;Config cfg;cfg.keyMode=mode;cfg.palette=0;cfg.sensitivity=1;cfg.releaseMs=0;eng.configure(cfg);
+      Audio idle;idle.generation=1;auto idleFrame=eng.render(idle,5000);
+      assert(idleFrame.level==0);for(auto k:idleFrame.keys)assert(k==Color{});
+      Audio low;low.generation=1;low.sequence=1;low.receivedMs=5016;low.envelope=.25;
+      auto lowFrame=eng.render(low,5016);
+      int lowLit=0;for(auto k:lowFrame.keys)if(k!=Color{})++lowLit;
+      Audio high;high.generation=1;high.sequence=2;high.receivedMs=5032;high.envelope=.95;
+      auto highFrame=eng.render(high,5032);
+      int highLit=0;for(auto k:highFrame.keys)if(k!=Color{})++highLit;
+      assert(lowLit>0&&highLit>lowLit);
+    }
     // Peak-hold side meter: rises to the attack level, decays when the level falls, and
     // side 506 is the far-end mirror of 501.
     Engine side;Config c;c.keyMode=171;c.sideMode=501;c.palette=0;c.releaseMs=80;c.sensitivity=2;side.configure(c);
