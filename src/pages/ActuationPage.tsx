@@ -193,7 +193,7 @@ function ActuationPage({
                 value={actuation}
                 min={0.1}
                 max={3.4}
-                step={0.05}
+                step={model === 'hero68Xs' ? 0.005 : 0.05}
                 suffix="mm"
                 direction="top"
                 disabled={!hasSelection}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type * as React from 'react';
-import { clampNumber, snapToAllowedValue, snapToStep } from '../helpers';
+import { clampNumber, formatMillimeters, snapToAllowedValue, snapToStep } from '../helpers';
 
 function RangeControl({
   value,
@@ -29,6 +29,13 @@ function RangeControl({
 }) {
   const hasAllowedValues = Boolean(allowedValues?.length);
   const effectiveValue = hasAllowedValues ? snapToAllowedValue(value, allowedValues!) : value;
+  const minAllowed = hasAllowedValues ? allowedValues![0] : min;
+  const maxAllowed = hasAllowedValues ? allowedValues![allowedValues!.length - 1] : max;
+  const stepAllowed = hasAllowedValues
+    ? allowedValues!.length > 1
+      ? Number((allowedValues![1] - allowedValues![0]).toFixed(3))
+      : 0.005
+    : step;
   const discreteIndex = hasAllowedValues
     ? allowedValues!.reduce(
         (bestIndex, candidate, index) =>
@@ -41,7 +48,7 @@ function RangeControl({
     : 0;
   const pct = hasAllowedValues
     ? (discreteIndex / Math.max(1, allowedValues!.length - 1)) * 100
-    : ((effectiveValue - min) / (max - min)) * 100;
+    : ((effectiveValue - minAllowed) / (maxAllowed - minAllowed)) * 100;
   const recommendedPct =
     recommendedValue == null
       ? null
@@ -56,25 +63,25 @@ function RangeControl({
           ) /
             Math.max(1, allowedValues!.length - 1)) *
           100
-        : ((recommendedValue - min) / (max - min)) * 100;
-  const [draftValue, setDraftValue] = useState(() => (mixed ? '' : value.toFixed(2)));
+        : ((recommendedValue - minAllowed) / (maxAllowed - minAllowed)) * 100;
+  const [draftValue, setDraftValue] = useState(() => (mixed ? '' : formatMillimeters(value)));
 
   useEffect(() => {
-    setDraftValue(mixed ? '' : value.toFixed(2));
+    setDraftValue(mixed ? '' : formatMillimeters(value));
   }, [value, mixed]);
 
   const commitNumberInput = () => {
     const normalized = draftValue.trim().replace(',', '.');
     const parsed = Number(normalized);
     if (!normalized || Number.isNaN(parsed)) {
-      setDraftValue(mixed ? '' : value.toFixed(2));
+      setDraftValue(mixed ? '' : formatMillimeters(value));
       return;
     }
     const committed = hasAllowedValues
-      ? snapToAllowedValue(clampNumber(parsed, min, max), allowedValues!)
+      ? snapToAllowedValue(clampNumber(parsed, minAllowed, maxAllowed), allowedValues!)
       : snapToStep(parsed, min, max, step);
     onChange(committed);
-    setDraftValue(committed.toFixed(2));
+    setDraftValue(formatMillimeters(committed));
   };
 
   return (
@@ -91,8 +98,8 @@ function RangeControl({
         )}
         <input
           type="range"
-          min={hasAllowedValues ? 0 : min}
-          max={hasAllowedValues ? allowedValues!.length - 1 : max}
+          min={hasAllowedValues ? 0 : minAllowed}
+          max={hasAllowedValues ? allowedValues!.length - 1 : maxAllowed}
           step={hasAllowedValues ? 1 : step}
           value={hasAllowedValues ? discreteIndex : value}
           disabled={disabled}
@@ -104,10 +111,14 @@ function RangeControl({
                 0,
                 allowedValues!.length - 1
               );
-              onChange(allowedValues![index]);
+              const nextVal = allowedValues![index];
+              onChange(nextVal);
+              setDraftValue(formatMillimeters(nextVal));
               return;
             }
-            onChange(snapToStep(Number(e.target.value), min, max, step));
+            const nextVal = snapToStep(Number(e.target.value), minAllowed, maxAllowed, step);
+            onChange(nextVal);
+            setDraftValue(formatMillimeters(nextVal));
           }}
         />
       </div>
@@ -117,9 +128,9 @@ function RangeControl({
           <input
             type="number"
             inputMode="decimal"
-            min={min}
-            max={max}
-            step={hasAllowedValues ? 0.01 : step}
+            min={minAllowed}
+            max={maxAllowed}
+            step={stepAllowed}
             value={draftValue}
             aria-label={mixed ? 'Value input, mixed values' : 'Value input'}
             disabled={disabled}
@@ -147,7 +158,7 @@ function RangeControl({
                   allowedValues!.length - 1
                 );
                 const nextValue = allowedValues![nextIndex];
-                setDraftValue(nextValue.toFixed(2));
+                setDraftValue(formatMillimeters(nextValue));
                 onChange(nextValue);
               } else if (e.key === 'Enter') {
                 e.preventDefault();
@@ -155,7 +166,7 @@ function RangeControl({
                 e.currentTarget.blur();
               } else if (e.key === 'Escape') {
                 e.preventDefault();
-                setDraftValue(mixed ? '' : value.toFixed(2));
+                setDraftValue(mixed ? '' : formatMillimeters(value));
                 e.currentTarget.blur();
               }
             }}

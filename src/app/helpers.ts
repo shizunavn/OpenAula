@@ -3,6 +3,7 @@ import { HERO84_ONLY_KEYS } from '../keyboard/hero84Layout';
 import { allRegisteredKeyIds, getBoards } from '../keyboard/registry';
 import { defaultRemapLayers } from '../protocol/hero68/remap';
 import type { HydratedKeySettings } from '../protocol/hero68/hero68Encoder';
+import type { HeroDeviceModelId } from '../keyboard/registry/types';
 
 const HERO68_KEY_ID_SET = new Set(HERO68_KEY_IDS);
 
@@ -38,9 +39,21 @@ export function hallKeyLabel(keyId: string | null): string {
   return HERO68_KEY_LABEL_BY_ID[keyId] ?? keyId.replace(/^Key/, '').replace(/^Digit/, '');
 }
 
-export const RAPID_TRIGGER_VALUES = Array.from({ length: 680 }, (_, index) =>
+export const RAPID_TRIGGER_VALUES_STANDARD = Array.from({ length: 340 }, (_, index) =>
+  Number(((index + 1) * 0.01).toFixed(2))
+);
+
+export const RAPID_TRIGGER_VALUES_XS = Array.from({ length: 680 }, (_, index) =>
   Number(((index + 1) * 0.005).toFixed(3))
 );
+
+export function rapidTriggerValuesForModel(
+  model?: HeroDeviceModelId | string | null
+): readonly number[] {
+  return model === 'hero68Xs' ? RAPID_TRIGGER_VALUES_XS : RAPID_TRIGGER_VALUES_STANDARD;
+}
+
+export const RAPID_TRIGGER_VALUES = RAPID_TRIGGER_VALUES_STANDARD;
 
 /**
  * Formats millimeter distances with 2 decimal places for multiples of `0.01 mm`
@@ -48,6 +61,9 @@ export const RAPID_TRIGGER_VALUES = Array.from({ length: 680 }, (_, index) =>
  * matching the official AULA web driver (`r % 10 === 0 ? toFixed(2) : toFixed(3)`).
  */
 export function formatMillimeters(value: number, minDecimals = 2): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return (0).toFixed(minDecimals);
+  }
   const roundedUm = Math.round(value * 1000);
   if (roundedUm % 10 !== 0) {
     return (roundedUm / 1000).toFixed(3);

@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import Hero68Preview from '../components/Hero68Preview';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import type { HeroDeviceModelId } from '../keyboard/devices';
-import { RAPID_TRIGGER_VALUES } from '../app/helpers';
+import { rapidTriggerValuesForModel } from '../app/helpers';
 import type { SwitchOption } from '../app/switchAssets';
 import { SwitchStemMenuIcon } from '../app/components/SwitchStemMenuIcon';
 import { Toggle } from '../app/components/Toggle';
@@ -126,6 +126,9 @@ function QuickSettingsPage({
   setQuickPreviewMode
 }: QuickSettingsPageProps) {
   const { tr } = useI18n();
+  const isXs = model === 'hero68Xs';
+  const rapidTriggerValues = rapidTriggerValuesForModel(model);
+  const minRt = isXs ? 0.005 : 0.01;
   return (
     <div className="page quick-page page-enter">
       <section className="keyboard-stage">
@@ -202,7 +205,7 @@ function QuickSettingsPage({
               value={actuation}
               min={0.1}
               max={3.4}
-              step={0.05}
+              step={isXs ? 0.005 : 0.05}
               suffix="mm"
               disabled={!hasSelection}
               direction="top"
@@ -253,10 +256,10 @@ function QuickSettingsPage({
               <div className="range-stack">
                 <RangeControl
                   value={rapidSensitivity}
-                  min={0.01}
+                  min={minRt}
                   max={3.4}
                   step={0.05}
-                  allowedValues={RAPID_TRIGGER_VALUES}
+                  allowedValues={rapidTriggerValues}
                   suffix="mm"
                   recommendedValue={0.65}
                   mixed={rapidSensitivityMixed}
@@ -276,10 +279,10 @@ function QuickSettingsPage({
                 <div className="range-stack">
                   <RangeControl
                     value={pressSensitivity}
-                    min={0.01}
+                    min={minRt}
                     max={3.4}
                     step={0.05}
-                    allowedValues={RAPID_TRIGGER_VALUES}
+                    allowedValues={rapidTriggerValues}
                     suffix="mm"
                     recommendedValue={0.5}
                     mixed={pressSensitivityMixed || splitSensitivityMixed}
@@ -297,10 +300,10 @@ function QuickSettingsPage({
                 <div className="range-stack">
                   <RangeControl
                     value={releaseSensitivity}
-                    min={0.01}
+                    min={minRt}
                     max={3.4}
                     step={0.05}
-                    allowedValues={RAPID_TRIGGER_VALUES}
+                    allowedValues={rapidTriggerValues}
                     suffix="mm"
                     recommendedValue={0.55}
                     mixed={releaseSensitivityMixed || splitSensitivityMixed}
@@ -346,7 +349,7 @@ function QuickSettingsPage({
                 value={topDeadzone}
                 min={0}
                 max={1}
-                step={0.01}
+                step={isXs ? 0.005 : 0.01}
                 suffix="mm"
                 disabled={!deadzoneControlsEnabled}
                 mixed={topDeadzoneMixed}
@@ -360,7 +363,7 @@ function QuickSettingsPage({
                 value={bottomDeadzone}
                 min={0}
                 max={1}
-                step={0.01}
+                step={isXs ? 0.005 : 0.01}
                 suffix="mm"
                 disabled={!deadzoneControlsEnabled}
                 mixed={bottomDeadzoneMixed}

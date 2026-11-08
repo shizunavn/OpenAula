@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type * as React from 'react';
-import { snapToStep } from '../helpers';
+import { formatMillimeters, snapToStep } from '../helpers';
 
 function VerticalRangeControl({
   value,
@@ -31,22 +31,22 @@ function VerticalRangeControl({
     direction === 'bottom'
       ? { height: `${pct}%`, bottom: 0, top: 'auto' }
       : { height: `${pct}%`, top: 0, bottom: 'auto' };
-  const [draftValue, setDraftValue] = useState(() => (mixed ? '' : value.toFixed(2)));
+  const [draftValue, setDraftValue] = useState(() => (mixed ? '' : formatMillimeters(value)));
 
   useEffect(() => {
-    setDraftValue(mixed ? '' : value.toFixed(2));
+    setDraftValue(mixed ? '' : formatMillimeters(value));
   }, [value, mixed]);
 
   const commitNumberInput = () => {
     const normalized = draftValue.trim().replace(',', '.');
     const parsed = Number(normalized);
     if (!normalized || Number.isNaN(parsed)) {
-      setDraftValue(mixed ? '' : value.toFixed(2));
+      setDraftValue(mixed ? '' : formatMillimeters(value));
       return;
     }
     const committed = snapToStep(parsed, min, max, step);
     onChange(committed);
-    setDraftValue(committed.toFixed(2));
+    setDraftValue(formatMillimeters(committed));
   };
 
   return (
@@ -63,7 +63,11 @@ function VerticalRangeControl({
           value={value}
           disabled={disabled}
           aria-label="Vertical value"
-          onChange={e => onChange(snapToStep(Number(e.target.value), min, max, step))}
+          onChange={e => {
+            const nextVal = snapToStep(Number(e.target.value), min, max, step);
+            onChange(nextVal);
+            setDraftValue(formatMillimeters(nextVal));
+          }}
         />
         <span className="meter-track" aria-hidden="true">
           <span className="meter-fill" style={fillStyle as React.CSSProperties} />
@@ -92,7 +96,7 @@ function VerticalRangeControl({
                 e.currentTarget.blur();
               } else if (e.key === 'Escape') {
                 e.preventDefault();
-                setDraftValue(mixed ? '' : value.toFixed(2));
+                setDraftValue(mixed ? '' : formatMillimeters(value));
                 e.currentTarget.blur();
               }
             }}

@@ -90,7 +90,8 @@ function App() {
   const perf = usePerKeyPerformance({
     persistedState,
     modelKeyIds,
-    selectedKeys: selection.selectedKeys
+    selectedKeys: selection.selectedKeys,
+    model: deviceModel
   });
   const workspace = useProfileWorkspace({
     persistedState,

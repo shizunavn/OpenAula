@@ -22,6 +22,7 @@ const {
   HERO68_XS_DEVICE_MODEL,
 } = await bundle('src/keyboard/devices.ts')
 const { HERO84_ONLY_KEYS } = await bundle('src/keyboard/hero84Layout.ts')
+const helpers = await bundle('src/app/helpers.ts')
 const positions = await bundle('src/protocol/hero68/keyPositions.ts')
 const remap = await bundle('src/protocol/hero68/remap.ts')
 const rgb = await bundle('src/protocol/hero68/rgb.ts')
@@ -293,4 +294,23 @@ test('ALL_DEVICE_MODELS includes HERO68, HERO68 XS, HERO84, and WIN 68 HE MAX in
   assert.equal(HERO68_XS_DEVICE_MODEL.label, 'AULA HERO 68 XS')
   assert.equal(HERO68_XS_DEVICE_MODEL.modelByte, 0x10)
   assert.equal(layouts.heroLayout('hero68Xs').keyIds.length, 68)
+})
+
+test('formatMillimeters and rapidTriggerValuesForModel preserve 0.005mm and 0.025mm for HERO 68 XS without slider rounding to 0.03', () => {
+  assert.equal(helpers.formatMillimeters(0.005), '0.005')
+  assert.equal(helpers.formatMillimeters(0.025), '0.025')
+  assert.equal(helpers.formatMillimeters(0.01), '0.01')
+  assert.equal(helpers.formatMillimeters(0.1), '0.10')
+  assert.equal(helpers.formatMillimeters(0.2), '0.20')
+
+  const xsValues = helpers.rapidTriggerValuesForModel('hero68Xs')
+  assert.equal(xsValues[0], 0.005)
+  assert.equal(xsValues[1], 0.01)
+  assert.equal(xsValues[4], 0.025)
+  assert.equal(helpers.snapToAllowedValue(0.005, xsValues), 0.005)
+  assert.equal(helpers.snapToAllowedValue(0.025, xsValues), 0.025)
+
+  const stdValues = helpers.rapidTriggerValuesForModel('hero68')
+  assert.equal(stdValues[0], 0.01)
+  assert.equal(helpers.snapToAllowedValue(0.005, stdValues), 0.01)
 })

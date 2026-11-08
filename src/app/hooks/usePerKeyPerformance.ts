@@ -4,7 +4,7 @@ import {
   mergeHydratedBooleans,
   mergeHydratedNumbers,
   mergePerKeyState,
-  RAPID_TRIGGER_VALUES,
+  rapidTriggerValuesForModel,
   selectionHasMixedValues,
   snapToAllowedValue,
   snapToStep
@@ -23,10 +23,12 @@ import {
   switchProfileLabel
 } from '../../protocol/hero68/switchProfiles';
 import type { PersistedOpenHeroState, ProfileDraft } from '../../state/persistence';
+import type { HeroDeviceModelId } from '../../keyboard/registry/types';
 export type UsePerKeyPerformanceOptions = {
   persistedState: PersistedOpenHeroState | null | undefined;
   modelKeyIds: readonly string[];
   selectedKeys: Set<string>;
+  model?: HeroDeviceModelId;
 };
 /**
  * Manages per-key Actuation Point, Rapid Trigger, Split Sensitivity, Dead Zone, and Switch Profile state.
@@ -40,8 +42,11 @@ export type UsePerKeyPerformanceOptions = {
 export function usePerKeyPerformance({
   persistedState,
   modelKeyIds,
-  selectedKeys
+  selectedKeys,
+  model
 }: UsePerKeyPerformanceOptions) {
+  const isXs = model === 'hero68Xs';
+  const rapidTriggerValues = useMemo(() => rapidTriggerValuesForModel(model), [model]);
   const [actuation, setActuation] = useState(1.6);
   const [rapidTrigger, setRapidTrigger] = useState(false);
   const [splitSensitivity, setSplitSensitivity] = useState(false);
@@ -260,7 +265,8 @@ export function usePerKeyPerformance({
     });
   }
   function setActuationForSelection(value: number) {
-    const nextValue = snapToStep(value, 0.1, 3.4, 0.005);
+    const step = isXs ? 0.005 : 0.05;
+    const nextValue = snapToStep(value, 0.1, 3.4, step);
     setActuation(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -309,7 +315,7 @@ export function usePerKeyPerformance({
     });
   }
   function setRapidSensitivityForSelection(value: number) {
-    const nextValue = snapToAllowedValue(value, RAPID_TRIGGER_VALUES);
+    const nextValue = snapToAllowedValue(value, rapidTriggerValues);
     setRapidSensitivity(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -326,7 +332,7 @@ export function usePerKeyPerformance({
     });
   }
   function setPressSensitivityForSelection(value: number) {
-    const nextValue = snapToAllowedValue(value, RAPID_TRIGGER_VALUES);
+    const nextValue = snapToAllowedValue(value, rapidTriggerValues);
     setPressSensitivity(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -343,7 +349,7 @@ export function usePerKeyPerformance({
     });
   }
   function setReleaseSensitivityForSelection(value: number) {
-    const nextValue = snapToAllowedValue(value, RAPID_TRIGGER_VALUES);
+    const nextValue = snapToAllowedValue(value, rapidTriggerValues);
     setReleaseSensitivity(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -376,7 +382,8 @@ export function usePerKeyPerformance({
     });
   }
   function setTopDeadzoneForSelection(value: number) {
-    const nextValue = snapToStep(value, 0, 1, 0.005);
+    const step = isXs ? 0.005 : 0.01;
+    const nextValue = snapToStep(value, 0, 1, step);
     setTopDeadzone(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -393,7 +400,8 @@ export function usePerKeyPerformance({
     });
   }
   function setBottomDeadzoneForSelection(value: number) {
-    const nextValue = snapToStep(value, 0, 1, 0.005);
+    const step = isXs ? 0.005 : 0.01;
+    const nextValue = snapToStep(value, 0, 1, step);
     setBottomDeadzone(nextValue);
     if (!selectedKeys.size) {
       return;

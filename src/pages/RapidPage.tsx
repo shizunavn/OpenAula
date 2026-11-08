@@ -5,7 +5,7 @@ import FeatureHelp from '../components/FeatureHelp';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import { heroLayout } from '../keyboard/layout';
 import type { HeroDeviceModelId } from '../keyboard/devices';
-import { RAPID_TRIGGER_VALUES } from '../app/helpers';
+import { rapidTriggerValuesForModel } from '../app/helpers';
 import { Toggle } from '../app/components/Toggle';
 import { RangeControl } from '../app/components/RangeControl';
 import { VerticalRangeControl } from '../app/components/VerticalRangeControl';
@@ -108,6 +108,9 @@ function RapidPage({
   rapidTriggerByKey
 }: RapidPageProps) {
   const { tr } = useI18n();
+  const isXs = model === 'hero68Xs';
+  const rapidTriggerValues = rapidTriggerValuesForModel(model);
+  const minRt = isXs ? 0.005 : 0.01;
   return (
     <div className="page quick-page rapid-page page-enter">
       <section className="keyboard-stage rapid-keyboard-stage">
@@ -231,10 +234,10 @@ function RapidPage({
               <div className="rapid-control-label">{tr('SENSITIVITY')}</div>
               <RangeControl
                 value={rapidSensitivity}
-                min={0.01}
+                min={minRt}
                 max={3.4}
                 step={0.05}
-                allowedValues={RAPID_TRIGGER_VALUES}
+                allowedValues={rapidTriggerValues}
                 suffix="mm"
                 recommendedValue={0.65}
                 mixed={rapidSensitivityMixed}
@@ -252,10 +255,10 @@ function RapidPage({
                 <div className="rapid-control-label">{tr('PRESS')}</div>
                 <RangeControl
                   value={pressSensitivity}
-                  min={0.01}
+                  min={minRt}
                   max={3.4}
                   step={0.05}
-                  allowedValues={RAPID_TRIGGER_VALUES}
+                  allowedValues={rapidTriggerValues}
                   suffix="mm"
                   recommendedValue={0.5}
                   mixed={pressSensitivityMixed || splitSensitivityMixed}
@@ -267,10 +270,10 @@ function RapidPage({
                 <div className="rapid-control-label">{tr('RELEASE')}</div>
                 <RangeControl
                   value={releaseSensitivity}
-                  min={0.01}
+                  min={minRt}
                   max={3.4}
                   step={0.05}
-                  allowedValues={RAPID_TRIGGER_VALUES}
+                  allowedValues={rapidTriggerValues}
                   suffix="mm"
                   recommendedValue={0.55}
                   mixed={releaseSensitivityMixed || splitSensitivityMixed}
@@ -310,7 +313,7 @@ function RapidPage({
                 value={topDeadzone}
                 min={0}
                 max={1}
-                step={0.01}
+                step={isXs ? 0.005 : 0.01}
                 suffix="mm"
                 disabled={!deadzoneControlsEnabled}
                 mixed={topDeadzoneMixed}
@@ -324,7 +327,7 @@ function RapidPage({
                 value={bottomDeadzone}
                 min={0}
                 max={1}
-                step={0.01}
+                step={isXs ? 0.005 : 0.01}
                 suffix="mm"
                 disabled={!deadzoneControlsEnabled}
                 mixed={bottomDeadzoneMixed}
