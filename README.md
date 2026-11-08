@@ -66,7 +66,7 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 
 ### Just want to use it?
 
-1. Open **[https://open-aula.pages.dev/](https://www.google.com/search?q=https://open-aula.pages.dev/)** in Chrome or Edge (the legacy origin `https://open-hero68.pages.dev/` also remains supported).
+1. Open **[https://open-aula.pages.dev/](https://open-aula.pages.dev/)** in Chrome or Edge (the legacy origin `https://open-hero68.pages.dev/` also remains supported).
 2. Click **Connect** and select your keyboard.
 3. Change settings, then click **Save to profile N**.
 
@@ -152,7 +152,7 @@ Tech stack: React 19, TypeScript 7, Vite 8, WebHID; the service uses a bundled N
 
 ### Cloudflare deployment (Pages)
 
-The web app is deployed to **Cloudflare Pages** at [https://open-aula.pages.dev/](https://www.google.com/search?q=https://open-aula.pages.dev/).
+The web app is deployed to **Cloudflare Pages** at [https://open-aula.pages.dev/](https://open-aula.pages.dev/).
 
 API endpoints (`/api/region` for language detection and `/api/health` for monitoring) are implemented via Cloudflare Pages Functions in `functions/api/`, which wrap the shared Worker handlers in `worker/`. Static frontend assets are compiled into `dist/`.
 
