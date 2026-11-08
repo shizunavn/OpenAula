@@ -21,7 +21,7 @@ import {
   decodeXsydHallTravelReply,
   mergeXsydHallSamples,
   xsydDeviceManager,
-  xsydMatrixIndexForKey,
+  xsydMatrixIndexForKeyId,
   xsydTableIdsForKeys,
   type XsydHallTableId,
 } from '../xsyd/device';
@@ -452,7 +452,7 @@ class Hero68HallStream {
       }
     }
     for (const keyId of this.#hostPressedKeys) {
-      const idx = xsydMatrixIndexForKey(keyId);
+      const idx = xsydMatrixIndexForKeyId(keyId);
       if (idx === undefined) continue;
       if (idx < 63) {
         table1Active = true;

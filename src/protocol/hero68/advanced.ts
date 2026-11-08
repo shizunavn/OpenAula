@@ -29,9 +29,11 @@ export function newAdvanced(kind: AdvancedKind, keys: string[], model?: HeroDevi
     id: keys[0],
     kind,
     keys,
-    actions: kind === 'DKS' ? [4, 22, 7, 9] : kind === 'MPT' ? [4, 22, 7] : kind === 'MT' ? [4, 22] : [4],
+    actions: kind === 'DKS' ? (isMax ? [4, 5, 6, 7] : [4, 22, 7, 9]) : kind === 'MPT' ? [4, 22, 7] : kind === 'MT' ? [4, 22] : [4],
     thresholds: kind === 'MPT' ? [1, 2, 3] : isMax && kind === 'DKS' ? [1.4, 3.4, 3.4, 1.4] : [1, 3, 3, 1],
-    states: [[10, 0, 0, 0], [0, 10, 0, 0], [0, 0, 10, 0], [0, 0, 0, 10]],
+    states: isMax && kind === 'DKS'
+      ? [[14, 0, 0, 0], [0, 14, 0, 0], [0, 0, 14, 0], [0, 0, 0, 10]]
+      : [[10, 0, 0, 0], [0, 10, 0, 0], [0, 0, 10, 0], [0, 0, 0, 10]],
     delay: 200,
     mode: isMax && kind === 'SOCD' ? 0 : 1
   };

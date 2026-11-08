@@ -75,7 +75,19 @@ export const REMAP_CATEGORIES = catalog.categories.map(category => ({
     label: action.name === 'empty_button' ? 'Disabled' : action.name.replace(/_/g, ' ')
   }))
 }));
-const labels = new Map(REMAP_CATEGORIES.flatMap(category => category.actions.map(action => ([action.value, action.label] as const))));
+const labels = new Map<number, string>([
+  ...REMAP_CATEGORIES.flatMap(category => category.actions.map(action => ([action.value, action.label] as const))),
+  [0xe0, "L Ctrl"],
+  [0xe1, "L Shift"],
+  [0xe2, "L Alt"],
+  [0xe3, "L WIN"],
+  [0xe4, "R Ctrl"],
+  [0xe5, "R Shift"],
+  [0xe6, "R Alt"],
+  [0xe7, "R WIN"],
+  [0xf001, "Fn"],
+  [0x01, "Fn"],
+]);
 export function remapLabel(value: number | undefined): string {
   if (value === undefined) {
     return 'Unknown';

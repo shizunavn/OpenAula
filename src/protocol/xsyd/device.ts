@@ -66,6 +66,8 @@ import {
   decodeXsydHallPressedReply,
   decodeXsydHallTravelReply,
   mergeXsydHallSamples,
+  xsydMatrixIndexForKey,
+  xsydMatrixIndexForKeyId,
   xsydTableIdsForKeys,
   type XsydHallKeySample,
   type XsydHallTableId,
@@ -508,9 +510,24 @@ export function xsydSwitchMaxTravelUm(switchType: number): number {
   return switchType === 2 || switchType === 3 ? 3300 : 3400
 }
 
+const HERO_MODIFIER_TO_XSYD_USAGE: Readonly<Record<number, number>> = {
+  0x00010000: 0xe0, // L_Ctrl
+  0x00020000: 0xe1, // L_Shift
+  0x00040000: 0xe2, // L_Alt
+  0x00080000: 0xe3, // L_WIN
+  0x00100000: 0xe4, // R_Ctrl
+  0x00200000: 0xe5, // R_Shift
+  0x00400000: 0xe6, // R_Alt
+  0x00800000: 0xe7, // R_WIN
+  0x0d000000: 0x01, // Fn
+  0x0d010000: 0x01, // Fn1
+  0xf001: 0x01, // Firmware Fn action code
+}
+
 export function toXsydActionByte(action: number): number {
-  if (action === 0xf001) {
-    return 0x01
+  const mapped = HERO_MODIFIER_TO_XSYD_USAGE[action]
+  if (mapped !== undefined) {
+    return mapped
   }
   if (!Number.isInteger(action) || action < 0 || action > 0xff) {
     throw new RangeError(`XSYD action code must be a single byte (0..255), got ${action}`)
@@ -1574,3 +1591,7 @@ export type { Hero68ConnectionState, Hero68DeviceSnapshot }
 
 export * from './hall'
 export * from './rgb'
+export {
+  xsydMatrixIndexForKey,
+  xsydMatrixIndexForKeyId,
+} from './hall'

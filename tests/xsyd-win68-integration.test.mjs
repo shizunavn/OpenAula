@@ -1288,3 +1288,50 @@ test('XsydDeviceManager recovers from transient 0x23 read timeout during firmwar
     else delete globalThis.navigator
   }
 })
+
+test('WIN 68 HE MAX DKS UI visual 7-node track (0x03, 0x1C, 0x60, 0xC0), keycap palette, and modifier action encoding match image_5b2687.jpg', async () => {
+  const { dksVisualTrackState, DKS_PALETTE_CATEGORIES } = advancedPageMod
+
+  // Row A (Hold 1: 0x03 -> nodes 0 & 1 lit, segment 0 lit)
+  const rowA = dksVisualTrackState([14, 0, 0, 0], true)
+  assert.equal(rowA.maskHex, '0x03')
+  assert.deepEqual(rowA.nodes, [true, true, false, false, false, false, false])
+  assert.deepEqual(rowA.segments, [true, false, false, false, false, false])
+
+  // Row B (Hold 2: 0x1C -> nodes 2 & 3 lit, segment 2 lit)
+  const rowB = dksVisualTrackState([0, 14, 0, 0], true)
+  assert.equal(rowB.maskHex, '0x1C')
+  assert.deepEqual(rowB.nodes, [false, false, true, true, false, false, false])
+  assert.deepEqual(rowB.segments, [false, false, true, false, false, false])
+
+  // Row C (Hold 3: 0x60 -> nodes 4 & 5 lit, segment 4 lit)
+  const rowC = dksVisualTrackState([0, 0, 14, 0], true)
+  assert.equal(rowC.maskHex, '0x60')
+  assert.deepEqual(rowC.nodes, [false, false, false, false, true, true, false])
+  assert.deepEqual(rowC.segments, [false, false, false, false, true, false])
+
+  // Row D (End: 0xC0 -> nodes 5 & 6 lit, segment 5 lit on WIN 68 HE MAX)
+  const rowD = dksVisualTrackState([0, 0, 0, 10], true)
+  assert.equal(rowD.maskHex, '0xC0')
+  assert.deepEqual(rowD.nodes, [false, false, false, false, false, true, true])
+  assert.deepEqual(rowD.segments, [false, false, false, false, false, true])
+
+  // Palette categories match official AULA tabs (LETTER, NUMBER KEY, SYMBOLIC KEY, BASIC KEY, FUNCTION KEY, KEYBOARD CONTROL)
+  assert.deepEqual(
+    DKS_PALETTE_CATEGORIES.map(c => c.label),
+    ['LETTER', 'NUMBER KEY', 'SYMBOLIC KEY', 'BASIC KEY', 'FUNCTION KEY', 'KEYBOARD CONTROL']
+  )
+
+  // Verify newAdvanced('DKS', ['KeyW'], 'win68HeMax') defaults to the 4-stage A/B/C/D stairstep pattern
+  const defaultWin68Dks = heroAdvanced.newAdvanced('DKS', ['KeyW'], 'win68HeMax')
+  assert.deepEqual(defaultWin68Dks.actions, [4, 5, 6, 7])
+  assert.deepEqual(defaultWin68Dks.thresholds, [1.4, 3.4, 3.4, 1.4])
+  assert.equal(
+    hex(xsydDevice.encodeXsydAdvancedBinding(defaultWin68Dks)).slice(0, 40),
+    '5c1026cc011a0400050006000700031c60c07805'
+  )
+
+  // Verify HERO68 32-bit modifier codes (e.g. L_Shift 0x00020000 in DKS Running preset) convert cleanly to 0xE1 on WIN 68 HE MAX
+  assert.equal(xsydDevice.toXsydActionByte(0x00020000), 0xe1)
+  assert.equal(xsydDevice.toXsydActionByte(0x00010000), 0xe0)
+})

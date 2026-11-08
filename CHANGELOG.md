@@ -3,6 +3,21 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.5.1 — WIN 68 HE MAX DKS 7-Node Visual Track & Official Keycap Palette
+
+- DKS 7-Node Visual Track Editor (`AdvancedKeysPage.tsx` & `AdvancedKeysPage.css`):
+  - Implemented visual 7-node track matching official AULA DKS UI (`dksVisualTrackState`):
+    - Row A (Hold 1: `0x03` → nodes 0 & 1 lit, segment 0 lit)
+    - Row B (Hold 2: `0x1C` → nodes 2 & 3 lit, segment 2 lit)
+    - Row C (Hold 3: `0x60` → nodes 4 & 5 lit, segment 4 lit)
+    - Row D (End: `0xC0` → nodes 5 & 6 lit, segment 5 lit)
+  - Added official AULA keycap palette categories: LETTER, NUMBER KEY, SYMBOLIC KEY, BASIC KEY, FUNCTION KEY, KEYBOARD CONTROL.
+- WIN 68 HE MAX DKS defaults and action encoding:
+  - `newAdvanced` initializes DKS on WIN 68 HE MAX with default actions `[4, 5, 6, 7]` and states `[[14,0,0,0], [0,14,0,0], [0,0,14,0], [0,0,0,10]]` matching official hardware capture `dks_keyW_down1.4-3.4_up3.4-1.4_A-hold1_B-hold2_C-hold3_D-end.pcapng`.
+  - Seamlessly transcodes HERO68 32-bit modifier keycodes (e.g. `L_Shift 0x00020000` in DKS Running preset) to native XSYD `0xE1`/`0xE0` action bytes.
+- Regression verification:
+  - Added test coverage in `tests/xsyd-win68-integration.test.mjs` verifying the 7-node visual track, palette categories, and modifier action encoding.
+
 ## 1.5.0 — WIN 68 HE MAX Flash Flush 0x23 Recovery, 200 Hz Hall Stream & Research Synthesis
 
 - Auto-recovery from `0x23` read timeout during Flash flush:

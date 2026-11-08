@@ -30,3 +30,48 @@
 .ak-dks-simple{display:grid;gap:10px}.ak-dks-simple-row{display:grid;grid-template-columns:85px 75px minmax(0,1fr);align-items:center;gap:12px;color:#b7c6cf;font-size:13px}.ak-dks-simple .ak-action-key{min-width:0;width:75px;min-height:44px;font-size:14px;padding:8px}.ak-dks-simple select{width:100%;min-width:0;background:#283238;border:1px solid #4c5b65;color:#e1e9ed;border-radius:5px;padding:10px 8px;font-family:inherit;font-size:13px;cursor:pointer}.ak-dks-details{margin-top:20px;border-top:1px solid #3c474f;padding-top:15px;color:#b7c6cf;font-size:14px}.ak-dks-details summary{cursor:pointer}.ak-dks-details[open] summary{margin-bottom:24px}
 @media(max-width:1050px){.ak-workbench-body{grid-template-columns:1fr}.ak-side-panel{border-left:0;border-top:1px solid var(--ak-border)}.ak-workbench-head{padding:15px 18px}.ak-dks-grid{grid-template-columns:100px repeat(4,minmax(65px,1fr))}}
 @media(max-width:720px){.ak-overview{grid-template-columns:1fr}.ak-card,.ak-editor,.ak-side-panel{padding:19px}.ak-workbench-head{flex-wrap:wrap}.ak-workbench-head>div{width:100%;justify-content:flex-end}.advanced-keys-page .ak-keyboard-stage{min-height:0;padding:8px 0 20px}.ak-action-popover{position:fixed;top:25%;left:18px;width:calc(100vw - 36px)}.ak-current{min-height:230px}.ak-empty-symbol{margin:20px auto}.ak-page-heading h1{font-size:23px}}
+
+/* WIN 68 HE MAX 7-node DKS visual editor & inline categorized keycap palette */
+.ak-dks-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.ak-dks-toolbar p{margin:0!important;font-size:14px!important}
+.ak-dks-stairstep-btn{font-size:12px;padding:6px 11px;min-height:32px;white-space:nowrap}
+.ak-dks-visual-card{background:#1d2225;border:1px solid #353e43;border-radius:10px;padding:16px;margin-bottom:16px;user-select:none}
+.ak-dks-phase-header{display:grid;grid-template-columns:108px minmax(260px,1fr) 190px;align-items:end;gap:12px;padding-bottom:12px;border-bottom:1px solid #2e373c;margin-bottom:10px}
+.ak-dks-phase-columns{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ak-dks-phase-columns .ak-phase{padding-bottom:4px;gap:6px}
+.ak-dks-fixed-depth{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:5px;background:#283035;border:1px solid #3d484f;color:#b8c7d0;font-size:12px;font-weight:650}
+.ak-dks-pattern-col-head{font-size:12px;color:#98a9b3;text-align:right;padding-right:4px}
+.ak-dks-rows{display:grid;gap:10px}
+.ak-dks-visual-row{display:grid;grid-template-columns:108px minmax(260px,1fr) 190px;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;background:#252b2e;border:1px solid transparent;transition:border-color .14s,background .14s}
+.ak-dks-visual-row.is-selected-slot{border-color:#4b96e6;background:#232d36}
+.ak-dks-slot-cell{display:flex;align-items:center;gap:8px}
+.ak-dks-slot-index{font-size:12px;font-weight:700;color:#7f919c;width:14px;text-align:center}
+.ak-dks-slot-cell .ak-action-key{min-width:68px;width:74px;min-height:42px;padding:6px 8px;font-size:14px;border-radius:7px;border-color:#4d6473}
+.ak-dks-visual-row.is-selected-slot .ak-action-key{border-color:#56a3f5;box-shadow:0 0 0 1px #56a3f555}
+.ak-dks-track-7{display:grid;grid-template-columns:repeat(7,1fr);align-items:center;position:relative;padding:6px 0}
+.ak-dks-node{position:relative;background:none;border:0;height:36px;display:grid;place-items:center;cursor:pointer;padding:0;touch-action:none}
+.ak-dks-node:before,.ak-dks-node:after{content:"";position:absolute;top:calc(50% - 2px);height:4px;background:#343d42;pointer-events:none;z-index:0;transition:background .12s}
+.ak-dks-node:before{left:0;right:50%}
+.ak-dks-node:after{left:50%;right:0}
+.ak-dks-node:first-child:before,.ak-dks-node:last-child:after{display:none}
+.ak-dks-node.has-seg-prev:before,.ak-dks-node.has-seg-next:after{background:#df7a30}
+.ak-dks-node .ak-node-shape{position:relative;z-index:1;width:14px;height:14px;border-radius:50%;background:#3a4348;border:2px solid #525f66;transition:transform .12s,background .12s,border-color .12s}
+.ak-dks-node.is-bridge-square .ak-node-shape{width:12px;height:12px;border-radius:3px}
+.ak-dks-node:hover .ak-node-shape{border-color:#f5a35c;transform:scale(1.12)}
+.ak-dks-node.is-active .ak-node-shape,.ak-dks-node.is-dragging .ak-node-shape{background:#df7a30;border-color:#ffad66;box-shadow:0 0 8px #df7a3066}
+.ak-dks-pattern-cell{display:flex;align-items:center;gap:8px;min-width:0}
+.ak-dks-mask-badge{font-size:11px;font-weight:700;padding:3px 6px;border-radius:4px;background:#181e21;border:1px solid #3c4850;color:#ffad66;flex-shrink:0}
+.ak-dks-track-hint{margin-top:12px!important;margin-bottom:0!important;font-size:12px!important}
+.ak-dks-palette{background:#1d2225;border:1px solid #353e43;border-radius:10px;padding:14px 16px}
+.ak-dks-palette-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-bottom:1px solid #2e373c;padding-bottom:10px;margin-bottom:12px}
+.ak-dks-palette-tabs{display:flex;flex-wrap:wrap;gap:6px}
+.ak-dks-palette-tab{background:transparent;border:0;border-bottom:2px solid transparent;color:#9fb0ba;font-size:12px;font-weight:700;padding:6px 10px;cursor:pointer;letter-spacing:.02em;transition:color .12s,border-color .12s}
+.ak-dks-palette-tab:hover{color:#e3edf2}
+.ak-dks-palette-tab.is-active{color:#56a3f5;border-bottom-color:#56a3f5}
+.ak-dks-active-slot-pill{font-size:12px;color:#9fb0ba;background:#262e33;padding:4px 9px;border-radius:6px;border:1px solid #39454c}
+.ak-dks-active-slot-pill strong{color:#f0f6f9}
+.ak-dks-palette-keys{display:flex;flex-wrap:wrap;gap:8px}
+.ak-dks-keycap{min-width:42px;height:40px;padding:0 10px;border-radius:7px;background:#262d31;border:1px solid #455866;color:#d9e5ec;font-size:13px;font-weight:650;cursor:pointer;transition:background .12s,border-color .12s,transform .08s}
+.ak-dks-keycap:hover{border-color:#56a3f5;background:#2c3740;color:#fff}
+.ak-dks-keycap.is-active{border-color:#df7a30;background:#3a2b22;color:#ffbe85}
+@media(max-width:860px){.ak-dks-phase-header,.ak-dks-visual-row{grid-template-columns:1fr}.ak-dks-pattern-col-head{text-align:left}}
