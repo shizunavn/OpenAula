@@ -10,6 +10,7 @@
 #define OPENAULA_DATA_DIR L"OpenAula"
 #define OPENAULA_LEGACY_DATA_DIR L"OpenHero68"
 #define OPENAULA_LAUNCHER L"OpenAula.exe"
+#define OPENAULA_TRAY_CLASS L"OpenAulaRgbTray"
 inline bool setupTestMode(){return GetEnvironmentVariableW(L"OPENAULA_SETUP_TEST",nullptr,0)>0;}
 inline const wchar_t* trayMutexName(){return setupTestMode()?L"Local\\OpenAulaSetupTest":L"Local\\OpenAulaRgbService";}
 inline INTERNET_PORT servicePort(){return setupTestMode()?17868:16868;}
