@@ -1,4 +1,4 @@
-export type HeroDeviceModelId = 'hero68' | 'hero84' | 'win68HeMax' | 'win68';
+export type HeroDeviceModelId = 'hero68' | 'hero68Xs' | 'hero84' | 'win68HeMax' | 'win68';
 
 export type HeroKeyDefinition = {
   id: string;

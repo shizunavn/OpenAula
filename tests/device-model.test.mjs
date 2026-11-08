@@ -18,6 +18,8 @@ const {
   heroDeviceModel,
   detectHeroDeviceModelFromUuid,
   detectHeroDeviceModelFromProductName,
+  ALL_DEVICE_MODELS,
+  HERO68_XS_DEVICE_MODEL,
 } = await bundle('src/keyboard/devices.ts')
 const { HERO84_ONLY_KEYS } = await bundle('src/keyboard/hero84Layout.ts')
 const positions = await bundle('src/protocol/hero68/keyPositions.ts')
@@ -280,4 +282,15 @@ test('persistence loadOpenHeroState and saveOpenHeroState preserve v1 schema com
   } finally {
     delete globalThis.window
   }
+})
+
+test('ALL_DEVICE_MODELS includes HERO68, HERO68 XS, HERO84, and WIN 68 HE MAX in UI dropdown order', () => {
+  assert.deepEqual(
+    ALL_DEVICE_MODELS.map((model) => model.id),
+    ['hero68', 'hero68Xs', 'hero84', 'win68HeMax']
+  )
+  assert.equal(HERO68_XS_DEVICE_MODEL.id, 'hero68Xs')
+  assert.equal(HERO68_XS_DEVICE_MODEL.label, 'AULA HERO 68 XS')
+  assert.equal(HERO68_XS_DEVICE_MODEL.modelByte, 0x10)
+  assert.equal(layouts.heroLayout('hero68Xs').keyIds.length, 68)
 })

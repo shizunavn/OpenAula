@@ -1,4 +1,4 @@
-import { HERO68_BOARD } from './models/hero68.board';
+import { HERO68_BOARD, HERO68_XS_BOARD } from './models/hero68.board';
 import { HERO84_BOARD } from './models/hero84.board';
 import { WIN68_HE_MAX_BOARD } from './models/win68HeMax.board';
 import { MAX_HE_NAME_PATTERN } from '../maxHe';
@@ -6,7 +6,7 @@ import { assertBoardDescriptorValid } from './shared/bytetechCatalog';
 import type { BoardDescriptor, HeroDeviceModelId } from './types';
 export * from './types';
 export { assertBoardDescriptorValid, computeKeyCoordinates } from './shared/bytetechCatalog';
-export { HERO68_BOARD } from './models/hero68.board';
+export { HERO68_BOARD, HERO68_XS_BOARD } from './models/hero68.board';
 export { HERO84_BOARD } from './models/hero84.board';
 export {
   WIN68_HE_MAX_BOARD,
@@ -38,11 +38,17 @@ export function getBoards(): readonly BoardDescriptor[] {
   return Array.from(REGISTRY.values());
 }
 export function isBoardModelId(value: unknown): value is HeroDeviceModelId {
-  return typeof value === 'string' && (REGISTRY.has(value) || isWin68HeMaxModel(value));
+  return (
+    typeof value === 'string' &&
+    (REGISTRY.has(value) || isWin68HeMaxModel(value) || value === 'hero68Xs')
+  );
 }
 export function getBoard(modelId: HeroDeviceModelId | string = 'hero68'): BoardDescriptor {
   if (isWin68HeMaxModel(modelId)) {
     return WIN68_HE_MAX_BOARD;
+  }
+  if (modelId === 'hero68Xs') {
+    return HERO68_XS_BOARD;
   }
   const board = REGISTRY.get(modelId);
   if (!board) {

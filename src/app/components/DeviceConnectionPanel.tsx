@@ -7,6 +7,7 @@ import win68Thumb from '../../assets/win68HeMax.png';
 
 const BUILTIN_THUMBNAILS: Readonly<Record<string, string>> = {
   hero68: hero68Thumb,
+  hero68Xs: hero68XsThumb,
   hero68xs: hero68XsThumb,
   hero84: hero84Thumb,
   win68HeMax: win68Thumb,
@@ -55,7 +56,8 @@ export function DeviceConnectionPanel({
 }: DeviceConnectionPanelProps) {
   const tr = useT();
   const deviceConnected = deviceConnectionState === 'connected';
-  const showHero68XsThumb = deviceConnected && Boolean(isXs) && deviceModel === 'hero68';
+  const showHero68XsThumb =
+    deviceModel === 'hero68Xs' || (deviceConnected && Boolean(isXs) && deviceModel === 'hero68');
   const activeThumbnail = showHero68XsThumb
     ? hero68XsThumb
     : (BUILTIN_THUMBNAILS[deviceModel] ?? selectedModel.thumbnail);

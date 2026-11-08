@@ -414,7 +414,10 @@ export function useDeviceSyncController({
     const detectedModel = xsydDeviceManager.connected
       ? await xsydDeviceManager.detectConnectedModel().catch(() => null)
       : await hero68DeviceManager.detectConnectedModel().catch(() => null);
-    const targetModel: HeroDeviceModelId = detectedModel ?? deviceModel;
+    const targetModel: HeroDeviceModelId =
+      detectedModel === 'hero68' && hero68DeviceManager.getSnapshot().isXs
+        ? 'hero68Xs'
+        : (detectedModel ?? deviceModel);
     setDeviceActionError(
       detectedModel
         ? null
@@ -522,7 +525,10 @@ export function useDeviceSyncController({
       );
       return false;
     }
-    targetModel = detectedModel;
+    targetModel =
+      detectedModel === 'hero68' && hero68DeviceManager.getSnapshot().isXs
+        ? 'hero68Xs'
+        : detectedModel;
     const activeKeyIds = heroLayout(targetModel).keyIds;
     try {
       if (isWin68HeMaxModel(targetModel) && xsydDeviceManager.connected) {

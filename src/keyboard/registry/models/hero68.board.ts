@@ -1,4 +1,5 @@
 const hero68Thumb = '/src/assets/hero68.png';
+const hero68XsThumb = '/src/assets/hero68xs.png';
 import { HERO68_LAYOUT, makeDemoLighting } from '../../hero68Layout';
 import type { BoardDescriptor } from '../types';
 import {
@@ -129,4 +130,18 @@ export const HERO68_BOARD: BoardDescriptor = {
   validPositions: new Set(Object.values(HERO68_BOARD_KEY_POSITIONS)),
   factoryRemapLayers: buildFactoryRemapLayersFromCatalog(HERO68_BOARD_POS_TO_KEY_ID),
   makeDemoLighting
+};
+
+export const HERO68_XS_BOARD: BoardDescriptor = {
+  ...HERO68_BOARD,
+  id: 'hero68Xs',
+  name: 'Hero68Xs',
+  label: 'AULA HERO 68 XS',
+  thumbnail: hero68XsThumb,
+  usb: {
+    ...HERO68_BOARD.usb,
+    productNames: ['HERO 68 XS', 'AULA HERO 68 XS'],
+    deviceUuids: ['120000000010', '110000000010'],
+    modelByte: 0x10
+  }
 };

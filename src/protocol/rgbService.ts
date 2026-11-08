@@ -3,8 +3,9 @@ import { decodeReport } from './hero68/codec';
 import { fetchLocalService, LocalServicePermissionError } from './localServiceAccess';
 import type { RhythmConfiguration } from '../keyboard/rhythm';
 import { serviceHealth } from './serviceHealth';
+import type { HeroDeviceModelId } from '../keyboard/registry/types';
 export type RgbServiceStatus = {
-  deviceModel?: 'hero68' | 'hero84' | 'win68HeMax' | 'win68';
+  deviceModel?: HeroDeviceModelId;
   supportsFullUpdate?: boolean;
   coreVersion?: string;
   launcherVersion?: string;
