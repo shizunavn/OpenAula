@@ -5,7 +5,7 @@ import FeatureHelp from '../components/FeatureHelp';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import { heroLayout } from '../keyboard/layout';
 import type { HeroDeviceModelId } from '../keyboard/devices';
-import { rapidTriggerValuesForModel } from '../app/helpers';
+import { isXsPrecisionModel, rapidTriggerValuesForModel } from '../app/helpers';
 import { Toggle } from '../app/components/Toggle';
 import { RangeControl } from '../app/components/RangeControl';
 import { VerticalRangeControl } from '../app/components/VerticalRangeControl';
@@ -108,7 +108,7 @@ function RapidPage({
   rapidTriggerByKey
 }: RapidPageProps) {
   const { tr } = useI18n();
-  const isXs = model === 'hero68Xs';
+  const isXs = isXsPrecisionModel(model);
   const rapidTriggerValues = rapidTriggerValuesForModel(model);
   const minRt = isXs ? 0.005 : 0.01;
   return (
@@ -236,7 +236,7 @@ function RapidPage({
                 value={rapidSensitivity}
                 min={minRt}
                 max={3.4}
-                step={0.05}
+                step={isXs ? 0.005 : 0.01}
                 allowedValues={rapidTriggerValues}
                 suffix="mm"
                 recommendedValue={0.65}
@@ -257,7 +257,7 @@ function RapidPage({
                   value={pressSensitivity}
                   min={minRt}
                   max={3.4}
-                  step={0.05}
+                  step={isXs ? 0.005 : 0.01}
                   allowedValues={rapidTriggerValues}
                   suffix="mm"
                   recommendedValue={0.5}
@@ -272,7 +272,7 @@ function RapidPage({
                   value={releaseSensitivity}
                   min={minRt}
                   max={3.4}
-                  step={0.05}
+                  step={isXs ? 0.005 : 0.01}
                   allowedValues={rapidTriggerValues}
                   suffix="mm"
                   recommendedValue={0.55}

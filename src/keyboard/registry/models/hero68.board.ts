@@ -135,7 +135,7 @@ export const HERO68_BOARD: BoardDescriptor = {
 export const HERO68_XS_BOARD: BoardDescriptor = {
   ...HERO68_BOARD,
   id: 'hero68Xs',
-  name: 'Hero68Xs',
+  name: 'Hero68 XS',
   label: 'AULA HERO 68 XS',
   thumbnail: hero68XsThumb,
   usb: {

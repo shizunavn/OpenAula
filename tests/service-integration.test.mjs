@@ -62,7 +62,7 @@ test('configuration manager stays connected through service and verifies reply c
     await assert.rejects(()=>manager.request(report,0x93,0,800,()=>false),/Unexpected/)
     wrong=true;await assert.rejects(()=>manager.request(report,0x93,0),/Unexpected/)
     await manager.disconnect();assert.equal(manager.connected,false)
-    assert.deepEqual(seen,[0x82,0x93,0x93,0x93])
+    assert.deepEqual(seen,[0x82,0x82,0x93,0x93,0x93])
   }finally{globalThis.fetch=oldFetch}
 })
 

@@ -83,8 +83,25 @@ export async function digitalSettingsCommand(config: GamepadConfiguration, reque
       }
     }
   }
+  const isXsScale = Array.from(settings.values()).some(
+    s => s.ap > 340 || s.release > 340 || s.press > 340 || s.top > 100 || s.bottom > 100
+  );
+  const norm = (val: number, minNonZero = 0) => {
+    if (!isXsScale) return val;
+    const scaled = Math.min(340, Math.round(val / 2));
+    return val > 0 && scaled < minNonZero ? minNonZero : scaled;
+  };
   return 'gamepad-digital:' + keys.map(pos => {
     const s = settings.get(pos)!;
-    return [pos, s.ap, s.rt, s.release, s.press, s.dz, s.top, s.bottom].join(',');
+    return [
+      pos,
+      norm(s.ap, 1),
+      s.rt,
+      norm(s.release, s.rt ? 1 : 0),
+      norm(s.press, s.rt ? 1 : 0),
+      s.dz,
+      norm(s.top),
+      norm(s.bottom)
+    ].join(',');
   }).join('|');
 }

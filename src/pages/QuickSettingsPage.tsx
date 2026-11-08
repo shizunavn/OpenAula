@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import Hero68Preview from '../components/Hero68Preview';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import type { HeroDeviceModelId } from '../keyboard/devices';
-import { rapidTriggerValuesForModel } from '../app/helpers';
+import { isXsPrecisionModel, rapidTriggerValuesForModel } from '../app/helpers';
 import type { SwitchOption } from '../app/switchAssets';
 import { SwitchStemMenuIcon } from '../app/components/SwitchStemMenuIcon';
 import { Toggle } from '../app/components/Toggle';
@@ -126,7 +126,7 @@ function QuickSettingsPage({
   setQuickPreviewMode
 }: QuickSettingsPageProps) {
   const { tr } = useI18n();
-  const isXs = model === 'hero68Xs';
+  const isXs = isXsPrecisionModel(model);
   const rapidTriggerValues = rapidTriggerValuesForModel(model);
   const minRt = isXs ? 0.005 : 0.01;
   return (
@@ -205,7 +205,7 @@ function QuickSettingsPage({
               value={actuation}
               min={0.1}
               max={3.4}
-              step={isXs ? 0.005 : 0.05}
+              step={isXs ? 0.005 : 0.01}
               suffix="mm"
               disabled={!hasSelection}
               direction="top"
@@ -258,7 +258,7 @@ function QuickSettingsPage({
                   value={rapidSensitivity}
                   min={minRt}
                   max={3.4}
-                  step={0.05}
+                  step={isXs ? 0.005 : 0.01}
                   allowedValues={rapidTriggerValues}
                   suffix="mm"
                   recommendedValue={0.65}
@@ -281,7 +281,7 @@ function QuickSettingsPage({
                     value={pressSensitivity}
                     min={minRt}
                     max={3.4}
-                    step={0.05}
+                    step={isXs ? 0.005 : 0.01}
                     allowedValues={rapidTriggerValues}
                     suffix="mm"
                     recommendedValue={0.5}
@@ -302,7 +302,7 @@ function QuickSettingsPage({
                     value={releaseSensitivity}
                     min={minRt}
                     max={3.4}
-                    step={0.05}
+                    step={isXs ? 0.005 : 0.01}
                     allowedValues={rapidTriggerValues}
                     suffix="mm"
                     recommendedValue={0.55}

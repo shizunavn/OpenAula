@@ -114,11 +114,40 @@ export function createRgbController({
         zone: 1,
       }),
     );
-    const detected = detectHeroDeviceModelFromUuid(identity.data);
+    let isXs = Boolean(identity.data && identity.data[5] === 0x10);
+    let detected = detectHeroDeviceModelFromUuid(identity.data);
+    if (!detected && (identity.data[0] ?? 0) >= 0x20) {
+      try {
+        const subIdentity = await bridge.request(
+          buildReport({
+            command: 0x82,
+            zone: 0x09,
+          }),
+        );
+        if (subIdentity.data && subIdentity.data[5] === 0x10) {
+          isXs = true;
+        }
+        detected = detectHeroDeviceModelFromUuid(subIdentity.data);
+      } catch {}
+    }
     if (!detected) {
       throw Error('Device is not a supported HERO68/HERO84 keyboard');
     }
-    ctx.deviceModel = detected;
+    if (detected === 'hero68' && !isXs) {
+      try {
+        const rtReply = await bridge.request(
+          buildReport({
+            command: 0x82,
+            zone: 6,
+          }),
+        );
+        if (rtReply.data[0] === 5) {
+          isXs = true;
+        }
+      } catch {}
+    }
+    const resolvedModel = detected === 'hero68' && isXs ? 'hero68Xs' : detected;
+    ctx.deviceModel = resolvedModel;
     ctx.frameEncoder.setModel(detected);
     await bridge.syncModel();
     ctx.connected = true;
@@ -137,7 +166,7 @@ export function createRgbController({
         throw e;
       }
     }
-    ctx.log(heroDeviceModel(detected).name.toUpperCase() + ' connected');
+    ctx.log(heroDeviceModel(resolvedModel).name.toUpperCase() + ' connected');
   }
 
   async function stop() {
@@ -205,7 +234,7 @@ export function createRgbController({
         ([id]) => ids.has(id) && performance.now() - (ctx.hallReceivedAt.get(id) ?? 0) < 100,
       );
       ctx.engine!.setTravel(
-        Object.fromEntries(samples.map(([id, s]) => [id, s.distanceUnits / 100])),
+        Object.fromEntries(samples.map(([id, s]) => [id, s.distanceUnits / (ctx.deviceModel === 'hero68Xs' ? 200 : 100)])),
         Object.fromEntries(
           samples.map(([id, s]) => [
             id,

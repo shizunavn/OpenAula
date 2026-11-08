@@ -3,6 +3,7 @@ import { HERO84_ONLY_KEYS } from '../keyboard/hero84Layout';
 import { allRegisteredKeyIds, getBoards } from '../keyboard/registry';
 import { defaultRemapLayers } from '../protocol/hero68/remap';
 import type { HydratedKeySettings } from '../protocol/hero68/hero68Encoder';
+import { getHero68DistanceUnitMm } from '../protocol/hero68/precision';
 import type { HeroDeviceModelId } from '../keyboard/registry/types';
 
 const HERO68_KEY_ID_SET = new Set(HERO68_KEY_IDS);
@@ -47,10 +48,14 @@ export const RAPID_TRIGGER_VALUES_XS = Array.from({ length: 680 }, (_, index) =>
   Number(((index + 1) * 0.005).toFixed(3))
 );
 
+export function isXsPrecisionModel(model?: HeroDeviceModelId | string | null): boolean {
+  return model === 'hero68Xs' || getHero68DistanceUnitMm() === 0.005;
+}
+
 export function rapidTriggerValuesForModel(
   model?: HeroDeviceModelId | string | null
 ): readonly number[] {
-  return model === 'hero68Xs' ? RAPID_TRIGGER_VALUES_XS : RAPID_TRIGGER_VALUES_STANDARD;
+  return isXsPrecisionModel(model) ? RAPID_TRIGGER_VALUES_XS : RAPID_TRIGGER_VALUES_STANDARD;
 }
 
 export const RAPID_TRIGGER_VALUES = RAPID_TRIGGER_VALUES_STANDARD;
@@ -74,15 +79,27 @@ export function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 export function snapToStep(value: number, min: number, max: number, step: number) {
-  const clamped = clampNumber(value, min, max);
-  const steps = Math.round((clamped - min) / step);
-  return Number((min + steps * step).toFixed(3));
+  const minUm = Math.round(min * 1000);
+  const maxUm = Math.round(max * 1000);
+  const stepUm = Math.max(1, Math.round(step * 1000));
+  const clampedUm = Math.min(maxUm, Math.max(minUm, Math.round(value * 1000)));
+  const steps = Math.round((clampedUm - minUm) / stepUm);
+  const snappedUm = Math.min(maxUm, Math.max(minUm, minUm + steps * stepUm));
+  return Number((snappedUm / 1000).toFixed(3));
 }
 export function snapToAllowedValue(value: number, allowedValues: readonly number[]) {
-  return allowedValues.reduce(
-    (best, candidate) => (Math.abs(candidate - value) < Math.abs(best - value) ? candidate : best),
-    allowedValues[0]
-  );
+  const targetUm = Math.round(value * 1000);
+  let best = allowedValues[0];
+  let bestDiff = Math.abs(Math.round(best * 1000) - targetUm);
+  for (let i = 1; i < allowedValues.length; i++) {
+    const candidate = allowedValues[i];
+    const diff = Math.abs(Math.round(candidate * 1000) - targetUm);
+    if (diff < bestDiff) {
+      best = candidate;
+      bestDiff = diff;
+    }
+  }
+  return best;
 }
 export function makePerKeyState<T>(value: T, keyIds: readonly string[]) {
   return Object.fromEntries(keyIds.map(keyId => [keyId, value])) as Record<string, T>;

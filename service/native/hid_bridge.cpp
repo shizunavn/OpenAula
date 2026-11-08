@@ -429,6 +429,7 @@ struct BridgeSession {
   bool wasGamepadEnabled = false;
   // Set by TS via `device-model:<id>`; HERO84-only keys copy a HERO68 key's colour.
   bool hero84Rhythm = false;
+  bool hero68XsHall = false;
   // WIN 68 HE MAX rhythm state: the last sent colours and whether the `0x18`
   // Per-key Color switch has been written for this session yet.
   std::array<rhythm::Color, 68> xsydRhythmKeys{};
@@ -712,14 +713,19 @@ struct BridgeSession {
     hallScheduler.success();
     for (size_t i = 0; i < ids.size(); i++) {
       size_t o = 7 + i * 6;
+      uint16_t rawDistance = uint16_t(inBuf[o + 2] * 256 + inBuf[o + 3]);
       uint16_t word = uint16_t(inBuf[o + 4] * 256 + inBuf[o + 5]);
       hallScheduler.received(
           ids[i],
-          uint16_t(inBuf[o + 2] * 256 + inBuf[o + 3]),
+          rawDistance,
           word & 0x7fff,
           !!(word & 0x8000),
           at);
-      gamepadOutput.sample(ids[i], hallScheduler.samples[ids[i]]);
+      auto gpSample = hallScheduler.samples[ids[i]];
+      if (hero68XsHall || gpSample.distance > 340) {
+        gpSample.distance = uint16_t((gpSample.distance + 1) / 2);
+      }
+      gamepadOutput.sample(ids[i], gpSample);
     }
   }
 
@@ -1440,6 +1446,7 @@ struct BridgeSession {
     }
     if (line.rfind("device-model:", 0) == 0) {
       hero84Rhythm = line.substr(13) == "hero84";
+      hero68XsHall = line.substr(13) == "hero68Xs";
       emitLine("device-model-ready");
       return;
     }

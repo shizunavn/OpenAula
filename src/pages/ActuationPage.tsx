@@ -6,7 +6,7 @@ import Hero68Preview from '../components/Hero68Preview';
 import FeatureHelp from '../components/FeatureHelp';
 import type { HeroDeviceModelId } from '../keyboard/devices';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
-import { hallKeyLabel } from '../app/helpers';
+import { hallKeyLabel, isXsPrecisionModel } from '../app/helpers';
 import type { SwitchOption } from '../app/switchAssets';
 import { SwitchStemMenuIcon } from '../app/components/SwitchStemMenuIcon';
 import { Toggle } from '../app/components/Toggle';
@@ -193,7 +193,7 @@ function ActuationPage({
                 value={actuation}
                 min={0.1}
                 max={3.4}
-                step={model === 'hero68Xs' ? 0.005 : 0.05}
+                step={isXsPrecisionModel(model) ? 0.005 : 0.01}
                 suffix="mm"
                 direction="top"
                 disabled={!hasSelection}

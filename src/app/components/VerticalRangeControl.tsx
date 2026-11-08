@@ -25,6 +25,7 @@ function VerticalRangeControl({
   mixedPlaceholder?: string;
   onChange: (value: number) => void;
 }) {
+  const effectiveStep = Math.round(value * 1000) % 10 !== 0 && step > 0.005 ? 0.005 : step;
   const pct = ((value - min) / (max - min)) * 100;
   const markerStyle = direction === 'bottom' ? { bottom: `${pct}%` } : { top: `${pct}%` };
   const fillStyle =
@@ -44,14 +45,18 @@ function VerticalRangeControl({
       setDraftValue(mixed ? '' : formatMillimeters(value));
       return;
     }
-    const committed = snapToStep(parsed, min, max, step);
+    const targetStep =
+      Math.round(parsed * 1000) % 10 !== 0 && effectiveStep > 0.005 ? 0.005 : effectiveStep;
+    const committed = snapToStep(parsed, min, max, targetStep);
     onChange(committed);
     setDraftValue(formatMillimeters(committed));
   };
 
+  const isWideValue = draftValue.length >= 5;
+
   return (
     <div
-      className={`vertical-meter ${disabled ? 'is-disabled' : ''} ${mixed ? 'is-mixed' : ''} ${mixed && mixedPlaceholder !== '—' ? 'has-mixed-label' : ''} ${direction === 'top' ? 'is-top-oriented' : ''}`}
+      className={`vertical-meter ${disabled ? 'is-disabled' : ''} ${mixed ? 'is-mixed' : ''} ${mixed && mixedPlaceholder !== '—' ? 'has-mixed-label' : ''} ${direction === 'top' ? 'is-top-oriented' : ''} ${isWideValue ? 'has-wide-value' : ''}`}
     >
       <span className="vertical-range-shell">
         <input
@@ -59,12 +64,12 @@ function VerticalRangeControl({
           type="range"
           min={min}
           max={max}
-          step={step}
+          step={effectiveStep}
           value={value}
           disabled={disabled}
           aria-label="Vertical value"
           onChange={e => {
-            const nextVal = snapToStep(Number(e.target.value), min, max, step);
+            const nextVal = snapToStep(Number(e.target.value), min, max, effectiveStep);
             onChange(nextVal);
             setDraftValue(formatMillimeters(nextVal));
           }}
@@ -75,14 +80,13 @@ function VerticalRangeControl({
         </span>
       </span>
       <div className="meter-readout compact-meter-readout">
-        <label className="meter-value meter-value-input compact-meter-value">
+        <label
+          className={`meter-value meter-value-input compact-meter-value ${isWideValue ? 'is-wide' : ''}`}
+        >
           {mixed && !draftValue && <span className="mixed-value-label">{mixedPlaceholder}</span>}
           <input
-            type="number"
+            type="text"
             inputMode="decimal"
-            min={min}
-            max={max}
-            step={step}
             value={draftValue}
             disabled={disabled}
             aria-label="Vertical value input"
@@ -90,7 +94,20 @@ function VerticalRangeControl({
             onChange={e => setDraftValue(e.target.value)}
             onBlur={commitNumberInput}
             onKeyDown={e => {
-              if (e.key === 'Enter') {
+              if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                const delta = e.key === 'ArrowUp' ? 1 : -1;
+                const parsed = Number(draftValue.trim().replace(',', '.'));
+                const baseValue = Number.isFinite(parsed) ? parsed : value;
+                const nextValue = snapToStep(
+                  baseValue + delta * effectiveStep,
+                  min,
+                  max,
+                  effectiveStep
+                );
+                setDraftValue(formatMillimeters(nextValue));
+                onChange(nextValue);
+              } else if (e.key === 'Enter') {
                 e.preventDefault();
                 commitNumberInput();
                 e.currentTarget.blur();

@@ -103,7 +103,13 @@ export default function BackgroundServicePage({
     ? 'win68HeMax'
     : (status?.deviceModel ?? heroDevice.detectedModel);
   const keyboardName =
-    activeModel === 'win68HeMax' ? 'WIN 68 HE MAX' : activeModel === 'hero84' ? 'HERO84' : 'HERO68';
+    activeModel === 'win68HeMax'
+      ? 'WIN 68 HE MAX'
+      : activeModel === 'hero84'
+        ? 'HERO84'
+        : activeModel === 'hero68Xs' || heroDevice.isXs
+          ? 'HERO 68 XS'
+          : 'HERO68';
   useEffect(() => {
     if (!online) {
       setDriver('unknown');

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   formatMillimeters,
+  isXsPrecisionModel,
   mergeHydratedBooleans,
   mergeHydratedNumbers,
   mergePerKeyState,
+  RAPID_TRIGGER_VALUES_XS,
   rapidTriggerValuesForModel,
   selectionHasMixedValues,
   snapToAllowedValue,
@@ -45,7 +47,7 @@ export function usePerKeyPerformance({
   selectedKeys,
   model
 }: UsePerKeyPerformanceOptions) {
-  const isXs = model === 'hero68Xs';
+  const isXs = isXsPrecisionModel(model);
   const rapidTriggerValues = useMemo(() => rapidTriggerValuesForModel(model), [model]);
   const [actuation, setActuation] = useState(1.6);
   const [rapidTrigger, setRapidTrigger] = useState(false);
@@ -265,7 +267,7 @@ export function usePerKeyPerformance({
     });
   }
   function setActuationForSelection(value: number) {
-    const step = isXs ? 0.005 : 0.05;
+    const step = isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0 ? 0.005 : 0.01;
     const nextValue = snapToStep(value, 0.1, 3.4, step);
     setActuation(nextValue);
     if (!selectedKeys.size) {
@@ -315,7 +317,11 @@ export function usePerKeyPerformance({
     });
   }
   function setRapidSensitivityForSelection(value: number) {
-    const nextValue = snapToAllowedValue(value, rapidTriggerValues);
+    const activeValues =
+      isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0
+        ? RAPID_TRIGGER_VALUES_XS
+        : rapidTriggerValues;
+    const nextValue = snapToAllowedValue(value, activeValues);
     setRapidSensitivity(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -332,7 +338,11 @@ export function usePerKeyPerformance({
     });
   }
   function setPressSensitivityForSelection(value: number) {
-    const nextValue = snapToAllowedValue(value, rapidTriggerValues);
+    const activeValues =
+      isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0
+        ? RAPID_TRIGGER_VALUES_XS
+        : rapidTriggerValues;
+    const nextValue = snapToAllowedValue(value, activeValues);
     setPressSensitivity(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -349,7 +359,11 @@ export function usePerKeyPerformance({
     });
   }
   function setReleaseSensitivityForSelection(value: number) {
-    const nextValue = snapToAllowedValue(value, rapidTriggerValues);
+    const activeValues =
+      isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0
+        ? RAPID_TRIGGER_VALUES_XS
+        : rapidTriggerValues;
+    const nextValue = snapToAllowedValue(value, activeValues);
     setReleaseSensitivity(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -382,7 +396,7 @@ export function usePerKeyPerformance({
     });
   }
   function setTopDeadzoneForSelection(value: number) {
-    const step = isXs ? 0.005 : 0.01;
+    const step = isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0 ? 0.005 : 0.01;
     const nextValue = snapToStep(value, 0, 1, step);
     setTopDeadzone(nextValue);
     if (!selectedKeys.size) {
@@ -400,7 +414,7 @@ export function usePerKeyPerformance({
     });
   }
   function setBottomDeadzoneForSelection(value: number) {
-    const step = isXs ? 0.005 : 0.01;
+    const step = isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0 ? 0.005 : 0.01;
     const nextValue = snapToStep(value, 0, 1, step);
     setBottomDeadzone(nextValue);
     if (!selectedKeys.size) {

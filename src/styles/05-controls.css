@@ -45,7 +45,7 @@
   gap: 8px;
 }
 .value-pill {
-  min-width: 54px;
+  min-width: 62px;
   height: 28px;
   display: flex;
   align-items: center;
@@ -61,7 +61,7 @@
   padding: 0 8px;
 }
 .value-pill-input input {
-  width: 34px;
+  width: 48px;
   border: 0;
   outline: none;
   background: transparent;

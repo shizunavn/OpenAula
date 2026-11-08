@@ -414,8 +414,12 @@ export function useDeviceSyncController({
     const detectedModel = xsydDeviceManager.connected
       ? await xsydDeviceManager.detectConnectedModel().catch(() => null)
       : await hero68DeviceManager.detectConnectedModel().catch(() => null);
+    const unitMm =
+      !xsydDeviceManager.connected && hero68DeviceManager.connected
+        ? await syncDevicePrecision(hero68DeviceManager)
+        : 0.01;
     const targetModel: HeroDeviceModelId =
-      detectedModel === 'hero68' && hero68DeviceManager.getSnapshot().isXs
+      detectedModel === 'hero68' && (hero68DeviceManager.getSnapshot().isXs || unitMm === 0.005)
         ? 'hero68Xs'
         : (detectedModel ?? deviceModel);
     setDeviceActionError(
@@ -525,10 +529,17 @@ export function useDeviceSyncController({
       );
       return false;
     }
+    const unitMm =
+      !xsydDeviceManager.connected && hero68DeviceManager.connected
+        ? await syncDevicePrecision(hero68DeviceManager)
+        : 0.01;
     targetModel =
-      detectedModel === 'hero68' && hero68DeviceManager.getSnapshot().isXs
+      detectedModel === 'hero68' && (hero68DeviceManager.getSnapshot().isXs || unitMm === 0.005)
         ? 'hero68Xs'
         : detectedModel;
+    if (targetModel !== deviceModel) {
+      selectDeviceModel(targetModel);
+    }
     const activeKeyIds = heroLayout(targetModel).keyIds;
     try {
       if (isWin68HeMaxModel(targetModel) && xsydDeviceManager.connected) {

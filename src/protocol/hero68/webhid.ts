@@ -495,6 +495,7 @@ export class Hero68DeviceManager implements Hero68Transport {
           zone: 1
         })
       );
+      let isXsFromService = Boolean(identity?.data && identity.data[5] === 0x10);
       let detectedModel = detectHeroDeviceModelFromUuid(identity?.data);
       if (!detectedModel && isReceiverUuidPrefix(identity?.data)) {
         try {
@@ -504,6 +505,9 @@ export class Hero68DeviceManager implements Hero68Transport {
               zone: 0x09
             })
           );
+          if (subIdentity?.data && subIdentity.data[5] === 0x10) {
+            isXsFromService = true;
+          }
           detectedModel = detectHeroDeviceModelFromUuid(subIdentity?.data);
         } catch {}
       }
@@ -517,22 +521,39 @@ export class Hero68DeviceManager implements Hero68Transport {
         // its bridge UUID (11000000005c / 12000000005c) without throwing.
         this.#viaService = false;
         this.#reconnectViaService = false;
+        this.#isHero68Xs = false;
         this.#setSnapshot({
           state: 'disconnected',
           detectedModel: 'win68HeMax',
           detectedModelFromUuid: true,
           deviceName: heroDeviceModel('win68HeMax').label,
+          isXs: false,
           error: null
         });
         return;
       }
+      if (detectedModel === 'hero68' && !isXsFromService) {
+        try {
+          const rtPrecision = await rgbService.deviceRequest(
+            buildReport({
+              command: 0x82,
+              zone: 6
+            })
+          );
+          if (rtPrecision?.data?.[0] === 5) {
+            isXsFromService = true;
+          }
+        } catch {}
+      }
       this.#viaService = true;
       this.#reconnectViaService = false;
+      this.#isHero68Xs = isXsFromService;
       this.#setSnapshot({
         state: 'connected',
         detectedModel,
         detectedModelFromUuid: true,
-        deviceName: heroDeviceModel(detectedModel).label,
+        deviceName: isXsFromService ? 'AULA HERO 68 XS' : heroDeviceModel(detectedModel).label,
+        isXs: isXsFromService,
         error: null
       });
     } catch (error) {

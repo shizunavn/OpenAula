@@ -503,14 +503,14 @@
 }
 
 .source-actuation-slider .meter-value {
-  min-width: 49px;
+  min-width: 58px;
   height: 28px;
   border-radius: 5px;
   background: #171a1c;
 }
 
 .source-actuation-slider .meter-value-input input {
-  width: 35px;
+  width: 46px;
   font-size: 12px;
   font-weight: 700;
 }
@@ -555,7 +555,7 @@
 }
 
 .actuation-page-slider .meter-value {
-  min-width: 62px;
+  min-width: 68px;
   height: 36px;
   padding: 0 8px;
   border-radius: 8px;
@@ -563,7 +563,7 @@
 }
 
 .actuation-page-slider .meter-value-input input {
-  width: 42px;
+  width: 52px;
   font-size: 15px;
   font-weight: 700;
 }
@@ -657,15 +657,15 @@
 }
 
 .actuation-page .actuation-page-slider .meter-value {
-  min-width: 54px;
+  min-width: 64px;
   height: 32px;
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: 6px;
   background: #191c1e;
 }
 
 .actuation-page .actuation-page-slider .meter-value-input input {
-  width: 42px;
+  width: 50px;
   font-size: 13px;
 }
 

@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import type * as React from 'react';
-import { clampNumber, formatMillimeters, snapToAllowedValue, snapToStep } from '../helpers';
+import {
+  clampNumber,
+  formatMillimeters,
+  RAPID_TRIGGER_VALUES_XS,
+  snapToAllowedValue,
+  snapToStep
+} from '../helpers';
 
 function RangeControl({
   value,
@@ -27,41 +33,54 @@ function RangeControl({
   mixedPlaceholder?: string;
   onChange: (value: number) => void;
 }) {
-  const hasAllowedValues = Boolean(allowedValues?.length);
-  const effectiveValue = hasAllowedValues ? snapToAllowedValue(value, allowedValues!) : value;
-  const minAllowed = hasAllowedValues ? allowedValues![0] : min;
-  const maxAllowed = hasAllowedValues ? allowedValues![allowedValues!.length - 1] : max;
+  // Automatically promote to 0.005 mm discrete table if current value has a .xx5 step
+  // or if step <= 0.005 so a 0.025 value never snaps to 0.03 -> 0.04.
+  const valueHasFiveUmStep = Math.round(value * 1000) % 10 !== 0;
+  const resolvedAllowedValues =
+    allowedValues?.length && (valueHasFiveUmStep || step <= 0.005) && allowedValues.length < 680
+      ? RAPID_TRIGGER_VALUES_XS
+      : allowedValues;
+  const hasAllowedValues = Boolean(resolvedAllowedValues?.length);
+  const effectiveValue = hasAllowedValues
+    ? snapToAllowedValue(value, resolvedAllowedValues!)
+    : value;
+  const minAllowed = hasAllowedValues ? resolvedAllowedValues![0] : min;
+  const maxAllowed = hasAllowedValues
+    ? resolvedAllowedValues![resolvedAllowedValues!.length - 1]
+    : max;
   const stepAllowed = hasAllowedValues
-    ? allowedValues!.length > 1
-      ? Number((allowedValues![1] - allowedValues![0]).toFixed(3))
+    ? resolvedAllowedValues!.length > 1
+      ? Number((resolvedAllowedValues![1] - resolvedAllowedValues![0]).toFixed(3))
       : 0.005
     : step;
   const discreteIndex = hasAllowedValues
-    ? allowedValues!.reduce(
+    ? resolvedAllowedValues!.reduce(
         (bestIndex, candidate, index) =>
-          Math.abs(candidate - effectiveValue) <
-          Math.abs(allowedValues![bestIndex] - effectiveValue)
+          Math.abs(Math.round(candidate * 1000) - Math.round(effectiveValue * 1000)) <
+          Math.abs(
+            Math.round(resolvedAllowedValues![bestIndex] * 1000) - Math.round(effectiveValue * 1000)
+          )
             ? index
             : bestIndex,
         0
       )
     : 0;
   const pct = hasAllowedValues
-    ? (discreteIndex / Math.max(1, allowedValues!.length - 1)) * 100
+    ? (discreteIndex / Math.max(1, resolvedAllowedValues!.length - 1)) * 100
     : ((effectiveValue - minAllowed) / (maxAllowed - minAllowed)) * 100;
   const recommendedPct =
     recommendedValue == null
       ? null
       : hasAllowedValues
-        ? (allowedValues!.reduce(
+        ? (resolvedAllowedValues!.reduce(
             (bestIndex, candidate, index) =>
               Math.abs(candidate - recommendedValue) <
-              Math.abs(allowedValues![bestIndex] - recommendedValue)
+              Math.abs(resolvedAllowedValues![bestIndex] - recommendedValue)
                 ? index
                 : bestIndex,
             0
           ) /
-            Math.max(1, allowedValues!.length - 1)) *
+            Math.max(1, resolvedAllowedValues!.length - 1)) *
           100
         : ((recommendedValue - minAllowed) / (maxAllowed - minAllowed)) * 100;
   const [draftValue, setDraftValue] = useState(() => (mixed ? '' : formatMillimeters(value)));
@@ -77,16 +96,27 @@ function RangeControl({
       setDraftValue(mixed ? '' : formatMillimeters(value));
       return;
     }
-    const committed = hasAllowedValues
-      ? snapToAllowedValue(clampNumber(parsed, minAllowed, maxAllowed), allowedValues!)
+    const activeTable =
+      hasAllowedValues &&
+      Math.round(parsed * 1000) % 10 !== 0 &&
+      resolvedAllowedValues!.length < 680
+        ? RAPID_TRIGGER_VALUES_XS
+        : resolvedAllowedValues;
+    const committed = activeTable?.length
+      ? snapToAllowedValue(
+          clampNumber(parsed, activeTable[0], activeTable[activeTable.length - 1]),
+          activeTable
+        )
       : snapToStep(parsed, min, max, step);
     onChange(committed);
     setDraftValue(formatMillimeters(committed));
   };
 
+  const isWideValue = draftValue.length >= 5;
+
   return (
     <div
-      className={`range-wrap ${disabled ? 'is-disabled' : ''} ${mixed ? 'is-mixed' : ''} ${mixed && mixedPlaceholder !== '—' ? 'has-mixed-label' : ''}`}
+      className={`range-wrap ${disabled ? 'is-disabled' : ''} ${mixed ? 'is-mixed' : ''} ${mixed && mixedPlaceholder !== '—' ? 'has-mixed-label' : ''} ${isWideValue ? 'has-wide-value' : ''}`}
     >
       <div className="range-slider-shell">
         {recommendedPct != null && (
@@ -99,7 +129,7 @@ function RangeControl({
         <input
           type="range"
           min={hasAllowedValues ? 0 : minAllowed}
-          max={hasAllowedValues ? allowedValues!.length - 1 : maxAllowed}
+          max={hasAllowedValues ? resolvedAllowedValues!.length - 1 : maxAllowed}
           step={hasAllowedValues ? 1 : step}
           value={hasAllowedValues ? discreteIndex : value}
           disabled={disabled}
@@ -109,9 +139,9 @@ function RangeControl({
               const index = clampNumber(
                 Math.round(Number(e.target.value)),
                 0,
-                allowedValues!.length - 1
+                resolvedAllowedValues!.length - 1
               );
-              const nextVal = allowedValues![index];
+              const nextVal = resolvedAllowedValues![index];
               onChange(nextVal);
               setDraftValue(formatMillimeters(nextVal));
               return;
@@ -123,14 +153,11 @@ function RangeControl({
         />
       </div>
       <div className="value-readout">
-        <label className="value-pill value-pill-input">
+        <label className={`value-pill value-pill-input ${isWideValue ? 'is-wide' : ''}`}>
           {mixed && !draftValue && <span className="mixed-value-label">{mixedPlaceholder}</span>}
           <input
-            type="number"
+            type="text"
             inputMode="decimal"
-            min={minAllowed}
-            max={maxAllowed}
-            step={stepAllowed}
             value={draftValue}
             aria-label={mixed ? 'Value input, mixed values' : 'Value input'}
             disabled={disabled}
@@ -138,28 +165,45 @@ function RangeControl({
             onChange={e => setDraftValue(e.target.value)}
             onBlur={commitNumberInput}
             onKeyDown={e => {
-              if (hasAllowedValues && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+              if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                 e.preventDefault();
-                const parsed = Number(draftValue.trim().replace(',', '.'));
-                const baseValue = Number.isFinite(parsed)
-                  ? snapToAllowedValue(parsed, allowedValues!)
-                  : effectiveValue;
-                const baseIndex = allowedValues!.reduce(
-                  (bestIndex, candidate, index) =>
-                    Math.abs(candidate - baseValue) <
-                    Math.abs(allowedValues![bestIndex] - baseValue)
-                      ? index
-                      : bestIndex,
-                  0
-                );
-                const nextIndex = clampNumber(
-                  baseIndex + (e.key === 'ArrowUp' ? 1 : -1),
-                  0,
-                  allowedValues!.length - 1
-                );
-                const nextValue = allowedValues![nextIndex];
-                setDraftValue(formatMillimeters(nextValue));
-                onChange(nextValue);
+                const delta = e.key === 'ArrowUp' ? 1 : -1;
+                if (hasAllowedValues) {
+                  const parsed = Number(draftValue.trim().replace(',', '.'));
+                  const baseValue = Number.isFinite(parsed)
+                    ? snapToAllowedValue(parsed, resolvedAllowedValues!)
+                    : effectiveValue;
+                  const baseIndex = resolvedAllowedValues!.reduce(
+                    (bestIndex, candidate, index) =>
+                      Math.abs(Math.round(candidate * 1000) - Math.round(baseValue * 1000)) <
+                      Math.abs(
+                        Math.round(resolvedAllowedValues![bestIndex] * 1000) -
+                          Math.round(baseValue * 1000)
+                      )
+                        ? index
+                        : bestIndex,
+                    0
+                  );
+                  const nextIndex = clampNumber(
+                    baseIndex + delta,
+                    0,
+                    resolvedAllowedValues!.length - 1
+                  );
+                  const nextValue = resolvedAllowedValues![nextIndex];
+                  setDraftValue(formatMillimeters(nextValue));
+                  onChange(nextValue);
+                } else {
+                  const parsed = Number(draftValue.trim().replace(',', '.'));
+                  const baseValue = Number.isFinite(parsed) ? parsed : value;
+                  const nextValue = snapToStep(
+                    baseValue + delta * stepAllowed,
+                    min,
+                    max,
+                    stepAllowed
+                  );
+                  setDraftValue(formatMillimeters(nextValue));
+                  onChange(nextValue);
+                }
               } else if (e.key === 'Enter') {
                 e.preventDefault();
                 commitNumberInput();

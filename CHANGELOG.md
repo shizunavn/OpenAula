@@ -3,6 +3,19 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.7.1 — Native System Tray Flyout, Service Control Panel, and HERO 68 XS 5 µm Sync
+
+- Native System Tray & Windows Background Service:
+  - Added native dark-themed system tray flyout UI in `launcher.cpp` with live device status, RGB mode, gamepad status, and direct quick-action buttons.
+  - Revamped the local Service Control Panel (`service/controlPanel.ts`) with a modern responsive dashboard, live diagnostics, profile management, and direct action triggers.
+  - Added GDI32 link dependency in `service/build.mjs` and native tray build script.
+  - Implemented HERO 68 XS distance halving (`/ 2` / `/ 200`) in `hid_bridge.cpp`, `gamepadDigital.ts`, and `rgbController.ts` to ensure unified travel representation.
+- HERO 68 XS Precision & Performance Slider Synchronization:
+  - Resolved slider and preview value mismatch by replacing hardcoded `.toFixed(2)` formatting with `formatMillimeters()`, natively displaying `0.005 mm` and `0.025 mm` steps.
+  - Added automatic promotion to `0.005 mm` discrete steps (`RAPID_TRIGGER_VALUES_XS`) when values have 5 µm increments.
+  - Expanded value pill inputs from 34px to 48-52px across all controls and styled 3-decimal badges on the keyboard stage without text overflow.
+  - Synchronized automatic model detection for HERO 68 XS across WebHID and the Windows background service.
+
 ## 1.7.0 — AULA WIN 68 HE MAX & HERO 68 XS Hardware Imagery, Switch Visual Assets & 8K Receiver Support
 
 - Hardware Visual Imagery & Keyboard Assets:

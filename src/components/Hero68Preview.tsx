@@ -19,7 +19,7 @@ import AdvancedKeyIcon from './AdvancedKeyIcon';
 import { TachyonContext } from '../app/TachyonContext';
 import { DeviceModelContext } from '../app/DeviceModelContext';
 const tachyonLightingFrames = Object.fromEntries(
-  (['hero68', 'hero84', 'win68HeMax', 'win68'] as const).map(model => [
+  (['hero68', 'hero68Xs', 'hero84', 'win68HeMax', 'win68'] as const).map(model => [
     model,
     Object.fromEntries(
       heroLayout(model)
@@ -319,7 +319,7 @@ export default function Hero68Preview({
     <>
       <div
         ref={previewRef}
-        className={`hero68-preview-wrap is-${model}`}
+        className={`hero68-preview-wrap is-${model} ${model === 'hero68Xs' ? 'is-hero68' : ''}`}
         aria-label={`${keyboard.model.label} RGB preview`}
         style={
           {

@@ -631,7 +631,7 @@ export class CustomRgbEngine {
   }
   frame() {
     const frame = this.base.frame();
-    if (this.model && this.model !== 'hero68') {
+    if (this.model && this.model !== 'hero68' && this.model !== 'hero68Xs') {
       const board = getBoard(this.model);
       for (const id of this.keyIds) {
         if (!frame.keys[id]) {

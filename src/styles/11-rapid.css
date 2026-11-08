@@ -233,12 +233,12 @@
 }
 
 .rapid-deadzone-control-card .meter-value {
-  min-width: 46px;
+  min-width: 58px;
   height: 26px;
 }
 
 .rapid-deadzone-control-card .meter-value-input input {
-  width: 32px;
+  width: 44px;
   font-size: 12px;
 }
 
