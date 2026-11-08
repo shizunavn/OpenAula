@@ -21,7 +21,10 @@ import {
   decodeXsydHallTravelReply,
   mergeXsydHallSamples,
   xsydDeviceManager,
+  xsydMatrixIndexForKey,
+  xsydMatrixIndexForKeyId,
   xsydTableIdsForKeys,
+  type XsydHallTableId,
 } from '../xsyd/device';
 import { rgbService, type RgbServiceHallRecord } from '../rgbService';
 import { HERO68_DISTANCE_UNIT_MM } from './precision';
@@ -29,6 +32,8 @@ import { runHallPolling } from './hallPolling';
 
 /** The usable HERO68/HERO84 key travel tops out around 3.4 mm. Clamp the UI to 3.40 mm so full travel visually reaches 100%. */
 export const HERO68_HALL_VISUAL_MAX_MM = 3.4 as const;
+/** Target 200 Hz (5.0 ms period) Hall polling cadence on WIN 68 HE MAX (XSYD). */
+export const XSYD_HALL_POLL_INTERVAL_MS = 5 as const;
 export type HallStreamSource = 'direct-poll' | 'mode-poll';
 
 export type HallStreamSample = {
@@ -428,50 +433,184 @@ class Hero68HallStream {
     });
   }
 
+  #selectNextXsydTable(
+    tables: readonly XsydHallTableId[],
+    stepIndex: number,
+    travelCache: ReadonlyMap<number, number>,
+  ): XsydHallTableId {
+    if (tables.length === 1) {
+      return tables[0]!;
+    }
+    let table1Active = false;
+    let table2Active = false;
+    for (const [idx, um] of travelCache) {
+      if (um > 80) {
+        if (idx < 63) {
+          table1Active = true;
+        } else {
+          table2Active = true;
+        }
+      }
+    }
+    for (const keyId of this.#hostPressedKeys) {
+      const idx = xsydMatrixIndexForKeyId(keyId);
+      if (idx === undefined) continue;
+      if (idx < 63) {
+        table1Active = true;
+      } else {
+        table2Active = true;
+      }
+    }
+    // When only one half-matrix has depressed keys, dedicate 3 out of 4 polls
+    // to that active table and scan the idle half every 4th tick.
+    if (table1Active && !table2Active) {
+      return stepIndex % 4 === 3 ? 2 : 1;
+    }
+    if (table2Active && !table1Active) {
+      return stepIndex % 4 === 3 ? 1 : 2;
+    }
+    return tables[stepIndex % tables.length]!;
+  }
+
+  /**
+   * High-frequency 200 Hz (`5.0 ms` period) Hall polling loop for WIN 68 HE MAX (`XSYD 0x5C`).
+   *
+   * Optimization over the legacy ~68 Hz loop:
+   * 1. Queries `0x12` subcmd `0x03` (`buildXsydHallPressedFrame`) only once on stream start
+   *    (`stepIndex === 0`) to seed `pressedByMatrixIndex`. Subsequent ticks issue a single
+   *    `0x12` subcmd `0x02` (`buildXsydHallTravelFrame`) round-trip (`1 OUT + 3 IN` ≈ `2.0 ms`)
+   *    and update `pressedByMatrixIndex` via travel hysteresis (`<= 80 µm` release, `>= 150 µm`
+   *    or OS keydown press), cutting USB traffic in half.
+   * 2. Prioritizes the active half-matrix table 3:1 when keys are depressed in one table.
+   * 3. Uses a `MessageChannel`-backed 5.0 ms deadline pacer to bypass Chromium's 4 ms nested
+   *    `setTimeout` clamp and achieve a rock-solid 200 Hz stream rate.
+   */
   async #runXsydPolling(generation: number, requestedKeyIds: readonly string[]): Promise<void> {
     const keyIdSet = requestedKeyIds.length > 0 ? new Set(requestedKeyIds) : undefined;
     const tables = xsydTableIdsForKeys(requestedKeyIds);
     const travelCache = new Map<number, number>();
+    const pressedByMatrixIndex = new Map<number, boolean>();
     let stepIndex = 0;
+    let consecutiveFailures = 0;
 
-    while (generation === this.#pollGeneration && xsydDeviceManager.connected) {
-      const pollTables = stepIndex === 0 && tables.length > 1 ? tables : [tables[stepIndex % tables.length]!];
-      stepIndex += 1;
-
-      const pressedReply = await xsydDeviceManager.request(buildXsydHallPressedFrame(), 650);
-      if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
+    const channel = typeof MessageChannel !== 'undefined' ? new MessageChannel() : null;
+    const yieldImmediate = (): Promise<void> => {
+      if (!channel) {
+        return new Promise(resolve => setTimeout(resolve, 0));
+      }
+      return new Promise(resolve => {
+        channel.port1.onmessage = () => resolve();
+        channel.port2.postMessage(null);
+      });
+    };
+    const paceToDeadline = async (deadlineMs: number): Promise<void> => {
+      const now = performance.now();
+      const remaining = deadlineMs - now;
+      if (remaining <= 0) {
+        await yieldImmediate();
         return;
       }
-      const pressedByMatrixIndex = decodeXsydHallPressedReply(pressedReply);
-
-      let tableTravel = travelCache;
-      for (const tableId of pollTables) {
-        const travelReply = await xsydDeviceManager.request(buildXsydHallTravelFrame(tableId), 650);
-        if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
-          return;
-        }
-        tableTravel = decodeXsydHallTravelReply(travelReply, tableId);
-        for (const [idx, um] of tableTravel) {
-          travelCache.set(idx, um);
-        }
+      if (remaining > 4.5) {
+        await new Promise(resolve => setTimeout(resolve, Math.max(1, Math.floor(remaining - 1.5))));
       }
+      while (
+        generation === this.#pollGeneration &&
+        xsydDeviceManager.connected &&
+        performance.now() < deadlineMs
+      ) {
+        await yieldImmediate();
+      }
+    };
 
-      const samples = mergeXsydHallSamples({
-        travelByMatrixIndex: tables.length === 1 ? tableTravel : travelCache,
-        pressedByMatrixIndex,
-        keyIds: keyIdSet,
-      });
-      this.#ingestRecords(
-        samples.map(sample => ({
-          keyId: sample.pos,
-          keyCode: sample.keyId,
-          distanceUnits: sample.distanceUnits,
-          adc: sample.rawAdc,
-          pressed: sample.pressed,
-        })),
-      );
+    try {
+      let nextTickAt = performance.now();
+      while (generation === this.#pollGeneration && xsydDeviceManager.connected) {
+        const isInitialSeed = stepIndex === 0;
+        const pollTables: readonly XsydHallTableId[] = isInitialSeed
+          ? tables
+          : [this.#selectNextXsydTable(tables, stepIndex, travelCache)];
+        stepIndex += 1;
+        nextTickAt += XSYD_HALL_POLL_INTERVAL_MS;
 
-      await new Promise(resolve => setTimeout(resolve, 8));
+        try {
+          if (isInitialSeed) {
+            const pressedReply = await xsydDeviceManager.request(buildXsydHallPressedFrame(), 300);
+            if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
+              return;
+            }
+            for (const [idx, isPressed] of decodeXsydHallPressedReply(pressedReply)) {
+              pressedByMatrixIndex.set(idx, isPressed);
+            }
+          }
+
+          let tableTravel = travelCache;
+          for (const tableId of pollTables) {
+            const travelReply = await xsydDeviceManager.request(
+              buildXsydHallTravelFrame(tableId),
+              300,
+            );
+            if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
+              return;
+            }
+            tableTravel = decodeXsydHallTravelReply(travelReply, tableId);
+            for (const [idx, um] of tableTravel) {
+              travelCache.set(idx, um);
+              if (!isInitialSeed) {
+                if (um <= 80) {
+                  pressedByMatrixIndex.set(idx, false);
+                } else if (um >= 150) {
+                  pressedByMatrixIndex.set(idx, true);
+                }
+              }
+            }
+          }
+
+          if (consecutiveFailures > 0) {
+            consecutiveFailures = 0;
+            if (this.#state.recovering) {
+              this.#setState({ recovering: false });
+            }
+          }
+
+          const samples = mergeXsydHallSamples({
+            travelByMatrixIndex: tables.length === 1 ? tableTravel : travelCache,
+            pressedByMatrixIndex,
+            keyIds: keyIdSet,
+          });
+          this.#ingestRecords(
+            samples.map(sample => ({
+              keyId: sample.pos,
+              keyCode: sample.keyId,
+              distanceUnits: sample.distanceUnits,
+              adc: sample.rawAdc,
+              pressed: sample.pressed || this.#hostPressedKeys.has(sample.keyId),
+            })),
+          );
+        } catch (error) {
+          if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
+            return;
+          }
+          consecutiveFailures += 1;
+          if (consecutiveFailures >= 6) {
+            throw error;
+          }
+          if (!this.#state.recovering) {
+            this.#setState({ recovering: true });
+          }
+        }
+
+        const now = performance.now();
+        if (nextTickAt < now) {
+          nextTickAt = now;
+        }
+        await paceToDeadline(nextTickAt);
+      }
+    } finally {
+      if (channel) {
+        channel.port1.onmessage = null;
+        channel.port1.close();
+        channel.port2.close();
+      }
     }
   }
 
@@ -780,4 +919,5 @@ export function useHero68HallStream(): HallStreamState {
   );
 }
 
+export { xsydDeviceManager };
 export type Hero68HallStreamState = HallStreamState;

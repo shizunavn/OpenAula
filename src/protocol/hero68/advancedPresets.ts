@@ -1,4 +1,5 @@
 import { newAdvanced, validateAdvanced, type AdvancedBinding, type AdvancedKind } from './advanced';
+import type { HeroDeviceModelId } from '../../keyboard/registry';
 import { REMAP_CATEGORIES } from './remap';
 export type AdvancedPreset = {
   id: string;
@@ -79,13 +80,13 @@ export function presetConflicts(bindings: AdvancedBinding[], preset: AdvancedPre
   const keys = new Set(preset.bindings.flatMap(b => b.keys));
   return bindings.filter(b => b.keys.some(k => keys.has(k)));
 }
-export function applyAdvancedPreset(bindings: AdvancedBinding[], preset: AdvancedPreset): AdvancedBinding[] {
+export function applyAdvancedPreset(bindings: AdvancedBinding[], preset: AdvancedPreset, model?: HeroDeviceModelId): AdvancedBinding[] {
   const conflicts = presetConflicts(bindings, preset);
   if (conflicts.some(b => b.kind === 'UNKNOWN')) {
     throw new Error('This preset overlaps an unknown firmware binding, which must be preserved.');
   }
   const ids = new Set(conflicts.map(b => b.id));
   const result = [...bindings.filter(b => !ids.has(b.id)), ...structuredClone(preset.bindings)];
-  validateAdvanced(result);
+  validateAdvanced(result, model);
   return result;
 }

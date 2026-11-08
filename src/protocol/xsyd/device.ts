@@ -21,11 +21,13 @@ import type { PollingRate, ProfileSlot } from '../hero68/types'
 import type { Hero68ConnectionState, Hero68DeviceSnapshot } from '../hero68/webhid'
 import {
   buildDisableAdvancedKeyFrame,
+  buildDksFrame,
   buildEndFrame,
   buildMptFrame,
   buildMtFrame,
   buildSocdFrame,
   buildTglFrame,
+  encodeXsydDksStateRow,
   XSYD_ADVANCED_DELAY_MAX_MS,
   XSYD_ADVANCED_DELAY_UNIT_MS,
 } from './advanced'
@@ -64,6 +66,8 @@ import {
   decodeXsydHallPressedReply,
   decodeXsydHallTravelReply,
   mergeXsydHallSamples,
+  xsydMatrixIndexForKey,
+  xsydMatrixIndexForKeyId,
   xsydTableIdsForKeys,
   type XsydHallKeySample,
   type XsydHallTableId,
@@ -439,14 +443,13 @@ export async function readXsydFieldTable(
   requester: XsydRequester,
   queries: readonly { pos: number; field: number }[] = []
 ): Promise<XsydFieldWrite[]> {
+  if (queries.length === 0) {
+    return []
+  }
   const results: XsydFieldWrite[] = []
   const chunks: { pos: number; field: number }[][] = []
-  if (queries.length === 0) {
-    chunks.push([])
-  } else {
-    for (let i = 0; i < queries.length; i += XSYD_FEATURE_SLOTS) {
-      chunks.push(queries.slice(i, i + XSYD_FEATURE_SLOTS))
-    }
+  for (let i = 0; i < queries.length; i += XSYD_FEATURE_SLOTS) {
+    chunks.push(queries.slice(i, i + XSYD_FEATURE_SLOTS))
   }
   for (const batch of chunks) {
     const reply = await requester.request(buildFieldReadFrame(batch))
@@ -507,9 +510,24 @@ export function xsydSwitchMaxTravelUm(switchType: number): number {
   return switchType === 2 || switchType === 3 ? 3300 : 3400
 }
 
+const HERO_MODIFIER_TO_XSYD_USAGE: Readonly<Record<number, number>> = {
+  0x00010000: 0xe0, // L_Ctrl
+  0x00020000: 0xe1, // L_Shift
+  0x00040000: 0xe2, // L_Alt
+  0x00080000: 0xe3, // L_WIN
+  0x00100000: 0xe4, // R_Ctrl
+  0x00200000: 0xe5, // R_Shift
+  0x00400000: 0xe6, // R_Alt
+  0x00800000: 0xe7, // R_WIN
+  0x0d000000: 0x01, // Fn
+  0x0d010000: 0x01, // Fn1
+  0xf001: 0x01, // Firmware Fn action code
+}
+
 export function toXsydActionByte(action: number): number {
-  if (action === 0xf001) {
-    return 0x01
+  const mapped = HERO_MODIFIER_TO_XSYD_USAGE[action]
+  if (mapped !== undefined) {
+    return mapped
   }
   if (!Number.isInteger(action) || action < 0 || action > 0xff) {
     throw new RangeError(`XSYD action code must be a single byte (0..255), got ${action}`)
@@ -528,8 +546,9 @@ export function requireXsydKeyValue(keyId: string): number {
 /**
  * Validate Advanced Key bindings specifically for AULA WIN 68 HE MAX (XSYD `0x5C`).
  *
- * - Rejects `DKS`, `RS`, `DDKS`, and `UNKNOWN` (no verified capture layout).
- * - Rejects `SOCD` with `mode !== 0` (only `type=0, mode=0, delay=0` is verified).
+ * - Supports `SOCD` (modes `0..3`), `DKS` (`0x26`), `MT` (`0x24`), `TGL` (`0x25`),
+ *   `MPT` (`0x27`), and `END` (`0x28`).
+ * - Rejects `RS` and `DDKS` (unverified).
  * - Validates micrometre travel bounds (`100..3400` µm) and 10 ms delay byte (`10..2550` ms).
  */
 export function validateXsydAdvanced(
@@ -543,9 +562,6 @@ export function validateXsydAdvanced(
   }
   const used = new Set<string>()
   for (const b of bindings) {
-    if ((b.kind as string) === 'DKS') {
-      throw new Error('DKS is not supported on WIN 68 HE MAX.')
-    }
     if ((b.kind as string) === 'RS' || (b.kind as string) === 'DDKS') {
       throw new Error(`${b.kind} is not supported on WIN 68 HE MAX.`)
     }
@@ -555,7 +571,7 @@ export function validateXsydAdvanced(
       }
       continue
     }
-    if (!['SOCD', 'MT', 'TGL', 'MPT', 'END'].includes(b.kind)) {
+    if (!['SOCD', 'DKS', 'MT', 'TGL', 'MPT', 'END'].includes(b.kind)) {
       throw new Error(`Unsupported Advanced Key type on WIN 68 HE MAX: ${b.kind}`)
     }
     if (b.keys.length !== (b.kind === 'SOCD' ? 2 : 1)) {
@@ -569,12 +585,12 @@ export function validateXsydAdvanced(
       used.add(keyId)
     }
     if (b.kind === 'SOCD') {
-      if (b.mode !== 0) {
-        throw new Error('Only SOCD mode 0 is verified on WIN 68 HE MAX.')
+      if (![0, 1, 2, 3].includes(b.mode)) {
+        throw new Error('Invalid SOCD mode on WIN 68 HE MAX (expected 0–3).')
       }
       continue
     }
-    const expectedActions = b.kind === 'MPT' ? 3 : b.kind === 'MT' ? 2 : 1
+    const expectedActions = b.kind === 'DKS' ? 4 : b.kind === 'MPT' ? 3 : b.kind === 'MT' ? 2 : 1
     if (b.actions.length !== expectedActions) {
       throw new Error('Invalid action count.')
     }
@@ -588,6 +604,30 @@ export function validateXsydAdvanced(
         b.delay > XSYD_ADVANCED_DELAY_MAX_MS
       ) {
         throw new Error(`Delay must be ${XSYD_ADVANCED_DELAY_UNIT_MS}–${XSYD_ADVANCED_DELAY_MAX_MS} ms on WIN 68 HE MAX.`)
+      }
+    }
+    if (b.kind === 'DKS') {
+      if (b.thresholds.length !== 4) {
+        throw new Error('DKS requires 4 depth thresholds.')
+      }
+      const depthsUm = b.thresholds.map(mmToUm)
+      if (depthsUm.some(um => !Number.isInteger(um) || um < minUm || um > maxUm)) {
+        throw new Error(
+          `Depth must be ${umToMm(minUm).toFixed(2)}–${umToMm(maxUm).toFixed(2)} mm (${minUm}–${maxUm} µm).`
+        )
+      }
+      if (depthsUm[0] >= depthsUm[1] || depthsUm[3] >= depthsUm[2]) {
+        throw new Error('Shallow DKS points must be above the deep points.')
+      }
+      if (!Array.isArray(b.states) || b.states.length !== 4) {
+        throw new Error('Invalid DKS action pattern.')
+      }
+      try {
+        for (const row of b.states) {
+          encodeXsydDksStateRow(row)
+        }
+      } catch {
+        throw new Error('Invalid DKS action pattern.')
       }
     }
     if (b.kind === 'MPT') {
@@ -615,6 +655,13 @@ export function encodeXsydAdvancedBinding(binding: AdvancedBinding): Uint8Array 
   validateXsydAdvanced([binding])
   const key = requireXsydKeyValue(binding.keys[0])
   switch (binding.kind) {
+    case 'DKS':
+      return buildDksFrame({
+        key,
+        actions: binding.actions.map(toXsydActionByte),
+        states: binding.states,
+        actuationUm: mmToUm(binding.thresholds[0]),
+      })
     case 'MT':
       return buildMtFrame({
         key,
@@ -644,7 +691,7 @@ export function encodeXsydAdvancedBinding(binding: AdvancedBinding): Uint8Array 
         key1: key,
         key2: requireXsydKeyValue(binding.keys[1]),
         type: 0,
-        mode: 0,
+        mode: binding.mode,
         delay: 0,
       })
     default:
@@ -664,7 +711,13 @@ function xsydBindingSignature(b: AdvancedBinding): string {
     delay: ['MT', 'TGL'].includes(b.kind)
       ? Math.round(b.delay / XSYD_ADVANCED_DELAY_UNIT_MS) * XSYD_ADVANCED_DELAY_UNIT_MS
       : undefined,
-    depthsUm: b.kind === 'MPT' ? b.thresholds.map(mmToUm) : undefined,
+    depthsUm:
+      b.kind === 'MPT'
+        ? b.thresholds.map(mmToUm)
+        : b.kind === 'DKS'
+          ? [mmToUm(b.thresholds[0])]
+          : undefined,
+    masks: b.kind === 'DKS' ? b.states.map(encodeXsydDksStateRow) : undefined,
   })
 }
 
@@ -984,6 +1037,9 @@ function errorMessage(error: unknown): string {
  *   deferred Flash flush (`VA 0x07E28` -> `0x11914` vs `VA 0x16342` -> `0x12AF4`),
  *   so redundant `0x00 0x70 <slot>` frames during a multi-step save never reload
  *   stale Flash over uncommitted SRAM writes.
+ * - Retries `0x23` field-table requests automatically on transient read timeouts
+ *   (e.g., when a request lands during the firmware's ~500–670 ms Flash sector erase,
+ *   which emits an unsolicited `0xFF` completion packet at `VA 0x09AF0`).
  */
 export class XsydDeviceManager implements Hero68Transport, XsydRequester {
   #device: HIDDeviceLike | undefined
@@ -1280,9 +1336,9 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     }
   }
 
-  #queueControlOperation<T>(run: () => Promise<T>): Promise<T> {
+  #queueControlOperation<T>(run: () => Promise<T>, useCrossTabLock = true): Promise<T> {
     const work = () =>
-      typeof navigator !== 'undefined' && navigator.locks
+      useCrossTabLock && typeof navigator !== 'undefined' && navigator.locks
         ? navigator.locks.request('openhero68:xsyd-hid-control', run)
         : run()
     const next = this.#requestTail.then(work)
@@ -1301,16 +1357,16 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
   async request(
     frame: Uint8Array,
     timeoutMs = 800,
-    options: { expectReply?: boolean } = {}
+    options: { expectReply?: boolean; retries?: number } = {}
   ): Promise<XsydReply> {
     const expectReply = options.expectReply ?? true
+    const op = frame[2] ?? 0
     return this.#queueControlOperation(async () => {
       if (!expectReply) {
         this.#assembler.reset()
         await this.send(frame)
         return SILENT_REPLY
       }
-      const op = frame[2]
       const sub = frame[4]
       // Guard `0x00` subcmd `0x70` profile select against firmware `VA 0x16342` -> `0x12AF4`:
       // In firmware v1.1.4, `0x00 0x70 <slot>` unconditionally reloads Flash into SRAM.
@@ -1344,15 +1400,42 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
           return reply
         }
       }
-      const reply = await this.#requestOnce(frame, timeoutMs)
+      // `0x23` per-key field table reads/writes run in 34..68 packet bursts and
+      // frequently overlap the firmware's ~500–670 ms deferred Flash sector erase
+      // (`VA 0x0AD9E` -> `0x11914` -> `0x09AF0`), during which a single USB packet
+      // can be dropped while the MCU masks interrupts. Retry `0x23` up to 2 times.
+      const maxRetries = options.retries ?? (op === 0x23 ? 2 : 0)
+      const reply = await this.#requestWithRetry(frame, timeoutMs, maxRetries)
       if (
-        [0x18, 0x23, 0x24, 0x25, 0x27, 0x28, 0x29, 0x2a, 0x2c].includes(op) &&
+        [0x18, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2c].includes(op) &&
         frame[4] === 0x01
       ) {
-        this.#lastSramWriteAt = Date.now()
+        if (this.#lastSramWriteAt === 0) {
+          this.#lastSramWriteAt = Date.now()
+        }
       }
       return reply
-    })
+    }, op !== 0x12)
+  }
+
+  async #requestWithRetry(frame: Uint8Array, timeoutMs: number, maxRetries: number): Promise<XsydReply> {
+    const setTimer = typeof window !== 'undefined' && window.setTimeout ? window.setTimeout.bind(window) : setTimeout
+    let lastError: unknown
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const attemptTimeout = maxRetries > 0 && attempt < maxRetries ? Math.min(timeoutMs, 350) : timeoutMs
+        return await this.#requestOnce(frame, attemptTimeout)
+      } catch (error) {
+        lastError = error
+        const isReadTimeout = error instanceof Error && error.message.includes('read timed out')
+        if (!isReadTimeout || attempt >= maxRetries || !this.#device?.opened) {
+          throw error
+        }
+        this.#assembler.reset()
+        await new Promise(resolve => setTimer(resolve, 35))
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
 
   async #requestOnce(frame: Uint8Array, timeoutMs = 800): Promise<XsydReply> {
@@ -1365,6 +1448,8 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     const clearTimer =
       typeof window !== 'undefined' && window.clearTimeout ? window.clearTimeout.bind(window) : clearTimeout
 
+    this.#assembler.reset()
+
     return new Promise<XsydReply>((resolve, reject) => {
       const timeoutError = (stage: 'read' | 'send') =>
         new Error(
@@ -1376,6 +1461,7 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
         reject,
         timer: setTimer(() => {
           this.#waiters.delete(waiter)
+          this.#assembler.reset()
           const error = timeoutError('send')
           reject(error)
           this.#setSnapshot({
@@ -1393,12 +1479,14 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
           clearTimer(waiter.timer)
           waiter.timer = setTimer(() => {
             this.#waiters.delete(waiter)
+            this.#assembler.reset()
             reject(timeoutError('read'))
           }, Math.max(1, timeoutMs))
         })
         .catch(error => {
           clearTimer(waiter.timer)
           this.#waiters.delete(waiter)
+          this.#assembler.reset()
           reject(error instanceof Error ? error : new Error(String(error)))
         })
     })
@@ -1421,6 +1509,9 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     const payload = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength)
     reportTrace.add('in', event.reportId ?? XSYD_REPORT_ID, payload)
     if (this.#waiters.size === 0) {
+      if (payload.length >= 6 && payload[0] === XSYD_MAGIC && payload[2] === 0xff && payload[4] === 0x0a && payload[5] === 0xff) {
+        this.#lastSramWriteAt = 0
+      }
       return
     }
     const clearTimer =
@@ -1429,6 +1520,11 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
       const reply = this.#assembler.push(payload)
       if (!reply) {
         return
+      }
+      // Unsolicited `0xFF` (`0A FF <hi> <lo>` at `VA 0x09AF0`) signals that the
+      // firmware finished its deferred SRAM -> Flash sector flush.
+      if (reply.opcode === 0xff && reply.payload[0] === 0x0a && reply.payload[1] === 0xff) {
+        this.#lastSramWriteAt = 0
       }
       for (const waiter of this.#waiters) {
         if (reply.opcode !== waiter.expectedOpcode) {
@@ -1495,3 +1591,7 @@ export type { Hero68ConnectionState, Hero68DeviceSnapshot }
 
 export * from './hall'
 export * from './rgb'
+export {
+  xsydMatrixIndexForKey,
+  xsydMatrixIndexForKeyId,
+} from './hall'

@@ -21,7 +21,7 @@ export type HallControllerDeps = {
  * - `rgb`: reactive custom RGB effects requiring analog key travel (100 Hz)
  * - `gamepad:analog`: bound analog stick/trigger keys (50/100/200 Hz)
  * - `gamepad:digital`: bound digital button keys evaluated by native AP/RT (200 Hz)
- * - `web:<uuid>`: browser SSE subscribers (`/hall/stream`) for live UI travel bars (100 Hz)
+ * - `web:<uuid>`: browser SSE subscribers (`/hall/stream`) for live UI travel bars (200 Hz)
  *
  * `HallBroker` merges overlapping key demands by taking the maximum requested
  * polling frequency per physical key position before sending `hall-config:` to
@@ -124,7 +124,7 @@ export function createHallController({
       }
       if (
         !subscription.pending.size ||
-        now - subscription.lastSent < (subscription.keys.size > 10 ? 32 : 0)
+        now - subscription.lastSent < (subscription.keys.size > 10 ? 5 : 0)
       ) {
         continue;
       }
@@ -206,7 +206,7 @@ export function createHallController({
     ctx.hallBroker.subscribe({
       id,
       keys: [...keys],
-      hz: 100,
+      hz: 200,
     });
     scheduleHallSync();
     const initial = [...ctx.hallSamples.values()].filter(record => keys.has(record.keyId));

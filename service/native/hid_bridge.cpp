@@ -439,9 +439,10 @@ struct BridgeSession {
   std::array<std::array<uint32_t, 256>, 3> xsydRemaps{};
   bool xsydRemapsInitialized = false;
   std::array<uint16_t, hall::XsydHallTotalMatrixCount> xsydTravelUm{};
-  // Last decoded `XsydHallSubcmdPressed` reply, kept for cycles whose pressed
-  // read missed while the travel read succeeded.
+  // Last decoded `XsydHallSubcmdPressed` reply, primed once on start and updated
+  // via travel hysteresis on steady-state 200 Hz cycles.
   std::array<uint8_t, 192> xsydPressedFrame{};
+  bool xsydPressedPrimed = false;
   std::array<double, hall::Capacity> consumerHz{};
   double nextHallPublish = 0;
   double nextGamepadPublish = 0;
@@ -578,13 +579,50 @@ struct BridgeSession {
       };
 
       // Travel and pressed state are separate replies, so either half can be
-      // missing for a cycle. Keep polling the other half instead of dropping
-      // the whole cycle into a backoff.
+      // missing for a cycle. Prime `XsydHallSubcmdPressed` once on start and
+      // poll only the needed/active `XsydHallSubcmdTravel` table (1 round-trip
+      // per 5 ms cycle) in steady state so WIN 68 HE MAX sustains 200 Hz.
+      bool needTable1 = false;
+      bool needTable2 = false;
+      bool activeTable1 = false;
+      bool activeTable2 = false;
+      for (size_t idx = 0; idx < hall::XsydHallTotalMatrixCount; ++idx) {
+        const uint8_t heroPos = hall::XsydMatrixToHeroPos[idx];
+        if (!heroPos || hallScheduler.hz[heroPos] <= 0) {
+          continue;
+        }
+        if (idx < hall::XsydHallHalfMatrixCount) {
+          needTable1 = true;
+          if (xsydTravelUm[idx] > 80) {
+            activeTable1 = true;
+          }
+        } else {
+          needTable2 = true;
+          if (xsydTravelUm[idx] > 80) {
+            activeTable2 = true;
+          }
+        }
+      }
+      const uint8_t step = xsydTableStep++;
+      uint8_t tableId = 1;
+      if (needTable1 && !needTable2) {
+        tableId = 1;
+      } else if (needTable2 && !needTable1) {
+        tableId = 2;
+      } else if (activeTable1 && !activeTable2) {
+        tableId = (step % 4 == 3) ? 2 : 1;
+      } else if (activeTable2 && !activeTable1) {
+        tableId = (step % 4 == 3) ? 1 : 2;
+      } else {
+        tableId = (step & 1) ? 2 : 1;
+      }
+
       std::array<uint8_t, 192> pressedFrame{};
-      const uint8_t tableId = (xsydTableStep++ & 1) ? 2 : 1;
       std::array<uint8_t, 192> travelFrame{};
       const uint8_t travelResult = readXsydReply(hall::XsydHallSubcmdTravel, tableId, travelFrame);
-      const uint8_t pressedResult = readXsydReply(hall::XsydHallSubcmdPressed, 1, pressedFrame);
+      const uint8_t pressedResult = !xsydPressedPrimed
+          ? readXsydReply(hall::XsydHallSubcmdPressed, 1, pressedFrame)
+          : hall::XsydReadOk;
       if (travelResult == hall::XsydWriteFailed || pressedResult == hall::XsydWriteFailed) {
         hallScheduler.failed(rhythm::clockMs());
         hallFault = true;
@@ -596,22 +634,29 @@ struct BridgeSession {
       // A missed pressed-state reply reuses the last one, so a key can stay
       // reported as pressed one cycle longer but never flickers to released.
       const bool pressedOk = pressedResult == hall::XsydReadOk;
-      if (!travelOk && !pressedOk) {
+      if (!travelOk && (!pressedOk || xsydPressedPrimed)) {
         hallScheduler.failed(rhythm::clockMs());
         hallFault = true;
         setGamepadPause();
         emitLine("hall-error:Hall request timed out");
         return;
       }
+      if (!xsydPressedPrimed && pressedOk) {
+        std::copy(pressedFrame.begin(), pressedFrame.end(), xsydPressedFrame.begin());
+        xsydPressedPrimed = true;
+      }
       const size_t baseIndex = (tableId - 1) * hall::XsydHallHalfMatrixCount;
       if (travelOk) {
         for (size_t i = 0; i < hall::XsydHallHalfMatrixCount; ++i) {
           const uint16_t um = uint16_t(travelFrame[6 + i * 2] | (travelFrame[7 + i * 2] << 8));
-          xsydTravelUm[baseIndex + i] = std::min<uint16_t>(3400, um);
+          const uint16_t clampedUm = std::min<uint16_t>(3400, um);
+          xsydTravelUm[baseIndex + i] = clampedUm;
+          if (clampedUm <= 80) {
+            xsydPressedFrame[6 + baseIndex + i] = 0;
+          } else if (clampedUm >= 150) {
+            xsydPressedFrame[6 + baseIndex + i] = 0x02;
+          }
         }
-      }
-      if (pressedOk) {
-        std::copy(pressedFrame.begin(), pressedFrame.end(), xsydPressedFrame.begin());
       }
       const double at = rhythm::clockMs();
       hallFault = false;
@@ -730,7 +775,7 @@ struct BridgeSession {
       if (comma) {
         emitLine(event.str());
       }
-      nextHallPublish = now + 10;
+      nextHallPublish = now + 5;
     }
     if (now >= nextGamepadPublish) {
       emitLine("gamepad-status:" + gamepadOutput.status());

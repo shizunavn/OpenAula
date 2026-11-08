@@ -87,6 +87,9 @@ export function xsydMatrixIndexForKeyId(keyId: string): number | undefined {
   return KEY_ENTRY_BY_ID.get(keyId)?.index
 }
 
+/** Alias for xsydMatrixIndexForKeyId. */
+export const xsydMatrixIndexForKey = xsydMatrixIndexForKeyId
+
 export function xsydKeyIdForMatrixIndex(matrixIndex: number): string | undefined {
   const entry = KEY_ENTRY_BY_MATRIX_INDEX.get(matrixIndex)
   return entry ? xsydKeyIdForEntry(entry) : undefined

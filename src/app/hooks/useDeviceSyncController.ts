@@ -421,50 +421,63 @@ export function useDeviceSyncController({
     const activeKeyIds = heroLayout(targetModel).keyIds;
     try {
       if (isWin68HeMaxModel(targetModel) && xsydDeviceManager.connected) {
-        const hydrated = await hydrateFromXsydDevice(xsydDeviceManager, slot, activeKeyIds);
-        const mappings = await readXsydRemapLayers(xsydDeviceManager, activeKeyIds);
-        const savedSlotRgb = loadXsydSavedRgb(slot);
-        const rawFreshRgb = await readXsydRgbProfile(xsydDeviceManager, activeKeyIds).catch(
-          () => savedSlotRgb ?? defaultXsydRgb(activeKeyIds)
-        );
-        const freshRgb = savedSlotRgb
-          ? {
-              ...rawFreshRgb,
-              keys: savedSlotRgb.keys ?? rawFreshRgb.keys,
-              colors: {
-                ...rawFreshRgb.colors,
-                ...(savedSlotRgb.colors ?? {}),
-              },
-              ...(savedSlotRgb.custom ? { custom: savedSlotRgb.custom } : {}),
-            }
-          : rawFreshRgb;
-        setAdvancedHydratedSlot(slot);
-        setAdvancedReadError(null);
-        if (draft?.advancedBindings) {
-          setAdvancedBindings(draft.advancedBindings);
+        const snapshotHall = hero68HallStream.getSnapshot();
+        const shouldResumeHall = snapshotHall.active || snapshotHall.starting;
+        const requestedHallKeys = hero68HallStream.getRequestedKeys();
+        const hallSource = snapshotHall.source;
+        if (shouldResumeHall) {
+          await hero68HallStream.stop();
         }
-        setRgbBaseline(freshRgb);
-        setRgb(savedSlotRgb ? mergeRgb(freshRgb, savedSlotRgb) : freshRgb);
-        setRgbHydratedSlot(slot);
-        remapBaselineRef.current = structuredClone(mappings);
-        applyHydratedPerformance(hydrated, draft);
-        for (const layer of REMAP_LAYERS) {
-          for (const keyId of activeKeyIds) {
-            if (draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) && draft.remapLayers?.[layer][keyId] !== undefined) {
-              mappings[layer][keyId] = draft.remapLayers[layer][keyId];
+        try {
+          const hydrated = await hydrateFromXsydDevice(xsydDeviceManager, slot, activeKeyIds);
+          const mappings = await readXsydRemapLayers(xsydDeviceManager, activeKeyIds);
+          const savedSlotRgb = loadXsydSavedRgb(slot);
+          const rawFreshRgb = await readXsydRgbProfile(xsydDeviceManager, activeKeyIds).catch(
+            () => savedSlotRgb ?? defaultXsydRgb(activeKeyIds)
+          );
+          const freshRgb = savedSlotRgb
+            ? {
+                ...rawFreshRgb,
+                keys: savedSlotRgb.keys ?? rawFreshRgb.keys,
+                colors: {
+                  ...rawFreshRgb.colors,
+                  ...(savedSlotRgb.colors ?? {}),
+                },
+                ...(savedSlotRgb.custom ? { custom: savedSlotRgb.custom } : {}),
+              }
+            : rawFreshRgb;
+          setAdvancedHydratedSlot(slot);
+          setAdvancedReadError(null);
+          if (draft?.advancedBindings) {
+            setAdvancedBindings(draft.advancedBindings);
+          }
+          setRgbBaseline(freshRgb);
+          setRgb(savedSlotRgb ? mergeRgb(freshRgb, savedSlotRgb) : freshRgb);
+          setRgbHydratedSlot(slot);
+          remapBaselineRef.current = structuredClone(mappings);
+          applyHydratedPerformance(hydrated, draft);
+          for (const layer of REMAP_LAYERS) {
+            for (const keyId of activeKeyIds) {
+              if (draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) && draft.remapLayers?.[layer][keyId] !== undefined) {
+                mappings[layer][keyId] = draft.remapLayers[layer][keyId];
+              }
             }
           }
+          setRemapLayers(mappings);
+          setDirtyRemaps(new Set((draft?.dirtyRemaps ?? []).filter(change => {
+            const [layer, keyId] = change.split(':');
+            return mappings[(Number(layer) as RemapLayer)]?.[keyId] !== remapBaselineRef.current[(Number(layer) as RemapLayer)]?.[keyId];
+          })));
+          setLoadedProfileSlot(slot);
+          setSaveState('idle');
+          setDeviceReadState('success');
+          window.setTimeout(() => setDeviceReadState(current => current === 'success' ? 'idle' : current), 1800);
+          return true;
+        } finally {
+          if (shouldResumeHall && xsydDeviceManager.connected) {
+            await hero68HallStream.start(requestedHallKeys, hallSource, activeKeyIds).catch(() => {});
+          }
         }
-        setRemapLayers(mappings);
-        setDirtyRemaps(new Set((draft?.dirtyRemaps ?? []).filter(change => {
-          const [layer, keyId] = change.split(':');
-          return mappings[(Number(layer) as RemapLayer)]?.[keyId] !== remapBaselineRef.current[(Number(layer) as RemapLayer)]?.[keyId];
-        })));
-        setLoadedProfileSlot(slot);
-        setSaveState('idle');
-        setDeviceReadState('success');
-        window.setTimeout(() => setDeviceReadState(current => current === 'success' ? 'idle' : current), 1800);
-        return true;
       }
       const hydrated = await hydrateFromDevice(hero68DeviceManager, slot, activeKeyIds, targetModel);
       const mappings = await readRemapLayers(hero68DeviceManager, activeKeyIds, targetModel);
@@ -636,39 +649,52 @@ export function useDeviceSyncController({
       setProfileBusy(true);
       setDeviceActionError(null);
       if (isWin68HeMaxModel(deviceModel) && xsydDeviceManager.connected) {
-        if (dirtyKeys.size) {
-          await saveDeviceConfiguration(snapshot);
-          const readback = await hydrateFromXsydDevice(xsydDeviceManager, profileSlot, [...dirtyKeys]);
-          applyHydratedPerformance(readback);
+        const snapshotHall = hero68HallStream.getSnapshot();
+        const shouldResumeHall = snapshotHall.active || snapshotHall.starting;
+        const requestedHallKeys = hero68HallStream.getRequestedKeys();
+        const hallSource = snapshotHall.source;
+        if (shouldResumeHall) {
+          await hero68HallStream.stop();
         }
-        if (dirtyRemaps.size) {
-          await saveXsydRemapChanges(xsydDeviceManager, profileSlot, remapLayers, dirtyRemaps);
+        try {
+          if (dirtyKeys.size) {
+            await saveDeviceConfiguration(snapshot);
+            const readback = await hydrateFromXsydDevice(xsydDeviceManager, profileSlot, [...dirtyKeys]);
+            applyHydratedPerformance(readback);
+          }
+          if (dirtyRemaps.size) {
+            await saveXsydRemapChanges(xsydDeviceManager, profileSlot, remapLayers, dirtyRemaps);
+          }
+          if (advancedPending) {
+            const verified = await saveXsydAdvancedBindings(xsydDeviceManager, profileSlot, advancedBindings, advancedBaseline);
+            setAdvancedBaseline(verified);
+          }
+          if ((rgbPending || customRgbChanged) && !tachyon) {
+            const savedRgb = await saveXsydRgbProfile(
+              xsydDeviceManager,
+              rgb,
+              rgbBaseline,
+              setRgbBaseline,
+              modelKeyIds,
+              profileSlot
+            );
+            setRgb(savedRgb);
+          }
+          if (dirtyKeys.size) {
+            setDirtyKeys(new Set());
+          }
+          if (dirtyRemaps.size) {
+            remapBaselineRef.current = structuredClone(remapLayers);
+            setDirtyRemaps(new Set());
+          }
+          setSaveState('sent');
+          window.setTimeout(() => setSaveState('idle'), 1200);
+          return;
+        } finally {
+          if (shouldResumeHall && xsydDeviceManager.connected) {
+            await hero68HallStream.start(requestedHallKeys, hallSource, modelKeyIds).catch(() => {});
+          }
         }
-        if (advancedPending) {
-          const verified = await saveXsydAdvancedBindings(xsydDeviceManager, profileSlot, advancedBindings, advancedBaseline);
-          setAdvancedBaseline(verified);
-        }
-        if ((rgbPending || customRgbChanged) && !tachyon) {
-          const savedRgb = await saveXsydRgbProfile(
-            xsydDeviceManager,
-            rgb,
-            rgbBaseline,
-            setRgbBaseline,
-            modelKeyIds,
-            profileSlot
-          );
-          setRgb(savedRgb);
-        }
-        if (dirtyKeys.size) {
-          setDirtyKeys(new Set());
-        }
-        if (dirtyRemaps.size) {
-          remapBaselineRef.current = structuredClone(remapLayers);
-          setDirtyRemaps(new Set());
-        }
-        setSaveState('sent');
-        window.setTimeout(() => setSaveState('idle'), 1200);
-        return;
       }
       if (dirtyKeys.size) {
         await saveDeviceConfiguration(snapshot);

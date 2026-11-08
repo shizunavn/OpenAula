@@ -212,12 +212,23 @@ test('WIN 68 HE MAX identification and board descriptor preserve HERO68/84 guard
 })
 
 test('SOCD, disable-binding, handshake, polling rate, and 0x23 readback frames match capture byte for byte', () => {
-  // socd_AD_on.pcapng: 5c 0b 2c c8 | 01 04 07 00 00 00 00 00 00 00 00
-  const socdFrame = xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07 })
-  assert.equal(hex(socdFrame), '5c0b2cc8' + '0104070000000000000000')
+  // socd_AD_on.pcapng & socd_ad_...changes3modein1capture.pcapng: modes 0, 1, 2, 3
+  assert.equal(hex(xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 0 })), '5c0b2cc8' + '0104070000000000000000')
+  assert.equal(hex(xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 1 })), '5c0b2cc8' + '0104070000000000010000')
+  assert.equal(hex(xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 2 })), '5c0b2cc8' + '0104070000000000020000')
+  assert.equal(hex(xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 3 })), '5c0b2cc8' + '0104070000000000030000')
 
-  // Reject unverified SOCD modes/types/delays
-  assert.throws(() => xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 1 }), RangeError)
+  // dks_keyW_down1.4-3.4_up3.4-1.4_A-hold1_B-hold2_C-hold3_D-end.pcapng:
+  const dksFrame = xsydAdvanced.buildDksFrame({
+    key: 0x1a,
+    actions: [0x04, 0x05, 0x06, 0x07],
+    states: [[14, 0, 0, 0], [0, 14, 0, 0], [0, 0, 14, 0], [0, 0, 0, 10]],
+    actuationUm: 1400,
+  })
+  assert.equal(hex(dksFrame), '5c1026cc' + '011a0400050006000700031c60c07805')
+
+  // Reject out-of-range SOCD modes and unverified types/delays
+  assert.throws(() => xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, mode: 4 }), RangeError)
   assert.throws(() => xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, type: 1 }), RangeError)
   assert.throws(() => xsydAdvanced.buildSocdFrame({ key1: 0x04, key2: 0x07, delay: 10 }), RangeError)
 
@@ -523,7 +534,7 @@ test('saveXsydAdvancedBindings, xsydProtocolEncoder, and hydrateFromXsydDevice r
           makeReply(0x23, xsydFeatures.buildFieldWritePayload(readSlots))
         )
       }
-      if ([0x24, 0x25, 0x27, 0x28, 0x2c].includes(op)) {
+      if ([0x24, 0x25, 0x26, 0x27, 0x28, 0x2c].includes(op)) {
         const keyPos = op === 0x27 ? 0x04 : frame[5]
         fieldMemory.set(`${keyPos}:${xsydFeatures.XsydFeatureField.Header}`, 0x20)
         return xsydCodec.decodeXsydFrame(makeReply(op, frame.slice(4, 4 + frame[1])))
@@ -622,10 +633,21 @@ test('saveXsydAdvancedBindings, xsydProtocolEncoder, and hydrateFromXsydDevice r
     deadzoneEnabled: true,
   })
 
-  // 2. Save MT, TGL, MPT, END, and SOCD (mode=0) and verify exact wire bytes
+  // 2. Save DKS, MT, TGL, MPT, END, and SOCD (modes 0, 1, 2, 3) and verify exact wire bytes
   const draft = [
     {
-      ...heroAdvanced.newAdvanced('MT', ['KeyW'], 'win68HeMax'),
+      ...heroAdvanced.newAdvanced('DKS', ['KeyW'], 'win68HeMax'),
+      actions: [4, 5, 6, 7],
+      thresholds: [1.4, 3.4, 3.4, 1.4],
+      states: [
+        [14, 0, 0, 0],
+        [0, 14, 0, 0],
+        [0, 0, 14, 0],
+        [0, 0, 0, 10],
+      ],
+    },
+    {
+      ...heroAdvanced.newAdvanced('MT', ['KeyQ'], 'win68HeMax'),
       actions: [29, 8],
       delay: 200,
     },
@@ -644,147 +666,96 @@ test('saveXsydAdvancedBindings, xsydProtocolEncoder, and hydrateFromXsydDevice r
       actions: [19],
     },
     {
-      ...heroAdvanced.newAdvanced('SOCD', ['KeyA', 'KeyD'], 'win68HeMax'),
+      ...heroAdvanced.newAdvanced('SOCD', ['KeyC', 'KeyB'], 'win68HeMax'),
       keys: ['KeyC', 'KeyB'],
       id: 'KeyC',
-      mode: 0,
+      mode: 1,
     },
   ]
 
   await heroAdvanced.saveAdvancedBindings(requester, 0, draft, [], 'win68HeMax')
   const writtenHexes = sentFrames.map(hex)
-  assert.ok(writtenHexes.includes('5c0724d0' + '011a1d00080014'), 'MT frame matches capture')
+  assert.ok(
+    writtenHexes.includes('5c1026cc' + '011a0400050006000700031c60c07805'),
+    'DKS frame matches dks_keyW_...pcapng byte for byte'
+  )
+  assert.ok(writtenHexes.includes('5c0724d0' + '01141d00080014'), 'MT frame matches capture')
   assert.ok(writtenHexes.includes('5c0525cf' + '01191d0014'), 'TGL frame matches capture')
   assert.ok(
     writtenHexes.includes('5c0e27cb' + '0104040010001100f401e803dc05'),
     'MPT frame matches capture in micrometres'
   )
   assert.ok(writtenHexes.includes('5c0428bd' + '01161300'), 'END frame matches capture')
+  assert.ok(
+    writtenHexes.includes('5c0b2cc8' + '0106050000000000010000'),
+    'SOCD mode 1 frame matches capture layout'
+  )
 
   // 3. Removing a binding writes 0x23 field 0x08 = 0x0000 and verifies readback
   sentFrames.length = 0
-  await heroAdvanced.saveAdvancedBindings(requester, 0, draft.slice(0, 4), draft, 'win68HeMax')
+  await heroAdvanced.saveAdvancedBindings(requester, 0, draft.slice(0, 5), draft, 'win68HeMax')
   assert.ok(
     sentFrames.some(f => f[2] === 0x23 && f[4] === 0x01),
     'Removing binding sends 0x23 field 0x08 = 0 disable frame'
   )
 
-  // 4. DKS and SOCD mode != 0 are rejected before any frame is sent
+  // 4. Out-of-range SOCD mode (> 3) is rejected before any frame is sent
   sentFrames.length = 0
   await assert.rejects(
     () =>
       heroAdvanced.saveAdvancedBindings(
         requester,
         0,
-        [heroAdvanced.newAdvanced('DKS', ['KeyQ'], 'win68HeMax')],
+        [{ ...heroAdvanced.newAdvanced('SOCD', ['KeyA', 'KeyD'], 'win68HeMax'), mode: 4 }],
         [],
         'win68HeMax'
       ),
-    /DKS is not supported on WIN 68 HE MAX/
-  )
-  assert.equal(sentFrames.length, 0)
-
-  await assert.rejects(
-    () =>
-      heroAdvanced.saveAdvancedBindings(
-        requester,
-        0,
-        [{ ...heroAdvanced.newAdvanced('SOCD', ['KeyA', 'KeyD'], 'win68HeMax'), mode: 1 }],
-        [],
-        'win68HeMax'
-      ),
-    /Only SOCD mode 0 is verified/
+    /Invalid SOCD mode on WIN 68 HE MAX/
   )
   assert.equal(sentFrames.length, 0)
 })
 
-test('DKS unsupported modal and badges appear on win68/win68HeMax and never exist on hero68/hero84', () => {
+test('AdvancedKeysPage enables DKS and all 4 verified SOCD modes on win68/win68HeMax and hero68/hero84', () => {
   const oldDoc = globalThis.document
   globalThis.document = { body: {}, addEventListener() {}, removeEventListener() {} }
   try {
     const AdvancedKeysPage = advancedPageMod.default
-    const { DksUnsupportedModal, XSYD_DKS_DOC_URL } = advancedPageMod
+    const { XSYD_SOCD_OPTIONS } = advancedPageMod
 
-    const win68Tree = renderComponent({
-      type: AdvancedKeysPage,
-      props: {
-        model: 'win68',
-        bindings: [],
-        busy: false,
-        pending: false,
-        connected: true,
-        initialDksModalOpen: true,
-        onChange() {},
-      },
-    })
-
-    const win68Buttons = collectNodes(
-      win68Tree,
-      el => el.type === 'button' && el.props?.['data-mode'] !== undefined
+    assert.equal(XSYD_SOCD_OPTIONS.length, 4)
+    assert.deepEqual(
+      XSYD_SOCD_OPTIONS.map(o => ({ value: o.value, verified: o.verified, title: o.title })),
+      [
+        { value: 0, verified: true, title: 'Last input priority' },
+        { value: 1, verified: true, title: 'First key priority' },
+        { value: 2, verified: true, title: 'Second key priority' },
+        { value: 3, verified: true, title: 'Neutral' },
+      ]
     )
-    const win68DksButton = win68Buttons.find(b => b.props['data-mode'] === 'DKS')
-    assert.ok(win68DksButton, 'DKS card button exists on win68')
-    assert.equal(win68DksButton.props['data-unsupported'], 'true')
-    assert.equal(win68DksButton.props['aria-disabled'], 'true')
-    assert.match(textContent(win68DksButton), /Unsupported|Chưa hỗ trợ/)
 
-    assert.equal(win68Buttons.find(b => b.props['data-mode'] === 'RS'), undefined)
-    assert.equal(win68Buttons.find(b => b.props['data-mode'] === 'DDKS'), undefined)
-
-    const win68Modals = collectNodes(
-      win68Tree,
-      el => el.type === 'section' && el.props?.['aria-labelledby'] === 'ak-dks-unsupported-title'
-    )
-    assert.equal(win68Modals.length, 1, 'DKS unsupported modal opens on win68')
-    const modalText = textContent(win68Modals[0])
-    assert.match(modalText, /DKS is not supported on WIN 68 HE MAX/)
-    assert.match(modalText, /MT, TGL, MPT, and END/)
-    const docLinks = collectNodes(
-      win68Modals[0],
-      el => el.type === 'a' && el.props?.href === XSYD_DKS_DOC_URL
-    )
-    assert.equal(docLinks.length, 1, 'Modal links to docs/xsyd-protocol.md §7')
-
-    const trVi = i18nMod.createTranslator('vi')
-    assert.equal(
-      trVi('DKS is not supported on WIN 68 HE MAX'),
-      'DKS chưa được hỗ trợ trên WIN 68 HE MAX'
-    )
-    assert.equal(trVi('Unsupported'), 'Chưa hỗ trợ')
-    assert.equal(trVi('Unverified'), 'Chưa xác minh')
-    assert.equal(trVi('Close'), 'Đóng')
-    assert.equal(trVi('View documentation'), 'Xem tài liệu')
-    assert.ok(renderComponent({ type: DksUnsupportedModal, props: { open: false, onClose() {} } }) === null)
-
-    for (const heroModel of ['hero68', 'hero84']) {
-      const heroTree = renderComponent({
+    for (const model of ['win68', 'win68HeMax', 'hero68', 'hero84']) {
+      const tree = renderComponent({
         type: AdvancedKeysPage,
         props: {
-          model: heroModel,
+          model,
           bindings: [],
           busy: false,
           pending: false,
           connected: true,
-          initialDksModalOpen: true,
           onChange() {},
         },
       })
-      const heroButtons = collectNodes(
-        heroTree,
+      const modeButtons = collectNodes(
+        tree,
         el => el.type === 'button' && el.props?.['data-mode'] !== undefined
       )
-      const heroDksButton = heroButtons.find(b => b.props['data-mode'] === 'DKS')
-      assert.ok(heroDksButton)
-      assert.equal(heroDksButton.props['data-unsupported'], undefined)
-      assert.ok(!textContent(heroDksButton).includes('Unsupported'))
-      assert.equal(heroButtons.find(b => b.props['data-mode'] === 'RS'), undefined)
-      assert.equal(heroButtons.find(b => b.props['data-mode'] === 'DDKS'), undefined)
-
-      const heroModals = collectNodes(
-        heroTree,
-        el => el.type === 'section' && el.props?.['aria-labelledby'] === 'ak-dks-unsupported-title'
-      )
-      assert.equal(heroModals.length, 0, `DKS unsupported modal must not exist on ${heroModel}`)
+      const dksButton = modeButtons.find(b => b.props['data-mode'] === 'DKS')
+      assert.ok(dksButton, `DKS card button exists on ${model}`)
+      assert.equal(dksButton.props['data-unsupported'], undefined, `DKS must be enabled on ${model}`)
+      assert.equal(dksButton.props.disabled, false, `DKS must not be disabled on ${model}`)
+      assert.ok(!textContent(dksButton).includes('Unsupported'))
+      assert.equal(modeButtons.find(b => b.props['data-mode'] === 'RS'), undefined)
+      assert.equal(modeButtons.find(b => b.props['data-mode'] === 'DDKS'), undefined)
     }
   } finally {
     if (oldDoc !== undefined) globalThis.document = oldDoc
@@ -1135,4 +1106,232 @@ test('WIN 68 HE MAX GamepadPage & BackgroundServicePage work without timeout whe
   assert.equal(typeof gamepadPageMod.default, 'function')
   assert.equal(typeof bgServicePageMod.default, 'function')
   assert.equal(typeof gamepadServiceMod.useSharedHallService, 'function')
+})
+
+test('XsydFrameAssembler self-heals interrupted 3-report 0x92 Hall frames when 0xA3 (0x23), 0xFF (Flash flush), or a fresh 0x92 header arrives', async () => {
+  const codecMod = await bundle('src/protocol/xsyd/codec.ts')
+  const featuresMod = await bundle('src/protocol/xsyd/features.ts')
+
+  const travelPayload = new Uint8Array(0x80)
+  travelPayload[0] = 0x00
+  travelPayload[1] = 0x02
+  travelPayload[2 + 17 * 2] = 0xd0 // KeyW = 2000 um
+  travelPayload[2 + 17 * 2 + 1] = 0x07
+  const hallFrame = codecMod.buildXsydFrame(0x92, travelPayload)
+  hallFrame[3] = codecMod.xsydChecksum(hallFrame, 'in')
+  const hallReports = codecMod.xsydReports(hallFrame)
+  assert.equal(hallReports.length, 3)
+
+  const fieldReadReq = featuresMod.buildFieldReadFrame([
+    { pos: 0x1a, field: featuresMod.XsydFeatureField.Travel },
+  ])
+  const a3Reply = new Uint8Array(fieldReadReq)
+  a3Reply[2] = 0xa3
+  a3Reply[4 + 3] = 0xe8
+  a3Reply[4 + 4] = 0x03
+  a3Reply[3] = codecMod.xsydChecksum(a3Reply, 'in')
+
+  const assembler = new codecMod.XsydFrameAssembler()
+  // Simulate 0x92 Hall stream interrupted after report #1 (missing reports #2 and #3)
+  assert.equal(assembler.push(hallReports[0]), null)
+  // Next arrives a single-report 0xA3 reply for opcode 0x23: must NOT be swallowed as report #2 of 0x92!
+  const recoveredA3 = assembler.push(a3Reply)
+  assert.ok(recoveredA3, '0xA3 reply must be decoded immediately instead of swallowed by stale 0x92 buffer')
+  assert.equal(recoveredA3.opcode, 0xa3)
+  assert.equal(recoveredA3.checksumValid, true)
+
+  // Simulate 0x92 Hall stream interrupted after report #1 and #2, followed by a fresh 0x92 header
+  assert.equal(assembler.push(hallReports[0]), null)
+  assert.equal(assembler.push(hallReports[1]), null)
+  assert.equal(assembler.push(hallReports[0]), null, 'Fresh 0x92 header resets stale partial buffer and becomes report #1')
+  assert.equal(assembler.push(hallReports[1]), null)
+  const recoveredHall = assembler.push(hallReports[2])
+  assert.ok(recoveredHall && recoveredHall.opcode === 0x92 && recoveredHall.checksumValid)
+})
+
+test('XsydDeviceManager recovers from transient 0x23 read timeout during firmware Flash sector erase (0xFF) and streams XSYD Hall at 200 Hz', async () => {
+  const xsydCodec = await bundle('src/protocol/xsyd/codec.ts')
+  const xsydFeatures = await bundle('src/protocol/xsyd/features.ts')
+  const hallStreamMod = await bundle('src/protocol/hero68/hallStream.ts')
+
+  const oldNav = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const listeners = new Set()
+  let field23Attempts = 0
+  const hallRequests = []
+  let wTravelUm = 2200
+
+  function makeReply(reqOpcode, payloadBytes) {
+    const f = xsydCodec.buildXsydFrame(reqOpcode | 0x80, payloadBytes)
+    f[3] = xsydCodec.xsydChecksum(f, 'in')
+    return f
+  }
+
+  const mockDevice = {
+    opened: true,
+    vendorId: 0x1c4f,
+    productId: 0xee88,
+    productName: 'WIN 68 HE MAX',
+    collections: [{ usagePage: 0xffa0, usage: 0x0001 }],
+    async open() {
+      this.opened = true
+    },
+    async close() {
+      this.opened = false
+    },
+    addEventListener(type, listener) {
+      if (type === 'inputreport') listeners.add(listener)
+    },
+    removeEventListener(type, listener) {
+      if (type === 'inputreport') listeners.delete(listener)
+    },
+    async sendReport(_reportId, data) {
+      const bytes = new Uint8Array(data)
+      const op = bytes[2]
+      const sub = bytes[4]
+      queueMicrotask(() => {
+        if (op === 0x00 && sub === 0x01) {
+          const r = makeReply(0x00, [0x00, 0x01, 0x09, 0x01, 0x00])
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x00 && sub === 0x25) {
+          const r = makeReply(0x00, [0x00, 0x25, 0x0a, 0x0a, 0x00, 0x48, 0x0d])
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x00 && sub === 0x26) {
+          const ascii = [...Buffer.from('WIN 68 HE MAX', 'ascii')]
+          const r = makeReply(0x00, [0x00, 0x26, ...ascii])
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x00 && sub === 0x70) {
+          const r = makeReply(0x00, [0x00, 0x70, bytes[5] === 0x04 ? 0x00 : bytes[5], 0xff])
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x23) {
+          field23Attempts += 1
+          if (field23Attempts === 1) {
+            // Simulate firmware dropping the first 0x23 packet during a Flash erase and emitting unsolicited 0xFF
+            const flashDone = xsydCodec.buildXsydFrame(0xff, [0x0a, 0xff, 0x8d, 0x5c])
+            flashDone[3] = xsydCodec.xsydChecksum(flashDone, 'in')
+            for (const l of listeners) l({ reportId: 0, data: new DataView(flashDone.buffer) })
+            return
+          }
+          const r = makeReply(0x23, bytes.slice(4, 4 + bytes[1]))
+          for (const l of listeners) l({ reportId: 0, data: new DataView(r.buffer) })
+        } else if (op === 0x12) {
+          hallRequests.push([bytes[4], bytes[5]])
+          if (bytes[4] === 0x03) {
+            const p = new Uint8Array(0x82)
+            p[0] = 0x00
+            p[1] = 0x03
+            p[128] = 0xff
+            p[129] = 0xff
+            const f = xsydCodec.buildXsydFrame(0x92, p)
+            f[3] = xsydCodec.xsydChecksum(f, 'in')
+            for (const chunk of xsydCodec.xsydReports(f)) {
+              for (const l of listeners) l({ reportId: 0, data: new DataView(chunk.buffer) })
+            }
+          } else if (bytes[4] === 0x02) {
+            const p = new Uint8Array(0x80)
+            p[0] = 0x00
+            p[1] = 0x02
+            if (bytes[5] === 0x01) {
+              // KeyW is matrix index 23 in Table 1
+              p[2 + 23 * 2] = wTravelUm & 0xff
+              p[2 + 23 * 2 + 1] = (wTravelUm >> 8) & 0xff
+            }
+            const f = xsydCodec.buildXsydFrame(0x92, p)
+            f[3] = xsydCodec.xsydChecksum(f, 'in')
+            for (const chunk of xsydCodec.xsydReports(f)) {
+              for (const l of listeners) l({ reportId: 0, data: new DataView(chunk.buffer) })
+            }
+          }
+        }
+      })
+    },
+  }
+
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { hid: { async getDevices() { return [mockDevice] } } },
+  })
+
+  const { xsydDeviceManager, hero68HallStream } = hallStreamMod
+  try {
+    await xsydDeviceManager.connect(false)
+    // 1. Verify 0x23 automatic retry recovers when attempt #1 times out during Flash flush
+    const fieldFrame = xsydFeatures.buildFieldReadFrame([
+      { pos: 0x1a, field: xsydFeatures.XsydFeatureField.Travel },
+    ])
+    const reply = await xsydDeviceManager.request(fieldFrame, 80)
+    assert.equal(reply.opcode, 0xa3)
+    assert.equal(field23Attempts, 2, '0x23 must automatically retry and succeed on attempt #2')
+
+    // 2. Verify 200 Hz XSYD Hall stream (single 0x12 0x03 seed + 1-round-trip 0x12 0x02 steady state)
+    hallRequests.length = 0
+    await hero68HallStream.start(['KeyW', 'KeyS'])
+    await new Promise(resolve => setTimeout(resolve, 95))
+    const snap = hero68HallStream.getSnapshot()
+    await hero68HallStream.stop()
+
+    const pressedPolls = hallRequests.filter(([sub]) => sub === 0x03).length
+    const travel1Polls = hallRequests.filter(([sub, tbl]) => sub === 0x02 && tbl === 0x01).length
+    const travel2Polls = hallRequests.filter(([sub, tbl]) => sub === 0x02 && tbl === 0x02).length
+    assert.equal(pressedPolls, 1, '0x12 subcmd 0x03 (pressed state) must be polled only once on initial seed')
+    assert.ok(
+      travel1Polls > travel2Polls * 2,
+      `Active Table 1 (KeyW depressed) must be prioritized 3:1 over idle Table 2 (got T1=${travel1Polls}, T2=${travel2Polls})`
+    )
+    assert.ok(
+      snap.telemetryHz !== null && snap.telemetryHz >= 150,
+      `Expected ~200 Hz XSYD Hall stream rate, got ${snap.telemetryHz} Hz`
+    )
+  } finally {
+    await hero68HallStream.stop().catch(() => {})
+    await xsydDeviceManager.disconnect()
+    if (oldNav) Object.defineProperty(globalThis, 'navigator', oldNav)
+    else delete globalThis.navigator
+  }
+})
+
+test('WIN 68 HE MAX DKS UI visual 7-node track (0x03, 0x1C, 0x60, 0xC0), keycap palette, and modifier action encoding match image_5b2687.jpg', async () => {
+  const { dksVisualTrackState, DKS_PALETTE_CATEGORIES } = advancedPageMod
+
+  // Row A (Hold 1: 0x03 -> nodes 0 & 1 lit, segment 0 lit)
+  const rowA = dksVisualTrackState([14, 0, 0, 0], true)
+  assert.equal(rowA.maskHex, '0x03')
+  assert.deepEqual(rowA.nodes, [true, true, false, false, false, false, false])
+  assert.deepEqual(rowA.segments, [true, false, false, false, false, false])
+
+  // Row B (Hold 2: 0x1C -> nodes 2 & 3 lit, segment 2 lit)
+  const rowB = dksVisualTrackState([0, 14, 0, 0], true)
+  assert.equal(rowB.maskHex, '0x1C')
+  assert.deepEqual(rowB.nodes, [false, false, true, true, false, false, false])
+  assert.deepEqual(rowB.segments, [false, false, true, false, false, false])
+
+  // Row C (Hold 3: 0x60 -> nodes 4 & 5 lit, segment 4 lit)
+  const rowC = dksVisualTrackState([0, 0, 14, 0], true)
+  assert.equal(rowC.maskHex, '0x60')
+  assert.deepEqual(rowC.nodes, [false, false, false, false, true, true, false])
+  assert.deepEqual(rowC.segments, [false, false, false, false, true, false])
+
+  // Row D (End: 0xC0 -> nodes 5 & 6 lit, segment 5 lit on WIN 68 HE MAX)
+  const rowD = dksVisualTrackState([0, 0, 0, 10], true)
+  assert.equal(rowD.maskHex, '0xC0')
+  assert.deepEqual(rowD.nodes, [false, false, false, false, false, true, true])
+  assert.deepEqual(rowD.segments, [false, false, false, false, false, true])
+
+  // Palette categories match official AULA tabs (LETTER, NUMBER KEY, SYMBOLIC KEY, BASIC KEY, FUNCTION KEY, KEYBOARD CONTROL)
+  assert.deepEqual(
+    DKS_PALETTE_CATEGORIES.map(c => c.label),
+    ['LETTER', 'NUMBER KEY', 'SYMBOLIC KEY', 'BASIC KEY', 'FUNCTION KEY', 'KEYBOARD CONTROL']
+  )
+
+  // Verify newAdvanced('DKS', ['KeyW'], 'win68HeMax') defaults to the 4-stage A/B/C/D stairstep pattern
+  const defaultWin68Dks = heroAdvanced.newAdvanced('DKS', ['KeyW'], 'win68HeMax')
+  assert.deepEqual(defaultWin68Dks.actions, [4, 5, 6, 7])
+  assert.deepEqual(defaultWin68Dks.thresholds, [1.4, 3.4, 3.4, 1.4])
+  assert.equal(
+    hex(xsydDevice.encodeXsydAdvancedBinding(defaultWin68Dks)).slice(0, 40),
+    '5c1026cc011a0400050006000700031c60c07805'
+  )
+
+  // Verify HERO68 32-bit modifier codes (e.g. L_Shift 0x00020000 in DKS Running preset) convert cleanly to 0xE1 on WIN 68 HE MAX
+  assert.equal(xsydDevice.toXsydActionByte(0x00020000), 0xe1)
+  assert.equal(xsydDevice.toXsydActionByte(0x00010000), 0xe0)
 })
