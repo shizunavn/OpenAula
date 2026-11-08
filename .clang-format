@@ -1,13 +1,57 @@
+---
+# OpenAula Native C++ clang-format configuration
+# Target: Windows MSVC (C++17) for service/native/
 BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++17
+
+# Indentation & Spacing
+UseTab: Never
 IndentWidth: 2
+TabWidth: 2
+ContinuationIndentWidth: 4
+AccessModifierOffset: -2
+NamespaceIndentation: None
+
+# Line length
 ColumnLimit: 100
-AllowShortStatementsOnASingleLine: Never
+
+# Braces & Line Breaks
+BreakBeforeBraces: Attach
+AlwaysBreakTemplateDeclarations: Yes
+
+# Single-line restrictions (Strict)
 AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: InlineOnly
 AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Inline
 AllowShortLoopsOnASingleLine: Never
+AllowShortStatementsOnASingleLine: Never
+
+# Pointer & Reference Alignment (Strict Left: Type* ptr, Type& ref)
+DerivePointerAlignment: false
 PointerAlignment: Left
-NamespaceIndentation: None
+ReferenceAlignment: Left
+
+# Alignment & Whitespace Discipline
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+AlignEscapedNewlines: Right
+AlignOperands: Align
+AlignTrailingComments: true
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyBlock: false
+SpacesInAngles: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Comments
+FixNamespaceComments: true
+
 # Windows SDK headers fail unless they are included in dependency order
 # (hidsdi.h before hidpi.h, mmdeviceapi.h before functiondiscoverykeys_devpkey.h).
 SortIncludes: Never
