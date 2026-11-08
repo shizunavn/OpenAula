@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "lint": "eslint .",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "build:landing": "node tools/build-landing.mjs",
     "package:landing": "node tools/build-landing.mjs --package",
     "check:landing": "node tools/check-landing.mjs",
@@ -44,6 +45,7 @@
     "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
+    "prettier": "^3.9.10",
     "rolldown": "1.2.9",
     "typescript": "7.0.2",
     "vite": "8.3.0"

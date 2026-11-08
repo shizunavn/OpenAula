@@ -1,0 +1,25 @@
+# Dependencies & build artifacts
+node_modules/
+dist/
+build/
+.refactor/
+.wrangler/
+
+# Documentation & reverse engineering PCAPs
+docs/
+*.pcapng
+*.bin
+
+# Tests (written in compact single-line style)
+tests/**
+**/*.test.*
+
+# C++ Native code (handled strictly by .clang-format)
+service/native/**
+
+# Package lock
+package-lock.json
+
+# Keyboard matrix layout files where whitespace aligns to physical keys
+src/keyboard/hero68Layout.ts
+src/keyboard/customRgbColors.ts
