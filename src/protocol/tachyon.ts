@@ -9,8 +9,7 @@ function directLighting() {
     let saved: unknown;
     try {
       saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-    } catch {
-} /* No saved lighting. */
+    } catch {} /* No saved lighting. */
     lighting = new TachyonLighting(validTachyonSnapshot(saved) ? saved : null, snapshot => {
       if (snapshot) {
         localStorage.setItem(storageKey, JSON.stringify(snapshot));

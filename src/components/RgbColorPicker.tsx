@@ -81,5 +81,16 @@ export default function RgbColorPicker({
       }
     };
   }, []);
-  return <input ref={input} type="color" aria-label={label} defaultValue={initialColor.current} disabled={disabled} onInput={event => stage(event.currentTarget.value)} onChange={event => stage(event.currentTarget.value)} onBlur={flush} />;
+  return (
+    <input
+      ref={input}
+      type="color"
+      aria-label={label}
+      defaultValue={initialColor.current}
+      disabled={disabled}
+      onInput={event => stage(event.currentTarget.value)}
+      onChange={event => stage(event.currentTarget.value)}
+      onBlur={flush}
+    />
+  );
 }

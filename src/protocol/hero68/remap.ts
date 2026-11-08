@@ -1,16 +1,28 @@
 import catalog from './remapCatalog.json';
 import { HERO68_KEY_IDS } from '../../keyboard/hero68Layout';
-import { allRegisteredKeyIds, getBoard, getBoards, isBoardModelId, type HeroDeviceModelId } from '../../keyboard/registry';
+import {
+  allRegisteredKeyIds,
+  getBoard,
+  getBoards,
+  isBoardModelId,
+  type HeroDeviceModelId
+} from '../../keyboard/registry';
 import { HERO84_EXTRA_FACTORY_KEYCODES } from '../../keyboard/registry/models/hero84.board';
 import { keyIdToPos, posToKeyId } from './keyPositions';
 import { decodeRemapRecords } from './codec';
-import { readRemap, selectProfile, writeRemap, readProfileName, writeProfileName } from './commands';
+import {
+  readRemap,
+  selectProfile,
+  writeRemap,
+  readProfileName,
+  writeProfileName
+} from './commands';
 import type { Hero68Requester } from './hero68Encoder';
 import type { ProfileSlot } from './types';
 export type RemapLayer = 0 | 1 | 2;
 export type RemapLayers = Record<RemapLayer, Record<string, number>>;
-export const REMAP_LAYERS = ([0, 1, 2] as const);
-export const REMAP_LAYER_NAMES = (['Main Layer', 'Fn Layer 1', 'Fn Layer 2'] as const);
+export const REMAP_LAYERS = [0, 1, 2] as const;
+export const REMAP_LAYER_NAMES = ['Main Layer', 'Fn Layer 1', 'Fn Layer 2'] as const;
 export { HERO84_EXTRA_FACTORY_KEYCODES };
 export type MacroRemapMode = 'circle' | 'button' | 'repeat';
 export type MacroRemapBinding = {
@@ -24,34 +36,42 @@ export const MACRO_REMAP_MODE_CODES: Record<MacroRemapMode, MacroRemapBinding['m
   button: 0x02,
   repeat: 0x04
 };
-const MACRO_REMAP_MODES_BY_CODE = new Map<number, MacroRemapMode>([[0x01, 'circle'], [0x02, 'button'], [0x04, 'repeat']]);
+const MACRO_REMAP_MODES_BY_CODE = new Map<number, MacroRemapMode>([
+  [0x01, 'circle'],
+  [0x02, 'button'],
+  [0x04, 'repeat']
+]);
 
 /** Official macro key action: 0x03 TT CC II (type, count, macro index). */
-export function encodeMacroRemap(macroIndex: number, mode: MacroRemapMode = 'circle', count = 1): number {
+export function encodeMacroRemap(
+  macroIndex: number,
+  mode: MacroRemapMode = 'circle',
+  count = 1
+): number {
   if (!Number.isInteger(macroIndex) || macroIndex < 0 || macroIndex > 0xff) {
     throw new Error('Macro index must be between 0 and 255.');
   }
   if (!Number.isInteger(count) || count < 1 || count > 0xff) {
     throw new Error('Macro count must be between 1 and 255.');
   }
-  return (0x03 << 24 | MACRO_REMAP_MODE_CODES[mode] << 16 | count << 8 | macroIndex) >>> 0;
+  return ((0x03 << 24) | (MACRO_REMAP_MODE_CODES[mode] << 16) | (count << 8) | macroIndex) >>> 0;
 }
 export function isMacroRemapValue(value: number | undefined): boolean {
-  return value !== undefined && Number.isInteger(value) && (value >>> 24 & 0xff) === 0x03;
+  return value !== undefined && Number.isInteger(value) && ((value >>> 24) & 0xff) === 0x03;
 }
 export function decodeMacroRemap(value: number | undefined): MacroRemapBinding | null {
   if (!isMacroRemapValue(value) || value === undefined) {
     return null;
   }
-  const modeCode = value >>> 16 & 0xff;
+  const modeCode = (value >>> 16) & 0xff;
   const mode = MACRO_REMAP_MODES_BY_CODE.get(modeCode);
-  if (!mode || modeCode !== 0x01 && modeCode !== 0x02 && modeCode !== 0x04) {
+  if (!mode || (modeCode !== 0x01 && modeCode !== 0x02 && modeCode !== 0x04)) {
     return null;
   }
   return {
     mode,
     modeCode,
-    count: value >>> 8 & 0xff,
+    count: (value >>> 8) & 0xff,
     macroIndex: value & 0xff
   };
 }
@@ -76,17 +96,19 @@ export const REMAP_CATEGORIES = catalog.categories.map(category => ({
   }))
 }));
 const labels = new Map<number, string>([
-  ...REMAP_CATEGORIES.flatMap(category => category.actions.map(action => ([action.value, action.label] as const))),
-  [0xe0, "L Ctrl"],
-  [0xe1, "L Shift"],
-  [0xe2, "L Alt"],
-  [0xe3, "L WIN"],
-  [0xe4, "R Ctrl"],
-  [0xe5, "R Shift"],
-  [0xe6, "R Alt"],
-  [0xe7, "R WIN"],
-  [0xf001, "Fn"],
-  [0x01, "Fn"],
+  ...REMAP_CATEGORIES.flatMap(category =>
+    category.actions.map(action => [action.value, action.label] as const)
+  ),
+  [0xe0, 'L Ctrl'],
+  [0xe1, 'L Shift'],
+  [0xe2, 'L Alt'],
+  [0xe3, 'L WIN'],
+  [0xe4, 'R Ctrl'],
+  [0xe5, 'R Shift'],
+  [0xe6, 'R Alt'],
+  [0xe7, 'R WIN'],
+  [0xf001, 'Fn'],
+  [0x01, 'Fn']
 ]);
 export function remapLabel(value: number | undefined): string {
   if (value === undefined) {
@@ -94,7 +116,12 @@ export function remapLabel(value: number | undefined): string {
   }
   return labels.get(value) ?? `0x${value.toString(16).padStart(8, '0').toUpperCase()}`;
 }
-export function remapDisplayLabel(layer: RemapLayer, keyId: string, value: number | undefined, model?: HeroDeviceModelId): string {
+export function remapDisplayLabel(
+  layer: RemapLayer,
+  keyId: string,
+  value: number | undefined,
+  model?: HeroDeviceModelId
+): string {
   if (value === undefined) {
     return 'Unknown';
   }
@@ -117,17 +144,17 @@ export function remapDisplayLabel(layer: RemapLayer, keyId: string, value: numbe
 }
 const COMPACT_REMAP_LABELS: Record<string, string> = {
   'my computer': 'My PC',
-  'browser': 'Web',
-  'favorite': 'Fav',
-  'calculator': 'Calc',
-  'email': 'Mail',
+  browser: 'Web',
+  favorite: 'Fav',
+  calculator: 'Calc',
+  email: 'Mail',
   'previous song': 'Prev',
   'next song': 'Next',
   'play pause': 'Play/Pause',
-  'pause': 'Pause',
+  pause: 'Pause',
   'volume up': 'Vol +',
   'volume down': 'Vol −',
-  'mute': 'Mute',
+  mute: 'Mute',
   'system multimedia': 'Media',
   'screen bright up': 'Bright +',
   'screen bright down': 'Bright −',
@@ -138,8 +165,8 @@ const COMPACT_REMAP_LABELS: Record<string, string> = {
   'left button': 'Mouse 1',
   'right button': 'Mouse 2',
   'mid button': 'Mouse 3',
-  'forward': 'Mouse Fwd',
-  'back': 'Mouse Back',
+  forward: 'Mouse Fwd',
+  back: 'Mouse Back',
   'dpi plus': 'DPI +',
   'dpi sub': 'DPI −',
   'dpi switch': 'DPI',
@@ -169,7 +196,11 @@ function compactRemapLabel(label: string): string {
   }
   return label;
 }
-export function remapPreviewPresentation(layer: RemapLayer, keyId: string, value: number | undefined): RemapPreviewPresentation {
+export function remapPreviewPresentation(
+  layer: RemapLayer,
+  keyId: string,
+  value: number | undefined
+): RemapPreviewPresentation {
   const macroBinding = decodeMacroRemap(value);
   if (macroBinding) {
     const fullLabel = `Macro #${macroBinding.macroIndex}`;
@@ -183,7 +214,10 @@ export function remapPreviewPresentation(layer: RemapLayer, keyId: string, value
   }
   const fullLabel = remapDisplayLabel(layer, keyId, value);
   const label = compactRemapLabel(fullLabel);
-  const category = value === undefined ? undefined : REMAP_CATEGORIES.find(item => item.actions.some(action => action.value === value))?.label;
+  const category =
+    value === undefined
+      ? undefined
+      : REMAP_CATEGORIES.find(item => item.actions.some(action => action.value === value))?.label;
   const rawUnknown = value !== undefined && !labels.has(value);
   const raw = rawUnknown ? `0x${value.toString(16).padStart(8, '0').toUpperCase()}` : undefined;
   return {
@@ -194,7 +228,9 @@ export function remapPreviewPresentation(layer: RemapLayer, keyId: string, value
     needsTooltip: rawUnknown || label !== fullLabel || fullLabel.length > 9
   };
 }
-export function defaultRemapLayers(modelOrKeyIds?: HeroDeviceModelId | readonly string[]): RemapLayers {
+export function defaultRemapLayers(
+  modelOrKeyIds?: HeroDeviceModelId | readonly string[]
+): RemapLayers {
   if (typeof modelOrKeyIds === 'string') {
     if (isBoardModelId(modelOrKeyIds)) {
       const board = getBoard(modelOrKeyIds);
@@ -245,7 +281,11 @@ export function defaultRemapLayers(modelOrKeyIds?: HeroDeviceModelId | readonly 
 }
 
 /** Read every mapping; a partial reply never becomes a writable profile. */
-export async function readRemapLayers(requester: Hero68Requester, keyIds: readonly string[] = HERO68_KEY_IDS, model?: HeroDeviceModelId): Promise<RemapLayers> {
+export async function readRemapLayers(
+  requester: Hero68Requester,
+  keyIds: readonly string[] = HERO68_KEY_IDS,
+  model?: HeroDeviceModelId
+): Promise<RemapLayers> {
   const result: RemapLayers = {
     0: {},
     1: {},
@@ -256,7 +296,7 @@ export async function readRemapLayers(requester: Hero68Requester, keyIds: readon
     for (const packet of readRemap(layer, positions)) {
       const expectedPositions = new Set<number>();
       for (let i = 7; i < 7 + packet[6]; i += 2) {
-        expectedPositions.add(packet[i] << 8 | packet[i + 1]);
+        expectedPositions.add((packet[i] << 8) | packet[i + 1]);
       }
       const reply = await requester.request(packet, 0x83, layer);
       for (const record of decodeRemapRecords(reply.data)) {
@@ -277,7 +317,14 @@ export async function readRemapLayers(requester: Hero68Requester, keyIds: readon
 }
 
 /** Writes only edited keys, using official independent nine-record requests. */
-export async function saveRemapChanges(requester: Hero68Requester, slot: ProfileSlot, layers: RemapLayers, dirty: ReadonlySet<string>, keyIds?: readonly string[], model?: HeroDeviceModelId) {
+export async function saveRemapChanges(
+  requester: Hero68Requester,
+  slot: ProfileSlot,
+  layers: RemapLayers,
+  dirty: ReadonlySet<string>,
+  keyIds?: readonly string[],
+  model?: HeroDeviceModelId
+) {
   if (!dirty.size) {
     return;
   }
@@ -288,15 +335,26 @@ export async function saveRemapChanges(requester: Hero68Requester, slot: Profile
     if (!keys.length) {
       continue;
     }
-    for (const packet of writeRemap(layer, keys.map(keyId => ([keyIdToPos(keyId, model), layers[layer][keyId]] as const)))) {
+    for (const packet of writeRemap(
+      layer,
+      keys.map(keyId => [keyIdToPos(keyId, model), layers[layer][keyId]] as const)
+    )) {
       await requester.request(packet, 0x03, layer, 1000);
     }
     const verified = new Set<string>();
-    for (const packet of readRemap(layer, keys.map(keyId => keyIdToPos(keyId, model)))) {
+    for (const packet of readRemap(
+      layer,
+      keys.map(keyId => keyIdToPos(keyId, model))
+    )) {
       const reply = await requester.request(packet, 0x83, layer);
       for (const record of decodeRemapRecords(reply.data)) {
         const keyId = posToKeyId(record.keyId, model);
-        if (!keyId || !keys.includes(keyId) || verified.has(keyId) || record.keycode !== layers[layer][keyId]) {
+        if (
+          !keyId ||
+          !keys.includes(keyId) ||
+          verified.has(keyId) ||
+          record.keycode !== layers[layer][keyId]
+        ) {
           throw new Error(`Remap readback did not match ${REMAP_LAYER_NAMES[layer]}`);
         }
         verified.add(keyId);
@@ -323,7 +381,11 @@ export async function readOnboardProfileName(requester: Hero68Requester, slot: P
   const reply = await requester.request(readProfileName(slot), 0x9a, slot);
   return decodeProfileName(reply.data);
 }
-export async function saveOnboardProfileName(requester: Hero68Requester, slot: ProfileSlot, name: string) {
+export async function saveOnboardProfileName(
+  requester: Hero68Requester,
+  slot: ProfileSlot,
+  name: string
+) {
   if (!name.trim()) {
     throw new Error('Enter a profile name.');
   }

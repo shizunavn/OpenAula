@@ -12,14 +12,26 @@ import {
   type CustomRgbDirection,
   type CustomRgbLayer
 } from './customRgbModel';
-import { pickCustomRgbColor, blendCustomRgbColor, sampleCustomRgbSpectrum, customRgbContrastPalette } from './customRgbColors';
+import {
+  pickCustomRgbColor,
+  blendCustomRgbColor,
+  sampleCustomRgbSpectrum,
+  customRgbContrastPalette
+} from './customRgbColors';
 export * from './customRgbModel';
 const clamp = (v: number, low: number, high: number) => Math.max(low, Math.min(high, v));
 
 // Physical key centers for host FX on the baseline 68-key board; board-specific
 // coordinates can be retrieved via customRgbCoordinatesForModel(model).
-export const CUSTOM_RGB_COORDINATES: Record<string, [number, number]> = Object.fromEntries(Object.entries(getBoard('hero68').keyCoordinates).map(([id, [x, y]]) => [id, ([x, y] as [number, number])]));
-export function customRgbCoordinatesForModel(model: HeroDeviceModelId = 'hero68'): Readonly<Record<string, readonly [number, number]>> {
+export const CUSTOM_RGB_COORDINATES: Record<string, [number, number]> = Object.fromEntries(
+  Object.entries(getBoard('hero68').keyCoordinates).map(([id, [x, y]]) => [
+    id,
+    [x, y] as [number, number]
+  ])
+);
+export function customRgbCoordinatesForModel(
+  model: HeroDeviceModelId = 'hero68'
+): Readonly<Record<string, readonly [number, number]>> {
   return getBoard(model).keyCoordinates;
 }
 export function directionVector(direction?: CustomRgbDirection): { dx: number; dy: number } {
@@ -72,32 +84,40 @@ function computeBounds(coords: Readonly<Record<string, readonly [number, number]
   });
 }
 const defaultBounds = computeBounds(CUSTOM_RGB_COORDINATES);
-const gradientStops = Object.fromEntries(Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => [id, palette.colors.map(hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)))]));
+const gradientStops = Object.fromEntries(
+  Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => [
+    id,
+    palette.colors.map(hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)))
+  ])
+);
 function gradient(layer: CustomRgbLayer, phase: number): RgbColor {
   if (!layer.multicolor) {
     return layer.color;
   }
-  const stops = gradientStops[layer.palette ?? RGB_EFFECT_METADATA[layer.effect].defaults?.palette ?? 'aurora'];
+  const stops =
+    gradientStops[layer.palette ?? RGB_EFFECT_METADATA[layer.effect].defaults?.palette ?? 'aurora'];
   const position = clamp(phase, 0, 1) * (stops.length - 1);
   const index = Math.min(stops.length - 2, Math.floor(position));
   const mix = position - index;
-  return (stops[index].map((v, i) => v + (stops[index + 1][i] - v) * mix) as RgbColor);
+  return stops[index].map((v, i) => v + (stops[index + 1][i] - v) * mix) as RgbColor;
 }
 const fract = (v: number) => v - Math.floor(v);
 function sampleCircularPalette(layer: CustomRgbLayer, pos01: number): RgbColor {
   if (!layer.multicolor) {
     return layer.color;
   }
-  const stops = gradientStops[layer.palette ?? RGB_EFFECT_METADATA[layer.effect].defaults?.palette ?? 'wave'];
+  const stops =
+    gradientStops[layer.palette ?? RGB_EFFECT_METADATA[layer.effect].defaults?.palette ?? 'wave'];
   const n = stops.length;
   const wrapped = fract(pos01);
   const scaled = wrapped * n;
   const i0 = Math.floor(scaled) % n;
   const i1 = (i0 + 1) % n;
   const a = scaled - Math.floor(scaled);
-  return (stops[i0].map((v, k) => v * (1 - a) + stops[i1][k] * a) as RgbColor);
+  return stops[i0].map((v, k) => v * (1 - a) + stops[i1][k] * a) as RgbColor;
 }
-const hash = (a: number, b = 0, c = 0) => fract(Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453);
+const hash = (a: number, b = 0, c = 0) =>
+  fract(Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453);
 const mixNumber = (a: number, b: number, t: number) => a + (b - a) * t;
 const ease = (v: number) => {
   const t = clamp(v, 0, 1);
@@ -108,10 +128,15 @@ function valueNoise(x: number, y: number) {
   const yi = Math.floor(y);
   const u = ease(x - xi);
   const v = ease(y - yi);
-  return mixNumber(mixNumber(hash(xi, yi), hash(xi + 1, yi), u), mixNumber(hash(xi, yi + 1), hash(xi + 1, yi + 1), u), v);
+  return mixNumber(
+    mixNumber(hash(xi, yi), hash(xi + 1, yi), u),
+    mixNumber(hash(xi, yi + 1), hash(xi + 1, yi + 1), u),
+    v
+  );
 }
 const WHITE: RgbColor = [255, 244, 224];
-const lighten = (color: RgbColor, amount: number) => (color.map((c, i) => mixNumber(c, WHITE[i], clamp(amount, 0, 1))) as RgbColor);
+const lighten = (color: RgbColor, amount: number) =>
+  color.map((c, i) => mixNumber(c, WHITE[i], clamp(amount, 0, 1))) as RgbColor;
 const KEY_INDEX = Object.fromEntries(HERO68_KEY_IDS.map((id, i) => [id, i]));
 const FLAME_SPARKS = 7;
 type Spark = {
@@ -130,42 +155,55 @@ type GlowTransition = {
   heat: number;
 };
 function glowHeat(change: GlowTransition, time: number, duration: number) {
-  return change.pressed ? change.heat + (1 - change.heat) * ease((time - change.at) / 70) : change.heat * Math.pow(1 - clamp((time - change.at) / duration, 0, 1), 1.5);
+  return change.pressed
+    ? change.heat + (1 - change.heat) * ease((time - change.at) / 70)
+    : change.heat * Math.pow(1 - clamp((time - change.at) / duration, 0, 1), 1.5);
 }
 const PULSE_TAIL_SECONDS = Math.log(1024) / 1.7;
 function flameHeat(x: number, y: number, seconds: number, height: number) {
   const reach = clamp(1 - (4.5 - y) / height, 0, 1);
-  const base = reach * .72;
-  const tongues = valueNoise(x * .55 + 1.3, y * .7 + seconds * 1.15) * .65 + valueNoise(x * 1.3 + 7.1, y * 1.6 + seconds * 2.1) * .35;
-  return clamp(base + (tongues - .5) * .95 * ease(reach), 0, 1);
+  const base = reach * 0.72;
+  const tongues =
+    valueNoise(x * 0.55 + 1.3, y * 0.7 + seconds * 1.15) * 0.65 +
+    valueNoise(x * 1.3 + 7.1, y * 1.6 + seconds * 2.1) * 0.35;
+  return clamp(base + (tongues - 0.5) * 0.95 * ease(reach), 0, 1);
 }
 function flameSparks(seconds: number, speed: number): Spark[] {
   const sparks: Spark[] = [];
   for (let i = 0; i < FLAME_SPARKS; i++) {
-    const phase = seconds * speed / (2.2 + hash(i, 1) * 2) + hash(i, 2) * 8;
+    const phase = (seconds * speed) / (2.2 + hash(i, 1) * 2) + hash(i, 2) * 8;
     const cycle = Math.floor(phase);
-    const life = fract(phase) / .62;
+    const life = fract(phase) / 0.62;
     if (life >= 1) {
       continue;
     }
     const rise = 2.4 + hash(i, cycle, 4) * 1.8;
     sparks.push({
-      x: .8 + hash(i, cycle, 3) * 13.4 + Math.sin(life * 6 + hash(i, cycle, 5) * 6) * .5,
+      x: 0.8 + hash(i, cycle, 3) * 13.4 + Math.sin(life * 6 + hash(i, cycle, 5) * 6) * 0.5,
       y: 4.5 - life * rise,
-      power: Math.pow(1 - life, 1.2) * ease(life / .08)
+      power: Math.pow(1 - life, 1.2) * ease(life / 0.08)
     });
   }
   return sparks;
 }
-function aurora(layer: CustomRgbLayer, x: number, y: number, seconds: number, bounds = defaultBounds) {
+function aurora(
+  layer: CustomRgbLayer,
+  x: number,
+  y: number,
+  seconds: number,
+  bounds = defaultBounds
+) {
   const t = seconds * layer.speed;
   const span = bounds[0].max - bounds[0].min + 1;
-  const bend = Math.sin(y * .85 + t * .55) * .7 + y * .38;
-  const phase = (x - bounds[0].min + bend - t * 1.8) / span * 3;
-  const palettePosition = (1 - Math.cos(phase * Math.PI * 2 / 3)) / 2;
-  const curtain = Math.pow(.5 + .5 * Math.cos(phase * Math.PI * 2), Math.max(.35, 1.4 / layer.width));
+  const bend = Math.sin(y * 0.85 + t * 0.55) * 0.7 + y * 0.38;
+  const phase = ((x - bounds[0].min + bend - t * 1.8) / span) * 3;
+  const palettePosition = (1 - Math.cos((phase * Math.PI * 2) / 3)) / 2;
+  const curtain = Math.pow(
+    0.5 + 0.5 * Math.cos(phase * Math.PI * 2),
+    Math.max(0.35, 1.4 / layer.width)
+  );
   return {
-    strength: .35 + .65 * curtain,
+    strength: 0.35 + 0.65 * curtain,
     tint: gradient(layer, palettePosition)
   };
 }
@@ -175,13 +213,18 @@ function aurora(layer: CustomRgbLayer, x: number, y: number, seconds: number, bo
  * `bottom-left`, `bottom`, `bottom-right`) + legacy `horizontal`/`vertical`, with
  * seamless circular linear interpolation across the palette stops.
  */
-function dynamicWave(layer: CustomRgbLayer, x: number, y: number, seconds: number, bounds = defaultBounds) {
+function dynamicWave(
+  layer: CustomRgbLayer,
+  x: number,
+  y: number,
+  seconds: number,
+  bounds = defaultBounds
+) {
   const { dx, dy } = directionVector(layer.direction);
   const centerX = (bounds[0].min + bounds[0].max) / 2;
   const centerY = (bounds[1].min + bounds[1].max) / 2;
-  const spatialPhase = dx === 0 && dy === 0
-    ? Math.hypot(x - centerX, y - centerY)
-    : x * dx + y * dy;
+  const spatialPhase =
+    dx === 0 && dy === 0 ? Math.hypot(x - centerX, y - centerY) : x * dx + y * dy;
   const scale = 0.08 * (2.5 / Math.max(0.25, layer.width));
   const pos = fract(spatialPhase * scale - seconds * layer.speed * 0.5);
   if (!layer.multicolor) {
@@ -203,22 +246,31 @@ export class CustomRgbEngine {
   private pressCounter = 0;
   private held = new Set<string>();
   private releases = new Map<string, number>();
-  private transitions = new Map<string, {
-    at: number;
-    pressed: boolean;
-  }>();
+  private transitions = new Map<
+    string,
+    {
+      at: number;
+      pressed: boolean;
+    }
+  >();
   private glows = new Map<string, Map<string, GlowTransition>>();
   private travel: Record<string, number> = {};
-  private hallVersions = new Map<string, {
-    sequence: number;
-    timestampMs: number;
-  }>();
+  private hallVersions = new Map<
+    string,
+    {
+      sequence: number;
+      timestampMs: number;
+    }
+  >();
   private keyColors = new Map<string, Colors>();
   private analogColors = new Map<string, Colors>();
-  private cycleColors = new Map<string, {
-    cycle: number;
-    colors: Colors;
-  }>();
+  private cycleColors = new Map<
+    string,
+    {
+      cycle: number;
+      colors: Colors;
+    }
+  >();
   private previousColors = new Map<string, RgbColor>();
   private colorPalettes = new Map<string, readonly RgbColor[]>();
   private touchColors: Colors = {};
@@ -227,12 +279,15 @@ export class CustomRgbEngine {
   private pressureWaves: PressureWave[] = [];
   private emissions = new Map<string, number>();
   private analogInput = false;
-  private strikes = new Map<string, {
-    mm: number;
-    at: number;
-    peak: number;
-    hitAt: number;
-  }>();
+  private strikes = new Map<
+    string,
+    {
+      mm: number;
+      at: number;
+      peak: number;
+      hitAt: number;
+    }
+  >();
   private coordinates: Readonly<Record<string, readonly [number, number]>>;
   private keyIds: readonly string[];
   private keyIndex: Record<string, number>;
@@ -240,17 +295,24 @@ export class CustomRgbEngine {
     min: number;
     max: number;
   }[];
-  constructor(private profile: RgbProfile, private model?: HeroDeviceModelId) {
-    const inferredWin68 = !model && Boolean(
-      profile.keys?.colorIndex !== undefined ||
-      profile.keys?.reverse !== undefined ||
-      Array.isArray(profile.keys?.palette) ||
-      (profile.keys?.mode !== undefined && profile.keys.mode > 19 && profile.keys.mode < 100) ||
-      profile.custom?.base?.colorIndex !== undefined ||
-      profile.custom?.base?.reverse !== undefined ||
-      Array.isArray(profile.custom?.base?.palette) ||
-      (profile.custom?.base?.mode !== undefined && profile.custom.base.mode > 19 && profile.custom.base.mode < 100)
-    );
+  constructor(
+    private profile: RgbProfile,
+    private model?: HeroDeviceModelId
+  ) {
+    const inferredWin68 =
+      !model &&
+      Boolean(
+        profile.keys?.colorIndex !== undefined ||
+        profile.keys?.reverse !== undefined ||
+        Array.isArray(profile.keys?.palette) ||
+        (profile.keys?.mode !== undefined && profile.keys.mode > 19 && profile.keys.mode < 100) ||
+        profile.custom?.base?.colorIndex !== undefined ||
+        profile.custom?.base?.reverse !== undefined ||
+        Array.isArray(profile.custom?.base?.palette) ||
+        (profile.custom?.base?.mode !== undefined &&
+          profile.custom.base.mode > 19 &&
+          profile.custom.base.mode < 100)
+      );
     if (inferredWin68) {
       this.model = 'win68HeMax';
     }
@@ -258,7 +320,9 @@ export class CustomRgbEngine {
     const board = resolvedModel ? getBoard(resolvedModel) : getBoard('hero68');
     this.coordinates = resolvedModel ? board.keyCoordinates : CUSTOM_RGB_COORDINATES;
     this.keyIds = resolvedModel ? board.keyIds : HERO68_KEY_IDS;
-    this.keyIndex = resolvedModel ? Object.fromEntries(board.keyIds.map((id, i) => [id, i])) : KEY_INDEX;
+    this.keyIndex = resolvedModel
+      ? Object.fromEntries(board.keyIds.map((id, i) => [id, i]))
+      : KEY_INDEX;
     this.bounds = resolvedModel ? computeBounds(this.coordinates) : defaultBounds;
     this.config = restoreCustomRgb(profile.custom, profile);
     this.base = isWin68HeMaxModel(resolvedModel)
@@ -272,7 +336,9 @@ export class CustomRgbEngine {
       const stops = gradientStops[palette];
       for (let i = 0; i < stops.length - 1; i++) {
         for (let step = 0; step <= 8; step++) {
-          backgrounds.push((stops[i].map((v, c) => v + (stops[i + 1][c] - v) * step / 8) as RgbColor));
+          backgrounds.push(
+            stops[i].map((v, c) => v + ((stops[i + 1][c] - v) * step) / 8) as RgbColor
+          );
         }
       }
     };
@@ -286,9 +352,16 @@ export class CustomRgbEngine {
     this.colorPalettes.clear();
     for (const layer of this.config.layers) {
       this.colorPalettes.set(layer.id, customRgbContrastPalette(backgrounds));
-      if (layer.enabled && layer.opacity > 0 && layer.keys.length && RGB_EFFECT_METADATA[layer.effect].gradient) {
+      if (
+        layer.enabled &&
+        layer.opacity > 0 &&
+        layer.keys.length &&
+        RGB_EFFECT_METADATA[layer.effect].gradient
+      ) {
         if (layer.multicolor) {
-          addGradient(layer.palette ?? RGB_EFFECT_METADATA[layer.effect].defaults?.palette ?? 'aurora');
+          addGradient(
+            layer.palette ?? RGB_EFFECT_METADATA[layer.effect].defaults?.palette ?? 'aurora'
+          );
         } else {
           backgrounds.push(layer.color);
         }
@@ -299,19 +372,23 @@ export class CustomRgbEngine {
     if (isWin68HeMaxModel(this.model)) {
       return {
         ...this.profile,
-        keys: this.config.baseEffect ? {
-          ...this.config.base,
-          mode: 0,
-          brightness: 0
-        } : this.config.base
+        keys: this.config.baseEffect
+          ? {
+              ...this.config.base,
+              mode: 0,
+              brightness: 0
+            }
+          : this.config.base
       };
     }
     return {
       ...this.profile,
-      keys: this.config.baseEffect ? {
-        ...this.config.base,
-        mode: 20
-      } : this.config.base
+      keys: this.config.baseEffect
+        ? {
+            ...this.config.base,
+            mode: 20
+          }
+        : this.config.base
     };
   }
   configure(profile: RgbProfile) {
@@ -319,7 +396,9 @@ export class CustomRgbEngine {
     this.config = restoreCustomRgb(profile.custom, profile);
     this.base.configure(this.baseProfile());
     this.configureColorPalettes();
-    const pressureIds = new Set(this.config.layers.filter(l => l.enabled && l.effect === 'pressure-wave').map(l => l.id));
+    const pressureIds = new Set(
+      this.config.layers.filter(l => l.enabled && l.effect === 'pressure-wave').map(l => l.id)
+    );
     this.pressureWaves = this.pressureWaves.filter(w => pressureIds.has(w.layerId));
     for (const key of this.emissions.keys()) {
       if (!pressureIds.has(key.slice(0, key.lastIndexOf(':')))) {
@@ -337,7 +416,9 @@ export class CustomRgbEngine {
         this.previousColors.delete(key);
       }
     }
-    const glowIds = new Set(this.config.layers.filter(l => l.enabled && l.effect === 'afterglow').map(l => l.id));
+    const glowIds = new Set(
+      this.config.layers.filter(l => l.enabled && l.effect === 'afterglow').map(l => l.id)
+    );
     for (const id of this.glows.keys()) {
       if (!glowIds.has(id)) {
         this.glows.delete(id);
@@ -345,11 +426,19 @@ export class CustomRgbEngine {
     }
     for (const id of glowIds) {
       if (!this.glows.has(id)) {
-        this.glows.set(id, new Map([...this.held].map(key => [key, {
-          at: this.time,
-          pressed: true,
-          heat: 0
-        }])));
+        this.glows.set(
+          id,
+          new Map(
+            [...this.held].map(key => [
+              key,
+              {
+                at: this.time,
+                pressed: true,
+                heat: 0
+              }
+            ])
+          )
+        );
       }
     }
   }
@@ -438,10 +527,16 @@ export class CustomRgbEngine {
       });
     }
   }
-  setTravel(values: Record<string, number>, samples?: Record<string, {
-    sequence: number;
-    timestampMs: number;
-  }>) {
+  setTravel(
+    values: Record<string, number>,
+    samples?: Record<
+      string,
+      {
+        sequence: number;
+        timestampMs: number;
+      }
+    >
+  ) {
     if (!this.analogInput) {
       this.analogInput = true;
       this.strikes.clear();
@@ -460,7 +555,7 @@ export class CustomRgbEngine {
         this.hallVersions.set(id, sample);
       }
       const mm = clamp(value, 0, 3.4);
-      if (mm <= .08) {
+      if (mm <= 0.08) {
         this.strikes.set(id, {
           mm: 0,
           at: this.time,
@@ -476,12 +571,15 @@ export class CustomRgbEngine {
         hitAt: this.time
       };
       const delta = mm - previous.mm;
-      const dt = sample && previousSample ? clamp(sample.timestampMs - previousSample.timestampMs, 1, 80) : clamp(this.time - previous.at, 8, 80);
+      const dt =
+        sample && previousSample
+          ? clamp(sample.timestampMs - previousSample.timestampMs, 1, 80)
+          : clamp(this.time - previous.at, 8, 80);
       let peak = previous.peak;
       let hitAt = previous.hitAt;
-      if (delta > .04) {
-        const velocity = delta / dt * 1000;
-        const strength = .12 + .88 * clamp((velocity - 3) / 117, 0, 1);
+      if (delta > 0.04) {
+        const velocity = (delta / dt) * 1000;
+        const strength = 0.12 + 0.88 * clamp((velocity - 3) / 117, 0, 1);
         if (strength > peak) {
           peak = strength;
           hitAt = this.time;
@@ -507,7 +605,9 @@ export class CustomRgbEngine {
   }
   private strikeBrightness(id: string) {
     const strike = this.strikes.get(id);
-    return strike ? strike.peak * (.25 + .75 * Math.exp(-Math.max(0, this.time - strike.hitAt) / 600)) : 0;
+    return strike
+      ? strike.peak * (0.25 + 0.75 * Math.exp(-Math.max(0, this.time - strike.hitAt) / 600))
+      : 0;
   }
   releaseAll() {
     for (const id of [...this.held]) {
@@ -519,7 +619,12 @@ export class CustomRgbEngine {
   }
   private randomColor(colors: Colors, layerId: string, background: RgbColor): RgbColor {
     if (!colors[layerId]) {
-      colors[layerId] = pickCustomRgbColor(background, Math.random(), this.previousColors.get(layerId), this.colorPalettes.get(layerId));
+      colors[layerId] = pickCustomRgbColor(
+        background,
+        Math.random(),
+        this.previousColors.get(layerId),
+        this.colorPalettes.get(layerId)
+      );
       this.previousColors.set(layerId, colors[layerId]);
     }
     return colors[layerId];
@@ -531,47 +636,68 @@ export class CustomRgbEngine {
       for (const id of this.keyIds) {
         if (!frame.keys[id]) {
           const fallback = board.fallbackColorSources?.[id];
-          frame.keys[id] = fallback && frame.keys[fallback] || '#000000';
+          frame.keys[id] = (fallback && frame.keys[fallback]) || '#000000';
         }
       }
     }
     if (this.config.baseEffect?.effect === 'aurora' || this.config.baseEffect?.effect === 'wave') {
       const settings = this.config.baseEffect;
-      const layer = ({
+      const layer = {
         ...settings,
         effect: settings.effect,
         direction: settings.direction ?? 'left',
         multicolor: this.config.base.mix,
         color: this.config.base.rgb
-      } as CustomRgbLayer);
+      } as CustomRgbLayer;
       const brightnessScale = isWin68HeMaxModel(this.model)
-        ? Math.min(4, Math.max(0, this.config.base.brightness > 4 ? Math.round(this.config.base.brightness / 5) : this.config.base.brightness)) / 4
+        ? Math.min(
+            4,
+            Math.max(
+              0,
+              this.config.base.brightness > 4
+                ? Math.round(this.config.base.brightness / 5)
+                : this.config.base.brightness
+            )
+          ) / 4
         : this.config.base.brightness / 20;
       for (const id of this.keyIds) {
         const [x, y] = this.coordinates[id];
-        const {
-          strength,
+        const { strength, tint } =
+          settings.effect === 'wave'
+            ? dynamicWave(layer, x, y, this.time / 1000, this.bounds)
+            : aurora(layer, x, y, this.time / 1000, this.bounds);
+        frame.keys[id] =
+          '#' +
           tint
-        } = settings.effect === 'wave'
-          ? dynamicWave(layer, x, y, this.time / 1000, this.bounds)
-          : aurora(layer, x, y, this.time / 1000, this.bounds);
-        frame.keys[id] = '#' + tint.map(c => Math.round(c * strength * brightnessScale).toString(16).padStart(2, '0')).join('');
+            .map(c =>
+              Math.round(c * strength * brightnessScale)
+                .toString(16)
+                .padStart(2, '0')
+            )
+            .join('');
       }
     }
-    const baseColors = Object.fromEntries(Object.entries(frame.keys).map(([id, hex]) => [id, ([1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as RgbColor)]));
+    const baseColors = Object.fromEntries(
+      Object.entries(frame.keys).map(([id, hex]) => [
+        id,
+        [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as RgbColor
+      ])
+    );
     const smooth = (v: number) => {
       const t = clamp(v, 0, 1);
       return t * t * (3 - 2 * t);
     };
     const depth = (id: string) => {
       const mm = this.travel[id] ?? (this.held.has(id) ? 3.4 : 0);
-      return clamp(mm / 3.4, 0, 1) * smooth((mm - .08) / .08);
+      return clamp(mm / 3.4, 0, 1) * smooth((mm - 0.08) / 0.08);
     };
-    const analog = this.keyIds.map(id => ({
-      id,
-      p: depth(id),
-      point: this.coordinates[id]
-    })).filter(k => k.p > .025);
+    const analog = this.keyIds
+      .map(id => ({
+        id,
+        p: depth(id),
+        point: this.coordinates[id]
+      }))
+      .filter(k => k.p > 0.025);
     const activeAnalog = new Set(analog.map(k => k.id));
     for (const id of this.analogColors.keys()) {
       if (!activeAnalog.has(id)) {
@@ -626,10 +752,28 @@ export class CustomRgbEngine {
         this.emissions.delete(token);
       }
     }
-    this.pressureWaves = this.pressureWaves.filter(w => this.time - w.at < (this.config.layers.find(l => l.id === w.layerId)?.duration ?? 0)).slice(-64);
-    const bar = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0'];
+    this.pressureWaves = this.pressureWaves
+      .filter(
+        w => this.time - w.at < (this.config.layers.find(l => l.id === w.layerId)?.duration ?? 0)
+      )
+      .slice(-64);
+    const bar = [
+      'Digit1',
+      'Digit2',
+      'Digit3',
+      'Digit4',
+      'Digit5',
+      'Digit6',
+      'Digit7',
+      'Digit8',
+      'Digit9',
+      'Digit0'
+    ];
     const deepest = Math.max(0, ...analog.map(k => k.p));
-    const deepestKey = analog.reduce<typeof analog[number] | undefined>((best, k) => !best || k.p > best.p ? k : best, undefined);
+    const deepestKey = analog.reduce<(typeof analog)[number] | undefined>(
+      (best, k) => (!best || k.p > best.p ? k : best),
+      undefined
+    );
     if (!deepestKey) {
       this.touchColors = {};
       this.touchSource = undefined;
@@ -637,10 +781,13 @@ export class CustomRgbEngine {
       this.touchSource = deepestKey.id;
     }
     const cycleTints = new Map<string, RgbColor>();
-    const scanBands = new Map<string, {
-      center: number;
-      colorPhase: number;
-    }>();
+    const scanBands = new Map<
+      string,
+      {
+        center: number;
+        colorPhase: number;
+      }
+    >();
     const sparks = new Map<string, Spark[]>();
     const glowSources = new Map<string, GlowSource[]>();
     for (const layer of this.config.layers) {
@@ -659,7 +806,7 @@ export class CustomRgbEngine {
             continue;
           }
           const heat = glowHeat(change, this.time, layer.duration);
-          if (heat > .01) {
+          if (heat > 0.01) {
             sources.push({
               x: point[0],
               y: point[1],
@@ -671,18 +818,19 @@ export class CustomRgbEngine {
         continue;
       }
       if (layer.effect === 'scan') {
-        const {
-          min,
-          max
-        } = this.bounds[layer.direction === 'horizontal' ? 0 : 1];
+        const { min, max } = this.bounds[layer.direction === 'horizontal' ? 0 : 1];
         const length = max - min;
         const travel = length / layer.speed;
         const pause = (layer.scanPauseMs ?? 0) / 1000;
-        const phase = this.time / 1000 % (2 * (travel + pause));
-        const position = phase < travel + pause ? clamp(phase / travel, 0, 1) : 1 - clamp((phase - travel - pause) / travel, 0, 1);
+        const phase = (this.time / 1000) % (2 * (travel + pause));
+        const position =
+          phase < travel + pause
+            ? clamp(phase / travel, 0, 1)
+            : 1 - clamp((phase - travel - pause) / travel, 0, 1);
         scanBands.set(layer.id, {
-          center: min + length * (layer.multicolor ? .5 - .5 * Math.cos(position * Math.PI) : position),
-          colorPhase: this.time / 1000 / 20 % 1
+          center:
+            min + length * (layer.multicolor ? 0.5 - 0.5 * Math.cos(position * Math.PI) : position),
+          colorPhase: (this.time / 1000 / 20) % 1
         });
         continue;
       }
@@ -700,8 +848,15 @@ export class CustomRgbEngine {
         this.cycleColors.set(layer.id, entry);
       }
       const keys = layer.keys.filter(id => baseColors[id]);
-      const background = ([0, 1, 2].map(i => keys.reduce((sum, id) => sum + baseColors[id][i], 0) / Math.max(1, keys.length)) as RgbColor);
-      cycleTints.set(layer.id, layer.palette ? gradient(layer, fract(this.time / 1000 / period)) : this.randomColor(entry.colors, layer.id, background));
+      const background = [0, 1, 2].map(
+        i => keys.reduce((sum, id) => sum + baseColors[id][i], 0) / Math.max(1, keys.length)
+      ) as RgbColor;
+      cycleTints.set(
+        layer.id,
+        layer.palette
+          ? gradient(layer, fract(this.time / 1000 / period))
+          : this.randomColor(entry.colors, layer.id, background)
+      );
     }
     for (const id of this.keyIds) {
       const [x, y] = this.coordinates[id];
@@ -714,25 +869,24 @@ export class CustomRgbEngine {
         const axis = layer.direction === 'horizontal' ? x : y;
         let strength = 0;
         let tint: RgbColor = cycleTints.get(layer.id) ?? layer.color;
-        const randomTint = (colors: Colors, source: string) => layer.palette ? gradient(layer, fract((this.keyIndex[source] ?? 0) / 17 + (this.time / 3000))) : this.randomColor(colors, layer.id, baseColors[source]);
+        const randomTint = (colors: Colors, source: string) =>
+          layer.palette
+            ? gradient(layer, fract((this.keyIndex[source] ?? 0) / 17 + this.time / 3000))
+            : this.randomColor(colors, layer.id, baseColors[source]);
         const seconds = this.time / 1000;
         if (layer.effect === 'aurora') {
-          ;
-          ({
-            strength,
-            tint
-          } = aurora(layer, x, y, seconds, this.bounds));
+          ({ strength, tint } = aurora(layer, x, y, seconds, this.bounds));
         } else if (layer.effect === 'wave') {
-          ({
-            strength,
-            tint
-          } = dynamicWave(layer, x, y, seconds, this.bounds));
+          ({ strength, tint } = dynamicWave(layer, x, y, seconds, this.bounds));
         } else if (layer.effect === 'trigger') {
           const paletteStops = gradientStops[layer.palette ?? 'trigger'] ?? gradientStops.trigger;
           const rowHalfWidth = Math.max(0.28, layer.width * 0.38);
           const colHalfWidth = Math.max(0.45, layer.width * 0.55);
           const waveSpeed = 12 + layer.speed * 10;
-          const effectiveDuration = Math.max(120, layer.duration / Math.max(0.35, layer.speed / 1.5));
+          const effectiveDuration = Math.max(
+            120,
+            layer.duration / Math.max(0.35, layer.speed / 1.5)
+          );
           let accumR = 0;
           let accumG = 0;
           let accumB = 0;
@@ -748,19 +902,25 @@ export class CustomRgbEngine {
             }
             const armDist = onRow >= onCol ? dx : dy;
             const travelDelayMs = (armDist / waveSpeed) * 1000;
-            const isHeldOrigin = event.id === id && this.held.has(id) && event.releasedAt === undefined;
-            const rawAge = event.releasedAt !== undefined
-              ? (this.time - event.releasedAt) + Math.min(this.time - event.at, effectiveDuration * 0.25)
-              : this.held.has(event.id)
-                ? Math.min(this.time - event.at, effectiveDuration * 0.35 + travelDelayMs)
-                : this.time - event.at;
-            const localAge = (this.time - event.at) - travelDelayMs;
+            const isHeldOrigin =
+              event.id === id && this.held.has(id) && event.releasedAt === undefined;
+            const rawAge =
+              event.releasedAt !== undefined
+                ? this.time -
+                  event.releasedAt +
+                  Math.min(this.time - event.at, effectiveDuration * 0.25)
+                : this.held.has(event.id)
+                  ? Math.min(this.time - event.at, effectiveDuration * 0.35 + travelDelayMs)
+                  : this.time - event.at;
+            const localAge = this.time - event.at - travelDelayMs;
             if (localAge < -35) {
               continue;
             }
             const attack = ease((localAge + 35) / 45);
             const fadeAge = Math.max(0, rawAge - travelDelayMs * 0.5);
-            const decay = isHeldOrigin ? 1 : Math.pow(1 - clamp(fadeAge / effectiveDuration, 0, 1), 1.35);
+            const decay = isHeldOrigin
+              ? 1
+              : Math.pow(1 - clamp(fadeAge / effectiveDuration, 0, 1), 1.35);
             if (decay <= 0.005) {
               continue;
             }
@@ -793,17 +953,22 @@ export class CustomRgbEngine {
           const primary = layer.direction === 'horizontal' ? 0 : 1;
           const secondary = 1 - primary;
           const span = this.bounds[primary].max - this.bounds[primary].min;
-          const tail = Math.max(.25, layer.speed * layer.duration / 1000);
+          const tail = Math.max(0.25, (layer.speed * layer.duration) / 1000);
           const path = span + tail + 2;
           const point = [x, y];
           for (let i = 0; i < 2; i++) {
-            const distance = (seconds * layer.speed + i * path * .5) % path;
-            const cycle = Math.floor((seconds * layer.speed + i * path * .5) / path);
-            const lane = this.bounds[secondary].min + (cycle * 2 + i * 3) % (Math.round(this.bounds[secondary].max - this.bounds[secondary].min) + 1);
+            const distance = (seconds * layer.speed + i * path * 0.5) % path;
+            const cycle = Math.floor((seconds * layer.speed + i * path * 0.5) / path);
+            const lane =
+              this.bounds[secondary].min +
+              ((cycle * 2 + i * 3) %
+                (Math.round(this.bounds[secondary].max - this.bounds[secondary].min) + 1));
             const behind = this.bounds[primary].min - 1 + distance - point[primary];
-            const cross = Math.exp(-Math.pow((point[secondary] - lane) / Math.max(.25, layer.width * .4), 2));
-            const head = Math.exp(-Math.pow(behind / .35, 2));
-            const trail = behind >= 0 && behind <= tail ? Math.pow(1 - behind / tail, 2) * .7 : 0;
+            const cross = Math.exp(
+              -Math.pow((point[secondary] - lane) / Math.max(0.25, layer.width * 0.4), 2)
+            );
+            const head = Math.exp(-Math.pow(behind / 0.35, 2));
+            const trail = behind >= 0 && behind <= tail ? Math.pow(1 - behind / tail, 2) * 0.7 : 0;
             const power = Math.max(head, trail) * cross;
             if (power > strength) {
               strength = power;
@@ -813,7 +978,7 @@ export class CustomRgbEngine {
         } else if (layer.effect === 'pressure-wave') {
           for (const k of analog) {
             if (k.id === id && layer.keys.includes(k.id)) {
-              strength = this.strikeBrightness(k.id) * .55;
+              strength = this.strikeBrightness(k.id) * 0.55;
               if (layer.multicolor) {
                 tint = randomTint(this.analogColors.get(k.id)!, k.id);
               }
@@ -824,8 +989,11 @@ export class CustomRgbEngine {
               continue;
             }
             const age = this.time - wave.at;
-            const radius = age / 1000 * layer.speed;
-            const power = smooth(1 - Math.abs(Math.hypot(x - wave.x, y - wave.y) - radius) / layer.width) * wave.strength * clamp(1 - age / layer.duration, 0, 1);
+            const radius = (age / 1000) * layer.speed;
+            const power =
+              smooth(1 - Math.abs(Math.hypot(x - wave.x, y - wave.y) - radius) / layer.width) *
+              wave.strength *
+              clamp(1 - age / layer.duration, 0, 1);
             if (power > strength) {
               strength = power;
               if (layer.multicolor) {
@@ -838,41 +1006,57 @@ export class CustomRgbEngine {
           if (layer.multicolor) {
             const offset = (axis - band.center) / layer.width;
             strength = Math.exp(-2 * offset * offset);
-            tint = layer.palette ? gradient(layer, fract(band.colorPhase + offset / 8)) : sampleCustomRgbSpectrum(band.colorPhase + offset / 8, this.colorPalettes.get(layer.id));
+            tint = layer.palette
+              ? gradient(layer, fract(band.colorPhase + offset / 8))
+              : sampleCustomRgbSpectrum(
+                  band.colorPhase + offset / 8,
+                  this.colorPalettes.get(layer.id)
+                );
           } else {
             strength = smooth(1 - Math.abs(axis - band.center) / layer.width);
           }
         } else if (layer.effect === 'ember') {
           const heat = flameHeat(x, y, seconds * layer.speed, layer.width);
-          const flicker = .9 + .1 * valueNoise(seconds * layer.speed * 4, 3.7);
-          strength = heat < .05 ? 0 : ease(heat / .3) * (.3 + .7 * Math.pow(heat, .9)) * flicker;
-          tint = layer.multicolor ? gradient(layer, heat) : lighten(layer.color, (heat - .7) / .3 * .45);
+          const flicker = 0.9 + 0.1 * valueNoise(seconds * layer.speed * 4, 3.7);
+          strength =
+            heat < 0.05 ? 0 : ease(heat / 0.3) * (0.3 + 0.7 * Math.pow(heat, 0.9)) * flicker;
+          tint = layer.multicolor
+            ? gradient(layer, heat)
+            : lighten(layer.color, ((heat - 0.7) / 0.3) * 0.45);
           for (const spark of sparks.get(layer.id) ?? []) {
-            const power = Math.exp(-(Math.pow(x - spark.x, 2) + Math.pow(y - spark.y, 2)) / (2 * .42 * .42)) * spark.power;
+            const power =
+              Math.exp(-(Math.pow(x - spark.x, 2) + Math.pow(y - spark.y, 2)) / (2 * 0.42 * 0.42)) *
+              spark.power;
             if (power > strength) {
               strength = power;
-              tint = layer.multicolor ? gradient(layer, 1) : lighten(layer.color, .55);
+              tint = layer.multicolor ? gradient(layer, 1) : lighten(layer.color, 0.55);
             }
           }
         } else if (layer.effect === 'starlight') {
           const k = this.keyIndex[id] ?? 0;
-          const phase = seconds * layer.speed / (3.2 + hash(k, 5) * 4.5) + hash(k, 6) * 10;
+          const phase = (seconds * layer.speed) / (3.2 + hash(k, 5) * 4.5) + hash(k, 6) * 10;
           const cycle = Math.floor(phase);
           const life = fract(phase);
-          if (hash(k, cycle, 7) < clamp(layer.width / 10, .03, .95)) {
-            const envelope = life < .18 ? ease(life / .18) : Math.pow(1 - (life - .18) / .82, 2.2);
-            strength = envelope * (.9 + .1 * Math.sin(seconds * 7 + k * 1.7));
-            tint = lighten(layer.multicolor ? gradient(layer, hash(k, cycle, 8)) : layer.color, Math.pow(envelope, 3) * .7);
+          if (hash(k, cycle, 7) < clamp(layer.width / 10, 0.03, 0.95)) {
+            const envelope =
+              life < 0.18 ? ease(life / 0.18) : Math.pow(1 - (life - 0.18) / 0.82, 2.2);
+            strength = envelope * (0.9 + 0.1 * Math.sin(seconds * 7 + k * 1.7));
+            tint = lighten(
+              layer.multicolor ? gradient(layer, hash(k, cycle, 8)) : layer.color,
+              Math.pow(envelope, 3) * 0.7
+            );
           }
         } else if (layer.effect === 'afterglow') {
           let heat = 0;
           for (const source of glowSources.get(layer.id) ?? []) {
-            const fall = Math.exp(-Math.pow(Math.hypot(x - source.x, y - source.y) / layer.width, 2)) * source.heat;
+            const fall =
+              Math.exp(-Math.pow(Math.hypot(x - source.x, y - source.y) / layer.width, 2)) *
+              source.heat;
             heat = 1 - (1 - heat) * (1 - fall);
           }
           strength = clamp(heat * 1.25, 0, 1);
           const sample = layer.multicolor ? gradient(layer, heat) : layer.color;
-          tint = lighten(sample, (heat - .8) / .2 * .6);
+          tint = lighten(sample, ((heat - 0.8) / 0.2) * 0.6);
         } else if (layer.effect === 'pulse') {
           const beatLength = 60 / layer.speed;
           const beat = Math.floor(seconds / beatLength);
@@ -887,21 +1071,31 @@ export class CustomRgbEngine {
             }
             const age = seconds - index * beatLength;
             const accent = index % 4 === 0;
-            const loudness = accent ? 1 : .6;
-            const ring = Math.exp(-Math.pow((distance - age * (accent ? 10 : 7.5)) / layer.width, 2)) * Math.exp(-age * (accent ? 1.7 : 2.4)) * loudness;
-            const core = Math.exp(-age * 9) * Math.exp(-Math.pow(distance / 2.2, 2)) * loudness * .6;
+            const loudness = accent ? 1 : 0.6;
+            const ring =
+              Math.exp(-Math.pow((distance - age * (accent ? 10 : 7.5)) / layer.width, 2)) *
+              Math.exp(-age * (accent ? 1.7 : 2.4)) *
+              loudness;
+            const core =
+              Math.exp(-age * 9) * Math.exp(-Math.pow(distance / 2.2, 2)) * loudness * 0.6;
             const power = Math.max(ring, core);
             if (power > strength) {
               strength = power;
-              tint = layer.multicolor ? gradient(layer, accent ? 0 : index % 4 / 3) : accent ? lighten(layer.color, .35) : layer.color;
+              tint = layer.multicolor
+                ? gradient(layer, accent ? 0 : (index % 4) / 3)
+                : accent
+                  ? lighten(layer.color, 0.35)
+                  : layer.color;
             }
           }
         } else if (layer.effect === 'breath') {
-          strength = .5 - .5 * Math.cos(seconds * layer.speed * Math.PI / 3);
+          strength = 0.5 - 0.5 * Math.cos((seconds * layer.speed * Math.PI) / 3);
         } else if (layer.effect === 'mixing') {
           const components = [depth('ArrowLeft'), depth('ArrowDown'), depth('ArrowRight')];
           strength = Math.max(...components);
-          tint = (components.map(p => strength > 0 ? Math.round(p / strength * 255) : 0) as RgbColor);
+          tint = components.map(p =>
+            strength > 0 ? Math.round((p / strength) * 255) : 0
+          ) as RgbColor;
         } else if (layer.effect === 'touch') {
           const index = bar.indexOf(id);
           strength = index < 0 ? 0 : clamp(deepest * bar.length - index, 0, 1);
@@ -917,7 +1111,7 @@ export class CustomRgbEngine {
         } else if (layer.effect === 'jelly' || layer.effect === 'aoe') {
           for (const k of analog) {
             const distance = Math.hypot(x - k.point[0], y - k.point[1]);
-            const radius = layer.effect === 'jelly' ? .25 + k.p * layer.width * 3 : layer.width;
+            const radius = layer.effect === 'jelly' ? 0.25 + k.p * layer.width * 3 : layer.width;
             const power = smooth(1 - distance / radius) * (layer.effect === 'aoe' ? k.p : 1);
             if (power > strength) {
               strength = power;
@@ -928,7 +1122,11 @@ export class CustomRgbEngine {
           }
         } else if (layer.effect === 'reaction') {
           const release = this.releases.get(id);
-          strength = this.held.has(id) ? 1 : release === undefined ? 0 : clamp(1 - (this.time - release) / layer.duration, 0, 1);
+          strength = this.held.has(id)
+            ? 1
+            : release === undefined
+              ? 0
+              : clamp(1 - (this.time - release) / layer.duration, 0, 1);
           if (layer.multicolor && strength > 0) {
             const colors = this.keyColors.get(id);
             if (colors) {
@@ -945,7 +1143,8 @@ export class CustomRgbEngine {
             const radius = Math.hypot(x - event.x, y - event.y);
             let power = 0;
             if (layer.effect === 'ripple') {
-              power = clamp(1 - Math.abs(radius - age / 1000 * layer.speed) / layer.width, 0, 1) * fade;
+              power =
+                clamp(1 - Math.abs(radius - (age / 1000) * layer.speed) / layer.width, 0, 1) * fade;
             }
             if (layer.effect === 'trail') {
               power = event.id === id ? fade : 0;
@@ -958,11 +1157,19 @@ export class CustomRgbEngine {
             }
           }
         }
-        const alpha = clamp(strength * layer.opacity / 100, 0, 1);
+        const alpha = clamp((strength * layer.opacity) / 100, 0, 1);
         const colorful = layer.multicolor && !['mixing', 'rt'].includes(layer.effect);
         color = blendCustomRgbColor(color, tint, alpha, colorful);
       }
-      frame.keys[id] = '#' + color.map(c => Math.round(clamp(c, 0, 255)).toString(16).padStart(2, '0')).join('');
+      frame.keys[id] =
+        '#' +
+        color
+          .map(c =>
+            Math.round(clamp(c, 0, 255))
+              .toString(16)
+              .padStart(2, '0')
+          )
+          .join('');
     }
     return frame;
   }

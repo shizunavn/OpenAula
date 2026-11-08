@@ -25,23 +25,23 @@
 //
 // Verified by tests/xsyd-advanced.test.mjs and tests/xsyd-win68-integration.test.mjs.
 
-import {buildXsydFrame, type XsydReply} from './codec'
-import {buildFieldWriteFrame, XsydFeatureField} from './features'
+import { buildXsydFrame, type XsydReply } from './codec';
+import { buildFieldWriteFrame, XsydFeatureField } from './features';
 
 /** ProtocolVersion reported by the WIN 68 HE MAX in the capture handshake. */
-export const XSYD_PROTOCOL_VERSION = '1.0.9'
+export const XSYD_PROTOCOL_VERSION = '1.0.9';
 
 /** `advancedKeyV2` layout: one-byte key codes, one-byte delays. Requires >= 1.0.3. */
-export const XSYD_ADVANCED_KEY_V2 = true
+export const XSYD_ADVANCED_KEY_V2 = true;
 
 /** A key code as stored by the driver: HID usage / action code, one byte. */
-export type XsydKeyCode = number
+export type XsydKeyCode = number;
 
 /** Delay granularity of every advanced-key timer (MT/TGL hold). */
-export const XSYD_ADVANCED_DELAY_UNIT_MS = 10
+export const XSYD_ADVANCED_DELAY_UNIT_MS = 10;
 
 /** Largest hold delay the one-byte wire field can address. */
-export const XSYD_ADVANCED_DELAY_MAX_MS = XSYD_ADVANCED_DELAY_UNIT_MS * 0xff
+export const XSYD_ADVANCED_DELAY_MAX_MS = XSYD_ADVANCED_DELAY_UNIT_MS * 0xff;
 
 /**
  * Verified SOCD resolution modes (`payload[8]` in opcode `0x2C`, evaluated at
@@ -55,10 +55,10 @@ export const XsydSocdMode = {
   LastInputPriority: 0x00,
   FirstKeyPriority: 0x01,
   SecondKeyPriority: 0x02,
-  Neutral: 0x03,
-} as const
+  Neutral: 0x03
+} as const;
 
-export type XsydSocdModeValue = (typeof XsydSocdMode)[keyof typeof XsydSocdMode]
+export type XsydSocdModeValue = (typeof XsydSocdMode)[keyof typeof XsydSocdMode];
 
 /**
  * Verified 8-bit DKS phase masks (`payload[10..13]` in opcode `0x26`, evaluated
@@ -86,12 +86,12 @@ export const XsydDksMask = {
   HoldReleaseToEnd: 0x60,
   HoldStartToReleaseFromDeep: 0x1f,
   HoldDeepPressToEnd: 0x7c,
-  HoldStartToEnd: 0x7f,
-} as const
+  HoldStartToEnd: 0x7f
+} as const;
 
 function assertCode(code: number, name: string): void {
   if (!Number.isInteger(code) || code < 0 || code > 0xff) {
-    throw new RangeError(`${name} must be a byte key code`)
+    throw new RangeError(`${name} must be a byte key code`);
   }
 }
 
@@ -101,41 +101,41 @@ function assertCode(code: number, name: string): void {
  * Both MT and TGL captures agree: `Delay: 200` -> 0x14, `Delay: 300` -> 0x1e.
  */
 function encodeDelay(delayMs: number): number {
-  const delay = Math.round(delayMs / XSYD_ADVANCED_DELAY_UNIT_MS)
+  const delay = Math.round(delayMs / XSYD_ADVANCED_DELAY_UNIT_MS);
   if (!Number.isInteger(delay) || delay < 0 || delay > 0xff) {
-    throw new RangeError(`delayMs must map to 0..${XSYD_ADVANCED_DELAY_MAX_MS} ms`)
+    throw new RangeError(`delayMs must map to 0..${XSYD_ADVANCED_DELAY_MAX_MS} ms`);
   }
-  return delay
+  return delay;
 }
 
 /** MT: hold one key, tap another. */
 export interface XsydMt {
   /** Action code of the key being configured (the key object's `keyValue`). */
-  key: XsydKeyCode
+  key: XsydKeyCode;
   /** Action code fired while held (`MTInfo.DKS[0]`). */
-  hold: XsydKeyCode
+  hold: XsydKeyCode;
   /** Action code fired on a short press (`MTInfo.DKS[1]`). */
-  tap: XsydKeyCode
+  tap: XsydKeyCode;
   /** Hold threshold in milliseconds; the wire stores `delay / 10`. */
-  delayMs: number
+  delayMs: number;
 }
 
 /** TGL: latch one action on press, release it on the next press. */
 export interface XsydTgl {
   /** Action code of the key being configured. */
-  key: XsydKeyCode
+  key: XsydKeyCode;
   /** Action code held while latched (`TGLInfo.DKS`). */
-  toggle: XsydKeyCode
+  toggle: XsydKeyCode;
   /** Long-press threshold in milliseconds; the wire stores `delay / 10`. */
-  delayMs: number
+  delayMs: number;
 }
 
 /** End key: pressing this key emits another key's action and does not latch. */
 export interface XsydEnd {
   /** Action code of the key being configured (`ENDInfo` owner). */
-  key: XsydKeyCode
+  key: XsydKeyCode;
   /** `ENDInfo.DKS`: action code emitted when the key is pressed. */
-  action: XsydKeyCode
+  action: XsydKeyCode;
 }
 
 /**
@@ -146,24 +146,24 @@ export interface XsydEnd {
  * the END action was P.
  */
 export function buildEndPayload(end: XsydEnd): Uint8Array {
-  assertCode(end.key, 'key')
-  assertCode(end.action, 'action')
+  assertCode(end.key, 'key');
+  assertCode(end.action, 'action');
   return Uint8Array.from([
     0x01, // END
     end.key,
     end.action,
-    0x00, // constant in the capture
-  ])
+    0x00 // constant in the capture
+  ]);
 }
 
 /** MPT: trigger one action per travel depth. */
 export interface XsydMpt {
   /** Action code of the key being configured. */
-  key: XsydKeyCode
+  key: XsydKeyCode;
   /** Action codes fired at each depth below, in order (up to 3). */
-  steps: readonly XsydKeyCode[]
+  steps: readonly XsydKeyCode[];
   /** `MPTInfo.DB` in micrometres: one per step, shallowest first. */
-  depthsUm: readonly number[]
+  depthsUm: readonly number[];
 }
 
 /**
@@ -180,15 +180,15 @@ export interface XsydMpt {
  */
 export interface XsydDks {
   /** Action code of the key being configured (`keyValue`, e.g. `0x1a` = 26 for W). */
-  key: XsydKeyCode
+  key: XsydKeyCode;
   /** Four action codes (rows 0..3), each encoded as u16 LE on wire. */
-  actions: readonly XsydKeyCode[]
+  actions: readonly XsydKeyCode[];
   /** Explicit 8-bit phase masks `[mask0, mask1, mask2, mask3]`. */
-  masks?: readonly number[]
+  masks?: readonly number[];
   /** OpenAula 4-phase state rows (`states[0..3]`, converted via `encodeXsydDksStateRow`). */
-  states?: readonly (readonly number[])[]
+  states?: readonly (readonly number[])[];
   /** Shallow actuation depth in micrometres (`100..3400` µm, e.g. `1400` µm = `0x0578`). */
-  actuationUm: number
+  actuationUm: number;
 }
 
 /**
@@ -203,13 +203,13 @@ export interface XsydDks {
  *   - `#86416`: `5c 0b 2c c8 | 01 04 07 00 00 00 00 00 03 00 00` (`mode = 0x03`: Neutral)
  */
 export interface XsydSocd {
-  key1: XsydKeyCode
-  key2: XsydKeyCode
-  action1?: number
-  action2?: number
-  type?: number
-  mode?: number
-  delay?: number
+  key1: XsydKeyCode;
+  key2: XsydKeyCode;
+  action1?: number;
+  action2?: number;
+  type?: number;
+  mode?: number;
+  delay?: number;
 }
 
 /**
@@ -218,39 +218,39 @@ export interface XsydSocd {
  */
 export function encodeXsydDksStateRow(row: readonly number[]): number {
   if (!Array.isArray(row) || row.length !== 4) {
-    throw new RangeError('DKS state row must have 4 phase values')
+    throw new RangeError('DKS state row must have 4 phase values');
   }
-  const [s0, s1, s2, s3] = row
+  const [s0, s1, s2, s3] = row;
   if (s0 === 0 && s1 === 0 && s2 === 0 && s3 === 0) {
-    return XsydDksMask.None
+    return XsydDksMask.None;
   }
   if (s0 === 14 && s1 === 0 && s2 === 0 && s3 === 0) {
-    return XsydDksMask.HoldStartToDeepPress
+    return XsydDksMask.HoldStartToDeepPress;
   }
   if (s0 === 0 && s1 === 14 && s2 === 0 && s3 === 0) {
-    return XsydDksMask.HoldDeepPressToRelease
+    return XsydDksMask.HoldDeepPressToRelease;
   }
   if (s0 === 0 && s1 === 0 && s2 === 14 && s3 === 0) {
-    return XsydDksMask.HoldReleaseToEnd
+    return XsydDksMask.HoldReleaseToEnd;
   }
   if (s0 === 6 && s1 === 12 && s2 === 0 && s3 === 0) {
-    return XsydDksMask.HoldStartToReleaseFromDeep
+    return XsydDksMask.HoldStartToReleaseFromDeep;
   }
   if (s0 === 0 && s1 === 6 && s2 === 12 && s3 === 0) {
-    return XsydDksMask.HoldDeepPressToEnd
+    return XsydDksMask.HoldDeepPressToEnd;
   }
   if (s0 === 6 && s1 === 4 && s2 === 12 && s3 === 0) {
-    return XsydDksMask.HoldStartToEnd
+    return XsydDksMask.HoldStartToEnd;
   }
   if (row.every(v => v === 0 || v === 10)) {
-    let mask = 0
-    if (s0 === 10) mask |= XsydDksMask.TapStart
-    if (s1 === 10) mask |= XsydDksMask.TapDeepPress
-    if (s2 === 10) mask |= XsydDksMask.TapReleaseFromDeep
-    if (s3 === 10) mask |= XsydDksMask.TapEndOfRelease
-    return mask
+    let mask = 0;
+    if (s0 === 10) mask |= XsydDksMask.TapStart;
+    if (s1 === 10) mask |= XsydDksMask.TapDeepPress;
+    if (s2 === 10) mask |= XsydDksMask.TapReleaseFromDeep;
+    if (s3 === 10) mask |= XsydDksMask.TapEndOfRelease;
+    return mask;
   }
-  throw new RangeError(`Unsupported DKS state row pattern: [${row.join(', ')}]`)
+  throw new RangeError(`Unsupported DKS state row pattern: [${row.join(', ')}]`);
 }
 
 /**
@@ -258,31 +258,31 @@ export function encodeXsydDksStateRow(row: readonly number[]): number {
  */
 export function decodeXsydDksStateMask(mask: number): [number, number, number, number] {
   if (!Number.isInteger(mask) || mask < 0 || mask > 0xff) {
-    throw new RangeError(`DKS mask must be a byte (0..255), got ${mask}`)
+    throw new RangeError(`DKS mask must be a byte (0..255), got ${mask}`);
   }
   switch (mask) {
     case XsydDksMask.None:
-      return [0, 0, 0, 0]
+      return [0, 0, 0, 0];
     case XsydDksMask.HoldStartToDeepPress:
-      return [14, 0, 0, 0]
+      return [14, 0, 0, 0];
     case XsydDksMask.HoldDeepPressToRelease:
-      return [0, 14, 0, 0]
+      return [0, 14, 0, 0];
     case XsydDksMask.HoldReleaseToEnd:
-      return [0, 0, 14, 0]
+      return [0, 0, 14, 0];
     case XsydDksMask.HoldStartToReleaseFromDeep:
-      return [6, 12, 0, 0]
+      return [6, 12, 0, 0];
     case XsydDksMask.HoldDeepPressToEnd:
-      return [0, 6, 12, 0]
+      return [0, 6, 12, 0];
     case XsydDksMask.HoldStartToEnd:
     case 0xff:
-      return [6, 4, 12, 0]
+      return [6, 4, 12, 0];
     default:
       return [
         mask & XsydDksMask.TapStart ? 10 : 0,
         mask & XsydDksMask.TapDeepPress ? 10 : 0,
         mask & XsydDksMask.TapReleaseFromDeep ? 10 : 0,
-        mask & 0x80 ? 10 : 0,
-      ]
+        mask & 0x80 ? 10 : 0
+      ];
   }
 }
 
@@ -293,32 +293,32 @@ export function decodeXsydDksStateMask(mask: number): [number, number, number, n
  * `5c 10 26 cc | 01 1a 04 00 05 00 06 00 07 00 03 1c 60 c0 78 05`
  */
 export function buildDksPayload(dks: XsydDks): Uint8Array {
-  assertCode(dks.key, 'key')
+  assertCode(dks.key, 'key');
   if (!Array.isArray(dks.actions) || dks.actions.length !== 4) {
-    throw new RangeError('DKS requires exactly 4 action codes')
+    throw new RangeError('DKS requires exactly 4 action codes');
   }
   for (const action of dks.actions) {
-    assertCode(action, 'action')
+    assertCode(action, 'action');
   }
-  let masks: number[]
+  let masks: number[];
   if (dks.masks !== undefined) {
     if (!Array.isArray(dks.masks) || dks.masks.length !== 4) {
-      throw new RangeError('DKS requires 4 mask bytes')
+      throw new RangeError('DKS requires 4 mask bytes');
     }
     for (const m of dks.masks) {
-      assertCode(m, 'mask')
+      assertCode(m, 'mask');
     }
-    masks = [...dks.masks]
+    masks = [...dks.masks];
   } else if (dks.states !== undefined) {
     if (!Array.isArray(dks.states) || dks.states.length !== 4) {
-      throw new RangeError('DKS requires 4 state rows')
+      throw new RangeError('DKS requires 4 state rows');
     }
-    masks = dks.states.map(encodeXsydDksStateRow)
+    masks = dks.states.map(encodeXsydDksStateRow);
   } else {
-    throw new RangeError('DKS requires either masks or states')
+    throw new RangeError('DKS requires either masks or states');
   }
   if (!Number.isInteger(dks.actuationUm) || dks.actuationUm < 100 || dks.actuationUm > 3400) {
-    throw new RangeError('DKS actuationUm must be an integer in 100..3400 µm')
+    throw new RangeError('DKS actuationUm must be an integer in 100..3400 µm');
   }
   return Uint8Array.from([
     0x01,
@@ -336,40 +336,40 @@ export function buildDksPayload(dks: XsydDks): Uint8Array {
     masks[2],
     masks[3],
     dks.actuationUm & 0xff,
-    (dks.actuationUm >> 8) & 0xff,
-  ])
+    (dks.actuationUm >> 8) & 0xff
+  ]);
 }
 
 /**
  * Decode an `0xA6` DKS reply (`LEN = 0x2E` = 46 bytes, `#40754` in `dks_keyW_...pcapng`).
  */
 export function decodeDksReply(reply: XsydReply): {
-  key: XsydKeyCode
-  actions: [XsydKeyCode, XsydKeyCode, XsydKeyCode, XsydKeyCode]
-  masks: [number, number, number, number]
-  states: [number, number, number, number][]
-  actuationUm: number
+  key: XsydKeyCode;
+  actions: [XsydKeyCode, XsydKeyCode, XsydKeyCode, XsydKeyCode];
+  masks: [number, number, number, number];
+  states: [number, number, number, number][];
+  actuationUm: number;
 } {
   if (reply.opcode !== 0xa6 || reply.payload.length < 16) {
-    throw new Error(`Expected opcode 0xA6 DKS reply, got 0x${reply.opcode.toString(16)}`)
+    throw new Error(`Expected opcode 0xA6 DKS reply, got 0x${reply.opcode.toString(16)}`);
   }
-  const p = reply.payload
-  const key = p[1]
+  const p = reply.payload;
+  const key = p[1];
   const actions: [number, number, number, number] = [
     p[2] | (p[3] << 8),
     p[4] | (p[5] << 8),
     p[6] | (p[7] << 8),
-    p[8] | (p[9] << 8),
-  ]
-  const masks: [number, number, number, number] = [p[10], p[11], p[12], p[13]]
-  const actuationUm = p[14] | (p[15] << 8)
+    p[8] | (p[9] << 8)
+  ];
+  const masks: [number, number, number, number] = [p[10], p[11], p[12], p[13]];
+  const actuationUm = p[14] | (p[15] << 8);
   return {
     key,
     actions,
     masks,
     states: masks.map(decodeXsydDksStateMask),
-    actuationUm,
-  }
+    actuationUm
+  };
 }
 
 /**
@@ -383,9 +383,9 @@ export function decodeDksReply(reply: XsydReply): {
  * for 300 ms vs 200 ms).
  */
 export function buildMtPayload(mt: XsydMt): Uint8Array {
-  assertCode(mt.key, 'key')
-  assertCode(mt.hold, 'hold')
-  assertCode(mt.tap, 'tap')
+  assertCode(mt.key, 'key');
+  assertCode(mt.hold, 'hold');
+  assertCode(mt.tap, 'tap');
   return Uint8Array.from([
     0x01, // MT
     mt.key,
@@ -393,8 +393,8 @@ export function buildMtPayload(mt: XsydMt): Uint8Array {
     0x00, // constant in every capture
     mt.tap,
     0x00, // constant in every capture
-    encodeDelay(mt.delayMs),
-  ])
+    encodeDelay(mt.delayMs)
+  ]);
 }
 
 /**
@@ -404,15 +404,15 @@ export function buildMtPayload(mt: XsydMt): Uint8Array {
  * `TGLInfo{DKS:29, Delay:200}` — toggle Z (0x1d).
  */
 export function buildTglPayload(tgl: XsydTgl): Uint8Array {
-  assertCode(tgl.key, 'key')
-  assertCode(tgl.toggle, 'toggle')
+  assertCode(tgl.key, 'key');
+  assertCode(tgl.toggle, 'toggle');
   return Uint8Array.from([
     0x01, // TGL
     tgl.key,
     tgl.toggle,
     0x00, // constant in the capture
-    encodeDelay(tgl.delayMs),
-  ])
+    encodeDelay(tgl.delayMs)
+  ]);
 }
 
 /**
@@ -430,25 +430,25 @@ export function buildTglPayload(tgl: XsydTgl): Uint8Array {
  * `MPTInfo.DB` in µm.
  */
 export function buildMptPayload(mpt: XsydMpt): Uint8Array {
-  assertCode(mpt.key, 'key')
+  assertCode(mpt.key, 'key');
   if (mpt.steps.length === 0 || mpt.steps.length > 3) {
-    throw new RangeError('MPT takes 1..3 steps')
+    throw new RangeError('MPT takes 1..3 steps');
   }
   if (mpt.depthsUm.length !== mpt.steps.length) {
-    throw new RangeError('every MPT step needs a depth')
+    throw new RangeError('every MPT step needs a depth');
   }
-  const payload = [0x01, mpt.steps.length + 1]
+  const payload = [0x01, mpt.steps.length + 1];
   for (const step of mpt.steps) {
-    assertCode(step, 'step')
-    payload.push(step, 0x00)
+    assertCode(step, 'step');
+    payload.push(step, 0x00);
   }
   for (const depth of mpt.depthsUm) {
     if (!Number.isInteger(depth) || depth < 0 || depth > 0xffff) {
-      throw new RangeError('depth must be micrometres in a u16')
+      throw new RangeError('depth must be micrometres in a u16');
     }
-    payload.push(depth & 0xff, (depth >> 8) & 0xff)
+    payload.push(depth & 0xff, (depth >> 8) & 0xff);
   }
-  return Uint8Array.from(payload)
+  return Uint8Array.from(payload);
 }
 
 /**
@@ -463,21 +463,23 @@ export function buildMptPayload(mpt: XsydMpt): Uint8Array {
  * is rejected before reaching the wire.
  */
 export function buildSocdPayload(socd: XsydSocd): Uint8Array {
-  assertCode(socd.key1, 'key1')
-  assertCode(socd.key2, 'key2')
+  assertCode(socd.key1, 'key1');
+  assertCode(socd.key2, 'key2');
   if (socd.key1 === socd.key2) {
-    throw new RangeError('SOCD requires two distinct keys')
+    throw new RangeError('SOCD requires two distinct keys');
   }
-  const action1 = socd.action1 ?? 0
-  const action2 = socd.action2 ?? 0
-  const type = socd.type ?? 0
-  const mode = socd.mode ?? XsydSocdMode.LastInputPriority
-  const delay = socd.delay ?? 0
+  const action1 = socd.action1 ?? 0;
+  const action2 = socd.action2 ?? 0;
+  const type = socd.type ?? 0;
+  const mode = socd.mode ?? XsydSocdMode.LastInputPriority;
+  const delay = socd.delay ?? 0;
   if (!Number.isInteger(mode) || mode < 0 || mode > 3) {
-    throw new RangeError('SOCD mode must be 0..3 on WIN 68 HE MAX')
+    throw new RangeError('SOCD mode must be 0..3 on WIN 68 HE MAX');
   }
   if (action1 !== 0 || action2 !== 0 || type !== 0 || delay !== 0) {
-    throw new RangeError('Only SOCD type=0, action1=0, action2=0, delay=0 is verified by capture on WIN 68 HE MAX')
+    throw new RangeError(
+      'Only SOCD type=0, action1=0, action2=0, delay=0 is verified by capture on WIN 68 HE MAX'
+    );
   }
   return Uint8Array.from([
     0x01,
@@ -490,8 +492,8 @@ export function buildSocdPayload(socd: XsydSocd): Uint8Array {
     0x00,
     mode,
     0x00,
-    0x00,
-  ])
+    0x00
+  ]);
 }
 
 /**
@@ -499,28 +501,28 @@ export function buildSocdPayload(socd: XsydSocd): Uint8Array {
  * verified by `#12086`, `#47190`, `#73090` in `socd_ad_...pcapng`.
  */
 export function buildSocdReadFrame(key: XsydKeyCode): Uint8Array {
-  assertCode(key, 'key')
-  return buildXsydFrame(0x2c, [0x00, key, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00])
+  assertCode(key, 'key');
+  return buildXsydFrame(0x2c, [0x00, key, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00]);
 }
 
 /**
  * Decode an `0xAC` SOCD reply (`LEN = 0x0B` = 11 bytes, `#29463`, `#59270`, `#86418`).
  */
 export function decodeSocdReply(reply: XsydReply): {
-  key1: XsydKeyCode
-  key2: XsydKeyCode
-  action1: number
-  action2: number
-  type: number
-  mode: XsydSocdModeValue
-  delay: number
+  key1: XsydKeyCode;
+  key2: XsydKeyCode;
+  action1: number;
+  action2: number;
+  type: number;
+  mode: XsydSocdModeValue;
+  delay: number;
 } | null {
   if (reply.opcode !== 0xac || reply.payload.length < 11) {
-    throw new Error(`Expected opcode 0xAC SOCD reply, got 0x${reply.opcode.toString(16)}`)
+    throw new Error(`Expected opcode 0xAC SOCD reply, got 0x${reply.opcode.toString(16)}`);
   }
-  const p = reply.payload
+  const p = reply.payload;
   if (p[1] === 0 && p[2] === 0) {
-    return null
+    return null;
   }
   return {
     key1: p[1],
@@ -529,38 +531,38 @@ export function decodeSocdReply(reply: XsydReply): {
     action2: p[5] | (p[6] << 8),
     type: p[7],
     mode: (p[8] & 0x03) as XsydSocdModeValue,
-    delay: p[9] | (p[10] << 8),
-  }
+    delay: p[9] | (p[10] << 8)
+  };
 }
 
 /** Full 64-byte report body for an MT write. */
 export function buildMtFrame(mt: XsydMt): Uint8Array {
-  return buildXsydFrame(0x24, buildMtPayload(mt))
+  return buildXsydFrame(0x24, buildMtPayload(mt));
 }
 
 /** Full 64-byte report body for a TGL write. */
 export function buildTglFrame(tgl: XsydTgl): Uint8Array {
-  return buildXsydFrame(0x25, buildTglPayload(tgl))
+  return buildXsydFrame(0x25, buildTglPayload(tgl));
 }
 
 /** Full 64-byte report body for a DKS write (`0x26`, `LEN = 0x10`). */
 export function buildDksFrame(dks: XsydDks): Uint8Array {
-  return buildXsydFrame(0x26, buildDksPayload(dks))
+  return buildXsydFrame(0x26, buildDksPayload(dks));
 }
 
 /** Full 64-byte report body for an END write. */
 export function buildEndFrame(end: XsydEnd): Uint8Array {
-  return buildXsydFrame(0x28, buildEndPayload(end))
+  return buildXsydFrame(0x28, buildEndPayload(end));
 }
 
 /** Full 64-byte report body for an MPT (multi-point travel) write. */
 export function buildMptFrame(mpt: XsydMpt): Uint8Array {
-  return buildXsydFrame(0x27, buildMptPayload(mpt))
+  return buildXsydFrame(0x27, buildMptPayload(mpt));
 }
 
 /** Full 64-byte report body for a verified SOCD write (`mode = 0..3`). */
 export function buildSocdFrame(socd: XsydSocd): Uint8Array {
-  return buildXsydFrame(0x2c, buildSocdPayload(socd))
+  return buildXsydFrame(0x2c, buildSocdPayload(socd));
 }
 
 /**
@@ -569,16 +571,16 @@ export function buildSocdFrame(socd: XsydSocd): Uint8Array {
  */
 export function buildDisableAdvancedKeyFrame(keys: readonly XsydKeyCode[]): Uint8Array {
   if (keys.length === 0) {
-    throw new RangeError('At least one key is required to disable an advanced binding')
+    throw new RangeError('At least one key is required to disable an advanced binding');
   }
   for (const key of keys) {
-    assertCode(key, 'key')
+    assertCode(key, 'key');
   }
   return buildFieldWriteFrame(
     keys.map(pos => ({
       pos,
       field: XsydFeatureField.Header,
-      value: 0x0000,
+      value: 0x0000
     }))
-  )
+  );
 }

@@ -1,1 +1,1 @@
-export * from '../hero68/switchProfiles'
+export * from '../hero68/switchProfiles';

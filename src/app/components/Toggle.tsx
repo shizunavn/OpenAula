@@ -3,13 +3,13 @@ function Toggle({
   onChange,
   label,
   disabled = false,
-  mixed = false,
+  mixed = false
 }: {
-  checked: boolean
-  onChange: (value: boolean) => void
-  label: string
-  disabled?: boolean
-  mixed?: boolean
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+  disabled?: boolean;
+  mixed?: boolean;
 }) {
   return (
     <button
@@ -22,7 +22,7 @@ function Toggle({
     >
       <span className="toggle-knob" />
     </button>
-  )
+  );
 }
 
-export { Toggle }
+export { Toggle };

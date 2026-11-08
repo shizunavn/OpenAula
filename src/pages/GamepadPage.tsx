@@ -12,7 +12,7 @@ import {
   mapGamepad,
   restoreGamepad,
   type GamepadAction,
-  type GamepadConfiguration,
+  type GamepadConfiguration
 } from '../keyboard/gamepad';
 import { heroLayout } from '../keyboard/layout';
 import { WINDOWS_SCANS } from '../keyboard/windowsScans';
@@ -27,7 +27,7 @@ import {
   isToggleModifierConfigured,
   outOfDateToggleModifier,
   useSharedHallService,
-  type GamepadStatus,
+  type GamepadStatus
 } from '../protocol/gamepadService';
 import { GamepadAccessGateOverlay } from './gamepad/GamepadAccessGateOverlay';
 import { GamepadConfigTab } from './gamepad/GamepadConfigTab';
@@ -41,7 +41,7 @@ import {
   loadGamepadDraft,
   NEUTRAL_GAMEPAD_LIGHTING,
   physicalLabel,
-  saveGamepadDraft,
+  saveGamepadDraft
 } from './gamepad/gamepadDraftStorage';
 import { useGamepadDragAndCurve } from './gamepad/useGamepadDragAndCurve';
 import { useGamepadHotkeyRecorder } from './gamepad/useGamepadHotkeyRecorder';
@@ -52,7 +52,7 @@ export { loadGamepadDraft };
 export default function GamepadPage({
   slot,
   busy: profileBusy = false,
-  onSetup,
+  onSetup
 }: {
   slot: number;
   busy?: boolean;
@@ -101,7 +101,7 @@ export default function GamepadPage({
 
   function patch(next: Partial<GamepadConfiguration>) {
     restoreFromService.current = false;
-    setConfig((current) => {
+    setConfig(current => {
       const updated = { ...current, ...next };
       if (updated.toggleKeybind && !updated.toggleKeybind.length) {
         delete updated.toggleKeybind;
@@ -112,9 +112,9 @@ export default function GamepadPage({
 
   function removeBinding(keyId: string) {
     restoreFromService.current = false;
-    setConfig((current) => ({
+    setConfig(current => ({
       ...current,
-      bindings: current.bindings.filter((b) => b.keyId !== keyId),
+      bindings: current.bindings.filter(b => b.keyId !== keyId)
     }));
   }
 
@@ -135,7 +135,7 @@ export default function GamepadPage({
     startCurveDrag,
     moveCurveDrag,
     finishCurve,
-    changeCurve,
+    changeCurve
   } = useGamepadDragAndCurve({
     config,
     disabled,
@@ -145,21 +145,21 @@ export default function GamepadPage({
     keyboardRef: keyboard,
     onPatch: patch,
     onRemoveBinding: removeBinding,
-    onCurveDragStateChange: (dragging) => {
+    onCurveDragStateChange: dragging => {
       if (dragging) {
         autoApply.current?.setAvailable(false);
       }
-    },
+    }
   });
 
   function assign(keyId: string, actionName: GamepadAction) {
     restoreFromService.current = false;
-    setConfig((current) => ({
+    setConfig(current => ({
       ...current,
       bindings: [
-        ...current.bindings.filter((b) => b.keyId !== keyId),
-        { keyId, action: actionName, startMm: 0.1, endMm: 3.4 },
-      ],
+        ...current.bindings.filter(b => b.keyId !== keyId),
+        { keyId, action: actionName, startMm: 0.1, endMm: 3.4 }
+      ]
     }));
     setSelected(keyId);
     setAssigned({ keyId, sequence: Date.now() });
@@ -178,8 +178,8 @@ export default function GamepadPage({
           setXsydEnabled(true);
           if (!hallStream.active && !hallStream.starting) {
             await hero68HallStream.start(
-              config.bindings.map((b) => b.keyId),
-              'direct-poll',
+              config.bindings.map(b => b.keyId),
+              'direct-poll'
             );
           }
         } else {
@@ -235,7 +235,7 @@ export default function GamepadPage({
       statusEnabled: xsydWebHidMode ? xsydEnabled : status?.enabled,
       busy,
       onPatch: patch,
-      onToggleHotkey: (nextEnabled) => void runServiceAction(nextEnabled, 'hotkey'),
+      onToggleHotkey: nextEnabled => void runServiceAction(nextEnabled, 'hotkey')
     });
 
   useEffect(() => {
@@ -249,7 +249,7 @@ export default function GamepadPage({
     let active = true;
     let streamRevision = 0;
     const close = gamepadService.stream(
-      (nextStatus) => {
+      nextStatus => {
         if (active) {
           streamRevision++;
           if (restoreFromService.current && nextStatus.slot === slot) {
@@ -259,7 +259,7 @@ export default function GamepadPage({
           setStatus(nextStatus);
           setServiceConnected(true);
           setLoading(false);
-          setError((prev) => (prev === t('Service unavailable') ? '' : prev));
+          setError(prev => (prev === t('Service unavailable') ? '' : prev));
         }
       },
       () => {
@@ -273,7 +273,7 @@ export default function GamepadPage({
     );
     gamepadService
       .status()
-      .then((nextStatus) => {
+      .then(nextStatus => {
         if (!active || streamRevision !== 0) {
           return;
         }
@@ -283,7 +283,10 @@ export default function GamepadPage({
         }
         // A service that reports no Gamepad capability predates the shortcut,
         // yet the saved profile may still carry one; say why it does nothing.
-        if (!nextStatus.capabilities?.gamepad && isToggleModifierConfigured(nextStatus.configuration)) {
+        if (
+          !nextStatus.capabilities?.gamepad &&
+          isToggleModifierConfigured(nextStatus.configuration)
+        ) {
           setError(t(outOfDateToggleModifier()));
         }
         setStatus(nextStatus);
@@ -309,8 +312,8 @@ export default function GamepadPage({
   useEffect(() => {
     let active = true;
     const queue = new GamepadAutoApply(
-      (draft) => gamepadService.configure(slot, draft),
-      (value) => {
+      draft => gamepadService.configure(slot, draft),
+      value => {
         if (active) {
           setStatus(value);
         }
@@ -364,16 +367,24 @@ export default function GamepadPage({
     if ((xsydEnabled || tab === 'tester') && !hallStream.active && !hallStream.starting) {
       void hero68HallStream
         .start(
-          config.bindings.map((b) => b.keyId),
-          'direct-poll',
+          config.bindings.map(b => b.keyId),
+          'direct-poll'
         )
-        .catch((err) => {
+        .catch(err => {
           if (mounted.current) {
             setError(err instanceof Error ? err.message : String(err));
           }
         });
     }
-  }, [xsydWebHidMode, xsydEnabled, tab, demo, hallStream.active, hallStream.starting, config.bindings]);
+  }, [
+    xsydWebHidMode,
+    xsydEnabled,
+    tab,
+    demo,
+    hallStream.active,
+    hallStream.starting,
+    config.bindings
+  ]);
 
   const samples = useMemo(
     () =>
@@ -383,15 +394,15 @@ export default function GamepadPage({
           ? Object.fromEntries(
               Object.entries(hallStream.samples).map(([keyId, sample]) => [
                 keyId,
-                { distanceMm: sample.visualDistanceMm, pressed: sample.pressed },
+                { distanceMm: sample.visualDistanceMm, pressed: sample.pressed }
               ])
             )
           : Object.fromEntries(
               (status?.samples ?? [])
-                .filter((sample) => (sample.ageMs ?? 0) < 50)
-                .map((sample) => [
+                .filter(sample => (sample.ageMs ?? 0) < 50)
+                .map(sample => [
                   sample.keyId,
-                  { distanceMm: sample.distanceUnits / 100, pressed: sample.pressed },
+                  { distanceMm: sample.distanceUnits / 100, pressed: sample.pressed }
                 ])
             ),
     [demo, demoSamples, xsydWebHidMode, hallStream.samples, status, tab]
@@ -400,7 +411,7 @@ export default function GamepadPage({
   const report =
     (demo && tab === 'tester') || xsydWebHidMode
       ? mapGamepad(config, samples)
-      : status?.report ?? mapGamepad(config, {});
+      : (status?.report ?? mapGamepad(config, {}));
 
   const effectiveStatus = useMemo<GamepadStatus | null>(() => {
     if (!xsydWebHidMode) {
@@ -423,16 +434,16 @@ export default function GamepadPage({
       configuration: config,
       capabilities: {
         gamepad: true,
-        keyboardSuppression: false,
+        keyboardSuppression: false
       },
       hall: {
         consumers: active
           ? [
               {
                 id: 'web:xsyd-hall',
-                keys: config.bindings.map((b) => b.keyId),
-                hz: config.rate,
-              },
+                keys: config.bindings.map(b => b.keyId),
+                hz: config.rate
+              }
             ]
           : [],
         requests: hallStream.frameCount,
@@ -442,8 +453,8 @@ export default function GamepadPage({
           keyId,
           requestedHz: config.rate,
           hz,
-          intervalP99Ms: 0,
-        })),
+          intervalP99Ms: 0
+        }))
       },
       samples: Object.values(hallStream.samples).map((sample, idx) => ({
         keyId: sample.keyId,
@@ -453,8 +464,8 @@ export default function GamepadPage({
         pressed: sample.pressed,
         timestampMs: sample.timestampMs,
         sequence: idx + 1,
-        ageMs: 0,
-      })),
+        ageMs: 0
+      }))
     };
   }, [xsydWebHidMode, status, xsydEnabled, tab, hallStream, report, slot, config]);
 
@@ -473,27 +484,38 @@ export default function GamepadPage({
               pressed: sample.pressed,
               timestampMs: 0,
               sequence: 1,
-              ageMs: 0,
+              ageMs: 0
             })),
-            source: 'demo',
+            source: 'demo'
           }
         : xsydWebHidMode
           ? {
               report,
               samples: effectiveStatus?.samples ?? [],
-              source: 'browser',
+              source: 'browser'
             }
           : null
     );
-  }, [liveStore, tab, locked, effectiveStatus, xsydWebHidMode, xsydEnabled, report, demo, demoSamples, config]);
+  }, [
+    liveStore,
+    tab,
+    locked,
+    effectiveStatus,
+    xsydWebHidMode,
+    xsydEnabled,
+    report,
+    demo,
+    demoSamples,
+    config
+  ]);
 
-  const labels = Object.fromEntries(config.bindings.map((b) => [b.keyId, actionLabel(b.action)]));
-  const binding = config.bindings.find((b) => b.keyId === selected);
-  const measuredKeys = (effectiveStatus?.hall.keys ?? []).filter((k) =>
-    config.bindings.some((b) => b.keyId === k.keyId && isAnalogAction(b.action))
+  const labels = Object.fromEntries(config.bindings.map(b => [b.keyId, actionLabel(b.action)]));
+  const binding = config.bindings.find(b => b.keyId === selected);
+  const measuredKeys = (effectiveStatus?.hall.keys ?? []).filter(k =>
+    config.bindings.some(b => b.keyId === k.keyId && isAnalogAction(b.action))
   );
   const measuredHz = measuredKeys.length
-    ? Math.min(...measuredKeys.map((k) => k.hz)).toFixed(1)
+    ? Math.min(...measuredKeys.map(k => k.hz)).toFixed(1)
     : effectiveStatus?.outputHz
       ? effectiveStatus.outputHz.toFixed(1)
       : '—';
@@ -503,7 +525,7 @@ export default function GamepadPage({
     setStatus(null);
     setServiceConnected(false);
     setError('');
-    setConnectionAttempt((n) => n + 1);
+    setConnectionAttempt(n => n + 1);
   };
 
   return (
@@ -516,7 +538,11 @@ export default function GamepadPage({
           label={t(removeTarget ? 'Drop to remove binding' : 'Drop onto a key')}
         />
       )}
-      <div className={`gamepad-page ${showGate ? 'gp-locked' : ''}`} inert={locked} aria-busy={loading}>
+      <div
+        className={`gamepad-page ${showGate ? 'gp-locked' : ''}`}
+        inert={locked}
+        aria-busy={loading}
+      >
         <div className="gp-heading">
           <h2>
             <Gamepad2 size={23} /> Gamepad <small>P{slot + 1}</small>
@@ -542,7 +568,7 @@ export default function GamepadPage({
           type="file"
           accept=".json"
           hidden
-          onChange={async (event) => {
+          onChange={async event => {
             const uploaded = event.target.files?.[0];
             if (!uploaded) {
               return;
@@ -565,14 +591,14 @@ export default function GamepadPage({
             keyLabels={labels}
             keyDecorations={{
               ...Object.fromEntries(
-                config.bindings.map((b) => [
+                config.bindings.map(b => [
                   b.keyId,
                   <span
                     key={`${b.keyId}:${assigned?.keyId === b.keyId ? assigned.sequence : 0}`}
                     className={assigned?.keyId === b.keyId ? 'gp-assigned-pop' : ''}
                   >
                     <GamepadControlIcon action={b.action} />
-                  </span>,
+                  </span>
                 ])
               ),
               ...(dropTarget && dragged
@@ -581,26 +607,28 @@ export default function GamepadPage({
                       <span className="gp-drop-preview">
                         <GamepadControlIcon action={dragged.action} />
                       </span>
-                    ),
+                    )
                   }
-                : {}),
+                : {})
             }}
             keyClassNames={Object.fromEntries(
               heroLayout('hero84')
                 .rows.flat()
-                .map((key) => [
+                .map(key => [
                   key.id,
                   [
                     key.id === dropTarget && dragged ? 'gp-drop-target' : '',
-                    key.id === dragged?.sourceKeyId ? 'gp-drag-source' : '',
+                    key.id === dragged?.sourceKeyId ? 'gp-drag-source' : ''
                   ]
                     .filter(Boolean)
-                    .join(' '),
+                    .join(' ')
                 ])
             )}
-            draggableKeys={new Set(!disabled && tab === 'setup' ? config.bindings.map((b) => b.keyId) : [])}
+            draggableKeys={
+              new Set(!disabled && tab === 'setup' ? config.bindings.map(b => b.keyId) : [])
+            }
             onDragStartKey={(id, event) => {
-              const source = config.bindings.find((b) => b.keyId === id);
+              const source = config.bindings.find(b => b.keyId === id);
               if (disabled || tab !== 'setup' || !source) {
                 event.preventDefault();
                 return;
@@ -615,22 +643,22 @@ export default function GamepadPage({
                 action: source.action,
                 sourceKeyId: id,
                 x: event.clientX,
-                y: event.clientY,
+                y: event.clientY
               });
             }}
             onDragEndKey={clearDrag}
             keyTooltips={Object.fromEntries(
-              config.bindings.map((b) => [
+              config.bindings.map(b => [
                 b.keyId,
                 {
                   title: `${physicalLabel(b.keyId)} → ${actionLabel(b.action)}`,
                   detail: isAnalogAction(b.action)
                     ? `${b.startMm.toFixed(2)}–${b.endMm.toFixed(2)} mm`
-                    : t('Digital button · Actuation Point + Rapid Trigger'),
-                },
+                    : t('Digital button · Actuation Point + Rapid Trigger')
+                }
               ])
             )}
-            onToggleKey={(id) => {
+            onToggleKey={id => {
               if (recordingKeybind && !disabled && WINDOWS_SCANS[id] !== undefined) {
                 patch({ toggleKeybind: [id] });
                 setRecordingKeybind(false);
@@ -639,12 +667,12 @@ export default function GamepadPage({
               }
               setSelected(id);
               if (tab === 'tester' && demo) {
-                setDemoSamples((prev) => ({
+                setDemoSamples(prev => ({
                   ...prev,
                   [id]: {
                     distanceMm: prev[id]?.pressed ? 0 : 3.4,
-                    pressed: !prev[id]?.pressed,
-                  },
+                    pressed: !prev[id]?.pressed
+                  }
                 }));
               }
             }}
@@ -661,15 +689,17 @@ export default function GamepadPage({
                   return;
                 }
                 restoreFromService.current = false;
-                setConfig((current) => {
-                  const source = current.bindings.find((b) => b.keyId === sourceKeyId);
+                setConfig(current => {
+                  const source = current.bindings.find(b => b.keyId === sourceKeyId);
                   return source
                     ? {
                         ...current,
                         bindings: [
-                          ...current.bindings.filter((b) => b.keyId !== sourceKeyId && b.keyId !== id),
-                          { ...source, keyId: id },
-                        ],
+                          ...current.bindings.filter(
+                            b => b.keyId !== sourceKeyId && b.keyId !== id
+                          ),
+                          { ...source, keyId: id }
+                        ]
                       }
                     : current;
                 });
@@ -677,7 +707,9 @@ export default function GamepadPage({
                 setAssigned({ keyId: id, sequence: Date.now() });
                 return;
               }
-              const droppedAction = event.dataTransfer.getData('application/x-openhero-gamepad') as GamepadAction;
+              const droppedAction = event.dataTransfer.getData(
+                'application/x-openhero-gamepad'
+              ) as GamepadAction;
               if (GAMEPAD_ACTIONS.includes(droppedAction)) {
                 assign(id, droppedAction);
               }
@@ -688,8 +720,8 @@ export default function GamepadPage({
                 setDropTarget(id);
               }
             }}
-            onDragLeaveKey={(id) => setDropTarget((current) => (current === id ? null : current))}
-            onRemoveKey={(id) => {
+            onDragLeaveKey={id => setDropTarget(current => (current === id ? null : current))}
+            onRemoveKey={id => {
               if (!disabled) {
                 removeBinding(id);
               }
@@ -698,7 +730,7 @@ export default function GamepadPage({
             streamPreviewValues={Object.fromEntries(
               Object.entries(samples).map(([id, sample]) => [
                 id,
-                { distanceMm: sample.distanceMm, rawAdc: 0, pressed: sample.pressed },
+                { distanceMm: sample.distanceMm, rawAdc: 0, pressed: sample.pressed }
               ])
             )}
           />
@@ -764,7 +796,7 @@ export default function GamepadPage({
             onPatch={patch}
             onStartRecordingKeybind={() => {
               setPendingKeybind([]);
-              setRecordingKeybind((r) => !r);
+              setRecordingKeybind(r => !r);
             }}
             onClearKeybind={() => {
               setRecordingKeybind(false);

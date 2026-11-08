@@ -1,9 +1,25 @@
-import { advancedDelete, advancedDks, advancedEnd, advancedModTap, advancedMpt, advancedSocd, advancedTgl, readAdvancedKey, readAdvancedKeyPositions, selectProfile } from './commands';
+import {
+  advancedDelete,
+  advancedDks,
+  advancedEnd,
+  advancedModTap,
+  advancedMpt,
+  advancedSocd,
+  advancedTgl,
+  readAdvancedKey,
+  readAdvancedKeyPositions,
+  selectProfile
+} from './commands';
 import { getBoard, isWin68HeMaxModel, type HeroDeviceModelId } from '../../keyboard/registry';
 import { keyIdToPos, posToKeyId } from './keyPositions';
 import type { Hero68Requester } from './hero68Encoder';
 import type { DecodedReport, ProfileSlot } from './types';
-import { encodeXsydAdvancedBinding, saveXsydAdvancedBindings, validateXsydAdvanced, type XsydRequester } from '../xsyd/device';
+import {
+  encodeXsydAdvancedBinding,
+  saveXsydAdvancedBindings,
+  validateXsydAdvanced,
+  type XsydRequester
+} from '../xsyd/device';
 export type AdvancedKind = 'SOCD' | 'DKS' | 'MT' | 'TGL' | 'MPT' | 'END';
 export type AdvancedBinding = {
   id: string;
@@ -21,19 +37,45 @@ export type AdvancedBinding = {
 };
 export const ADVANCED_KINDS: AdvancedKind[] = ['SOCD', 'DKS', 'MT', 'TGL', 'MPT', 'END'];
 export const ADVANCED_LIMIT = 40;
-const u16 = (d: Uint8Array, i: number) => d[i] << 8 | d[i + 1];
-const u32 = (d: Uint8Array, i: number) => d[i] * 0x1000000 + (d[i + 1] << 16) + (d[i + 2] << 8) + d[i + 3] >>> 0;
-export function newAdvanced(kind: AdvancedKind, keys: string[], model?: HeroDeviceModelId): AdvancedBinding {
+const u16 = (d: Uint8Array, i: number) => (d[i] << 8) | d[i + 1];
+const u32 = (d: Uint8Array, i: number) =>
+  (d[i] * 0x1000000 + (d[i + 1] << 16) + (d[i + 2] << 8) + d[i + 3]) >>> 0;
+export function newAdvanced(
+  kind: AdvancedKind,
+  keys: string[],
+  model?: HeroDeviceModelId
+): AdvancedBinding {
   const isMax = isWin68HeMaxModel(model);
   return {
     id: keys[0],
     kind,
     keys,
-    actions: kind === 'DKS' ? (isMax ? [4, 5, 6, 7] : [4, 22, 7, 9]) : kind === 'MPT' ? [4, 22, 7] : kind === 'MT' ? [4, 22] : [4],
-    thresholds: kind === 'MPT' ? [1, 2, 3] : isMax && kind === 'DKS' ? [1.4, 3.4, 3.4, 1.4] : [1, 3, 3, 1],
-    states: isMax && kind === 'DKS'
-      ? [[14, 0, 0, 0], [0, 14, 0, 0], [0, 0, 14, 0], [0, 0, 0, 10]]
-      : [[10, 0, 0, 0], [0, 10, 0, 0], [0, 0, 10, 0], [0, 0, 0, 10]],
+    actions:
+      kind === 'DKS'
+        ? isMax
+          ? [4, 5, 6, 7]
+          : [4, 22, 7, 9]
+        : kind === 'MPT'
+          ? [4, 22, 7]
+          : kind === 'MT'
+            ? [4, 22]
+            : [4],
+    thresholds:
+      kind === 'MPT' ? [1, 2, 3] : isMax && kind === 'DKS' ? [1.4, 3.4, 3.4, 1.4] : [1, 3, 3, 1],
+    states:
+      isMax && kind === 'DKS'
+        ? [
+            [14, 0, 0, 0],
+            [0, 14, 0, 0],
+            [0, 0, 14, 0],
+            [0, 0, 0, 10]
+          ]
+        : [
+            [10, 0, 0, 0],
+            [0, 10, 0, 0],
+            [0, 0, 10, 0],
+            [0, 0, 0, 10]
+          ],
     delay: 200,
     mode: isMax && kind === 'SOCD' ? 0 : 1
   };
@@ -72,20 +114,32 @@ export function validateAdvanced(bindings: AdvancedBinding[], model?: HeroDevice
     if (b.actions.some(a => !Number.isInteger(a) || a < 0 || a > 0xffffffff)) {
       throw new Error('Invalid action.');
     }
-    if (['MT', 'TGL'].includes(b.kind) && (!Number.isInteger(b.delay) || b.delay < 1 || b.delay > 65535)) {
+    if (
+      ['MT', 'TGL'].includes(b.kind) &&
+      (!Number.isInteger(b.delay) || b.delay < 1 || b.delay > 65535)
+    ) {
       throw new Error('Delay must be 1–65535 ms.');
     }
     if (b.kind === 'SOCD' && ![0, 1, 2, 3, 4].includes(b.mode)) {
       throw new Error('Invalid SOCD mode.');
     }
     if (['DKS', 'MPT'].includes(b.kind)) {
-      if (b.thresholds.length !== (b.kind === 'DKS' ? 4 : 3) || b.thresholds.some(v => !Number.isFinite(v) || v < .1 || v > maxTravel)) {
+      if (
+        b.thresholds.length !== (b.kind === 'DKS' ? 4 : 3) ||
+        b.thresholds.some(v => !Number.isFinite(v) || v < 0.1 || v > maxTravel)
+      ) {
         throw new Error(`Depth must be 0.10–${maxTravel.toFixed(2)} mm.`);
       }
-      if (b.kind === 'MPT' && !(b.thresholds[0] < b.thresholds[1] && b.thresholds[1] < b.thresholds[2])) {
+      if (
+        b.kind === 'MPT' &&
+        !(b.thresholds[0] < b.thresholds[1] && b.thresholds[1] < b.thresholds[2])
+      ) {
         throw new Error('MPT depths must increase from left to right.');
       }
-      if (b.kind === 'DKS' && (b.thresholds[0] >= b.thresholds[1] || b.thresholds[3] >= b.thresholds[2])) {
+      if (
+        b.kind === 'DKS' &&
+        (b.thresholds[0] >= b.thresholds[1] || b.thresholds[3] >= b.thresholds[2])
+      ) {
         throw new Error('Shallow DKS points must be above the deep points.');
       }
     }
@@ -93,7 +147,11 @@ export function validateAdvanced(bindings: AdvancedBinding[], model?: HeroDevice
     if (b.actions.length !== count) {
       throw new Error('Invalid action count.');
     }
-    if (b.kind === 'DKS' && (b.states.length !== 4 || b.states.some(s => s.length !== 4 || s.some(v => ![0, 4, 6, 10, 12, 14].includes(v))))) {
+    if (
+      b.kind === 'DKS' &&
+      (b.states.length !== 4 ||
+        b.states.some(s => s.length !== 4 || s.some(v => ![0, 4, 6, 10, 12, 14].includes(v))))
+    ) {
       throw new Error('Invalid DKS action pattern.');
     }
   }
@@ -116,9 +174,18 @@ export function advancedPacket(b: AdvancedBinding, model?: HeroDeviceModelId): U
     case 'END':
       return advancedEnd(0, pos, b.actions[0]);
     case 'MPT':
-      return advancedMpt(0, pos, b.actions.map((a, i) => ([a, depths[i]] as const)));
+      return advancedMpt(
+        0,
+        pos,
+        b.actions.map((a, i) => [a, depths[i]] as const)
+      );
     case 'DKS':
-      return advancedDks(0, pos, (depths as [number, number, number, number]), b.actions.map((a, i) => ([a, (b.states[i] as [number, number, number, number])] as const)));
+      return advancedDks(
+        0,
+        pos,
+        depths as [number, number, number, number],
+        b.actions.map((a, i) => [a, b.states[i] as [number, number, number, number]] as const)
+      );
     default:
       throw new Error('This firmware binding is preserved but cannot be edited.');
   }
@@ -165,22 +232,25 @@ function decodeBinding(r: DecodedReport, model?: HeroDeviceModelId): AdvancedBin
     }
     return id;
   });
-  const kind: AdvancedBinding['kind'] = ({
-    1: 'TGL',
-    2: 'MT',
-    3: 'DKS',
-    4: 'SOCD',
-    5: 'MPT',
-    6: 'END'
-  } as Partial<Record<number, AdvancedKind>>)[type] ?? 'UNKNOWN';
-  const b = ({
+  const kind: AdvancedBinding['kind'] =
+    (
+      {
+        1: 'TGL',
+        2: 'MT',
+        3: 'DKS',
+        4: 'SOCD',
+        5: 'MPT',
+        6: 'END'
+      } as Partial<Record<number, AdvancedKind>>
+    )[type] ?? 'UNKNOWN';
+  const b = {
     ...newAdvanced(kind === 'UNKNOWN' ? 'END' : kind, keys),
     kind,
     raw: {
       type,
       data: Array.from(d)
     }
-  } as AdvancedBinding);
+  } as AdvancedBinding;
   if (type === 4) {
     if (d[0] !== 2) {
       throw new Error('Invalid SOCD pair.');
@@ -207,14 +277,20 @@ function decodeBinding(r: DecodedReport, model?: HeroDeviceModelId): AdvancedBin
   }
   return b;
 }
-export async function readAdvancedBindings(requester: Hero68Requester, model?: HeroDeviceModelId): Promise<AdvancedBinding[]> {
+export async function readAdvancedBindings(
+  requester: Hero68Requester,
+  model?: HeroDeviceModelId
+): Promise<AdvancedBinding[]> {
   const r = await requester.request(readAdvancedKeyPositions(0), 0x92, 0);
   if (!r.checksumValid || r.reserved !== 0 || r.data.length % 2 || r.data.length > 56) {
     throw new Error('Invalid Advanced Keys position list.');
   }
-  const positions = Array.from({
-    length: r.data.length / 2
-  }, (_, i) => u16(r.data, i * 2));
+  const positions = Array.from(
+    {
+      length: r.data.length / 2
+    },
+    (_, i) => u16(r.data, i * 2)
+  );
   if (new Set(positions).size !== positions.length) {
     throw new Error('Duplicate Advanced Key position.');
   }
@@ -239,29 +315,59 @@ export async function readAdvancedBindings(requester: Hero68Requester, model?: H
   }
   return bindings;
 }
-const signature = (b: AdvancedBinding) => JSON.stringify(b.kind === 'UNKNOWN' ? b.raw : {
-  kind: b.kind,
-  keys: b.keys,
-  actions: b.kind === 'SOCD' ? undefined : b.actions,
-  mode: b.kind === 'SOCD' ? b.mode : undefined,
-  delay: ['MT', 'TGL'].includes(b.kind) ? b.delay : undefined,
-  depths: ['DKS', 'MPT'].includes(b.kind) ? b.thresholds.map(v => Math.round(v * 100)) : undefined,
-  states: b.kind === 'DKS' ? b.states : undefined
-});
+const signature = (b: AdvancedBinding) =>
+  JSON.stringify(
+    b.kind === 'UNKNOWN'
+      ? b.raw
+      : {
+          kind: b.kind,
+          keys: b.keys,
+          actions: b.kind === 'SOCD' ? undefined : b.actions,
+          mode: b.kind === 'SOCD' ? b.mode : undefined,
+          delay: ['MT', 'TGL'].includes(b.kind) ? b.delay : undefined,
+          depths: ['DKS', 'MPT'].includes(b.kind)
+            ? b.thresholds.map(v => Math.round(v * 100))
+            : undefined,
+          states: b.kind === 'DKS' ? b.states : undefined
+        }
+  );
 export function advancedEqual(a: AdvancedBinding[], b: AdvancedBinding[]) {
   return JSON.stringify(a.map(signature).sort()) === JSON.stringify(b.map(signature).sort());
 }
-export function mergeAdvanced(fresh: AdvancedBinding[], draft?: AdvancedBinding[], baseline?: AdvancedBinding[], model?: HeroDeviceModelId) {
+export function mergeAdvanced(
+  fresh: AdvancedBinding[],
+  draft?: AdvancedBinding[],
+  baseline?: AdvancedBinding[],
+  model?: HeroDeviceModelId
+) {
   if (!draft || !baseline) {
     return fresh;
   }
-  const changed = new Set([...draft, ...baseline].filter(b => !draft.some(d => d.id === b.id && baseline.some(v => v.id === b.id && signature(d) === signature(v)))).map(b => b.id));
-  const result = [...fresh.filter(b => !changed.has(b.id)), ...draft.filter(b => changed.has(b.id))];
+  const changed = new Set(
+    [...draft, ...baseline]
+      .filter(
+        b =>
+          !draft.some(
+            d => d.id === b.id && baseline.some(v => v.id === b.id && signature(d) === signature(v))
+          )
+      )
+      .map(b => b.id)
+  );
+  const result = [
+    ...fresh.filter(b => !changed.has(b.id)),
+    ...draft.filter(b => changed.has(b.id))
+  ];
   validateAdvanced(result, model);
   return result;
 }
 /** Read before writing; preserve unedited/unknown bindings and verify final readback. */
-export async function saveAdvancedBindings(requester: Hero68Requester | XsydRequester, slot: ProfileSlot, draft: AdvancedBinding[], baseline: AdvancedBinding[], model?: HeroDeviceModelId) {
+export async function saveAdvancedBindings(
+  requester: Hero68Requester | XsydRequester,
+  slot: ProfileSlot,
+  draft: AdvancedBinding[],
+  baseline: AdvancedBinding[],
+  model?: HeroDeviceModelId
+) {
   if (isWin68HeMaxModel(model)) {
     return saveXsydAdvancedBindings(requester as XsydRequester, slot, draft, baseline);
   }
@@ -270,7 +376,9 @@ export async function saveAdvancedBindings(requester: Hero68Requester | XsydRequ
   await heroRequester.request(selectProfile(slot), 0x10, 0);
   const fresh = await readAdvancedBindings(heroRequester, model);
   if (!advancedEqual(fresh, baseline)) {
-    throw new Error('Advanced Keys changed on the keyboard. Read this profile again before saving.');
+    throw new Error(
+      'Advanced Keys changed on the keyboard. Read this profile again before saving.'
+    );
   }
   for (const old of baseline) {
     if (!draft.some(b => signature(b) === signature(old))) {

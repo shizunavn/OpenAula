@@ -1,22 +1,30 @@
 import { useRef, useState } from 'react';
 import { advancedEqual, type AdvancedBinding } from '../../protocol/hero68/advanced';
 import { defaultRemapLayers, type RemapLayer, type RemapLayers } from '../../protocol/hero68/remap';
-import { restoreStoredRgb, rgbChanges, rgbDirtyCount, type RgbProfile } from '../../protocol/hero68/rgb';
+import {
+  restoreStoredRgb,
+  rgbChanges,
+  rgbDirtyCount,
+  type RgbProfile
+} from '../../protocol/hero68/rgb';
 import type { ProfileSlot } from '../../protocol/hero68/types';
 import type { PersistedOpenHeroState, ProfileDraft } from '../../state/persistence';
 export type UseProfileWorkspaceOptions = {
   persistedState: PersistedOpenHeroState | null | undefined;
   modelKeyIds: readonly string[];
 };
-export function useProfileWorkspace({
-  persistedState,
-  modelKeyIds
-}: UseProfileWorkspaceOptions) {
+export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileWorkspaceOptions) {
   const [saveState, setSaveState] = useState<'idle' | 'sent'>('idle');
-  const [profileSlot, setProfileSlot] = useState<ProfileSlot>(() => persistedState?.profileSlot ?? 1);
+  const [profileSlot, setProfileSlot] = useState<ProfileSlot>(
+    () => persistedState?.profileSlot ?? 1
+  );
   const initialDraft = persistedState?.profileDrafts?.[persistedState?.profileSlot ?? 1];
-  const [rgb, setRgb] = useState<RgbProfile>(() => restoreStoredRgb(initialDraft?.rgb, initialDraft?.rgbFormat));
-  const [rgbBaseline, setRgbBaseline] = useState<RgbProfile>(() => restoreStoredRgb(initialDraft?.rgbBaseline, initialDraft?.rgbFormat));
+  const [rgb, setRgb] = useState<RgbProfile>(() =>
+    restoreStoredRgb(initialDraft?.rgb, initialDraft?.rgbFormat)
+  );
+  const [rgbBaseline, setRgbBaseline] = useState<RgbProfile>(() =>
+    restoreStoredRgb(initialDraft?.rgbBaseline, initialDraft?.rgbFormat)
+  );
   const [rgbHydratedSlot, setRgbHydratedSlot] = useState<ProfileSlot | null>(null);
   const rgbDirty = rgbChanges(rgb, rgbBaseline, modelKeyIds);
   const rgbPending = rgbDirtyCount(rgbDirty);
@@ -41,22 +49,32 @@ export function useProfileWorkspace({
       }
     };
   });
-  const [dirtyRemaps, setDirtyRemaps] = useState<Set<string>>(() => new Set(initialDraft?.dirtyRemaps ?? []));
+  const [dirtyRemaps, setDirtyRemaps] = useState<Set<string>>(
+    () => new Set(initialDraft?.dirtyRemaps ?? [])
+  );
   const [profileNames, setProfileNames] = useState<Record<ProfileSlot, string>>(() => ({
     0: 'Onboard Profile 0',
     1: 'Onboard Profile 1',
     2: 'Onboard Profile 2',
     ...persistedState?.profileNames
   }));
-  const [profileDrafts, setProfileDrafts] = useState<Partial<Record<ProfileSlot, ProfileDraft>>>(() => persistedState?.profileDrafts ?? {});
+  const [profileDrafts, setProfileDrafts] = useState<Partial<Record<ProfileSlot, ProfileDraft>>>(
+    () => persistedState?.profileDrafts ?? {}
+  );
   const [profileBusy, setProfileBusy] = useState(false);
-  const [advancedBindings, setAdvancedBindings] = useState<AdvancedBinding[]>(() => initialDraft?.advancedBindings ?? []);
-  const [advancedBaseline, setAdvancedBaseline] = useState<AdvancedBinding[]>(() => initialDraft?.advancedBaseline ?? []);
+  const [advancedBindings, setAdvancedBindings] = useState<AdvancedBinding[]>(
+    () => initialDraft?.advancedBindings ?? []
+  );
+  const [advancedBaseline, setAdvancedBaseline] = useState<AdvancedBinding[]>(
+    () => initialDraft?.advancedBaseline ?? []
+  );
   const [advancedHydratedSlot, setAdvancedHydratedSlot] = useState<ProfileSlot | null>(null);
   const [advancedReadError, setAdvancedReadError] = useState<string | null>(null);
   const advancedPending = !advancedEqual(advancedBindings, advancedBaseline);
   const profileBusyRef = useRef(false);
-  const remapBaselineRef = useRef<RemapLayers>(initialDraft?.remapBaseline ?? defaultRemapLayers(modelKeyIds));
+  const remapBaselineRef = useRef<RemapLayers>(
+    initialDraft?.remapBaseline ?? defaultRemapLayers(modelKeyIds)
+  );
   function assignRemap(layer: RemapLayer, keyId: string, value: number) {
     if (profileBusyRef.current || remapLayers[layer][keyId] === value) {
       return;
@@ -83,7 +101,9 @@ export function useProfileWorkspace({
     if (profileBusyRef.current) {
       return;
     }
-    const keys = modelKeyIds.filter(keyId => remapLayers[source][keyId] !== remapLayers[target][keyId]);
+    const keys = modelKeyIds.filter(
+      keyId => remapLayers[source][keyId] !== remapLayers[target][keyId]
+    );
     setRemapLayers(previous => ({
       ...previous,
       [target]: {

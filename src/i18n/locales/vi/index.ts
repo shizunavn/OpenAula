@@ -11,7 +11,7 @@ export {
   VI_REMAP_AND_MACRO,
   VI_LIGHTING,
   VI_SERVICE_AND_SETTINGS,
-  VI_GAMEPAD,
+  VI_GAMEPAD
 };
 
 export const VI_MODULES = [
@@ -20,7 +20,7 @@ export const VI_MODULES = [
   ['remapAndMacro', VI_REMAP_AND_MACRO],
   ['lighting', VI_LIGHTING],
   ['serviceAndSettings', VI_SERVICE_AND_SETTINGS],
-  ['gamepad', VI_GAMEPAD],
+  ['gamepad', VI_GAMEPAD]
 ] as const;
 
 export const VI: Readonly<Record<string, string>> = {
@@ -29,5 +29,5 @@ export const VI: Readonly<Record<string, string>> = {
   ...VI_REMAP_AND_MACRO,
   ...VI_LIGHTING,
   ...VI_SERVICE_AND_SETTINGS,
-  ...VI_GAMEPAD,
+  ...VI_GAMEPAD
 };

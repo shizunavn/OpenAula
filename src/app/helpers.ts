@@ -3,7 +3,13 @@ import { HERO84_ONLY_KEYS } from '../keyboard/hero84Layout';
 import { allRegisteredKeyIds, getBoards } from '../keyboard/registry';
 import { defaultRemapLayers } from '../protocol/hero68/remap';
 import type { HydratedKeySettings } from '../protocol/hero68/hero68Encoder';
-const HERO68_KEY_LABEL_BY_ID: Readonly<Record<string, string>> = Object.freeze(Object.fromEntries([...HERO68_LAYOUT.flat().map(key => ([key.id, key.label] as const)), ...HERO84_ONLY_KEYS.map(key => ([key.id, key.label] as const)), ...getBoards().flatMap(board => board.rows.flat().map(key => ([key.id, key.label] as const)))]));
+const HERO68_KEY_LABEL_BY_ID: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries([
+    ...HERO68_LAYOUT.flat().map(key => [key.id, key.label] as const),
+    ...HERO84_ONLY_KEYS.map(key => [key.id, key.label] as const),
+    ...getBoards().flatMap(board => board.rows.flat().map(key => [key.id, key.label] as const))
+  ])
+);
 const FACTORY_REMAP_LAYERS = defaultRemapLayers(allRegisteredKeyIds());
 function hallKeyLabel(keyId: string | null): string {
   if (!keyId) {
@@ -20,14 +26,21 @@ function snapToStep(value: number, min: number, max: number, step: number) {
   const snapped = Math.round((clamped - min) / step) * step + min;
   return Number(snapped.toFixed(decimals));
 }
-const RAPID_TRIGGER_VALUES = (Array.from({
-  length: 340
-}, (_, index) => Number(((index + 1) * 0.01).toFixed(2))) as readonly number[]);
+const RAPID_TRIGGER_VALUES = Array.from(
+  {
+    length: 340
+  },
+  (_, index) => Number(((index + 1) * 0.01).toFixed(2))
+) as readonly number[];
 function snapToAllowedValue(value: number, allowedValues: readonly number[]) {
   if (!allowedValues.length) {
     return value;
   }
-  return allowedValues.reduce((closest, candidate) => Math.abs(candidate - value) < Math.abs(closest - value) ? candidate : closest, allowedValues[0]);
+  return allowedValues.reduce(
+    (closest, candidate) =>
+      Math.abs(candidate - value) < Math.abs(closest - value) ? candidate : closest,
+    allowedValues[0]
+  );
 }
 function selectionHasMixedValues<T>(selectedKeys: Set<string>, values: Record<string, T>) {
   if (selectedKeys.size <= 1) {
@@ -38,19 +51,42 @@ function selectionHasMixedValues<T>(selectedKeys: Set<string>, values: Record<st
   return keys.some(keyId => values[keyId] !== first);
 }
 const HERO68_KEY_ID_SET = new Set(HERO68_KEY_IDS);
-function normalizeHero68Selection(keys: Iterable<string>, keyIds: readonly string[] = HERO68_KEY_IDS) {
+function normalizeHero68Selection(
+  keys: Iterable<string>,
+  keyIds: readonly string[] = HERO68_KEY_IDS
+) {
   const allowed = keyIds === HERO68_KEY_IDS ? HERO68_KEY_ID_SET : new Set(keyIds);
   return new Set(Array.from(keys).filter(keyId => allowed.has(keyId)));
 }
-function isWholeKeyboardSelected(keys: ReadonlySet<string>, keyIds: readonly string[] = HERO68_KEY_IDS) {
+function isWholeKeyboardSelected(
+  keys: ReadonlySet<string>,
+  keyIds: readonly string[] = HERO68_KEY_IDS
+) {
   return keyIds.every(keyId => keys.has(keyId));
 }
-function mergePerKeyState<T>(saved: Record<string, T> | undefined, fallback: T, keyIds: readonly string[] = HERO68_KEY_IDS) {
-  return (Object.fromEntries(keyIds.map(keyId => [keyId, saved?.[keyId] ?? fallback])) as Record<string, T>);
+function mergePerKeyState<T>(
+  saved: Record<string, T> | undefined,
+  fallback: T,
+  keyIds: readonly string[] = HERO68_KEY_IDS
+) {
+  return Object.fromEntries(keyIds.map(keyId => [keyId, saved?.[keyId] ?? fallback])) as Record<
+    string,
+    T
+  >;
 }
-type HydratedNumberField = 'actuationMm' | 'rapidSensitivityMm' | 'pressSensitivityMm' | 'releaseSensitivityMm' | 'topDeadzoneMm' | 'bottomDeadzoneMm';
+type HydratedNumberField =
+  | 'actuationMm'
+  | 'rapidSensitivityMm'
+  | 'pressSensitivityMm'
+  | 'releaseSensitivityMm'
+  | 'topDeadzoneMm'
+  | 'bottomDeadzoneMm';
 type HydratedBooleanField = 'rapidTriggerEnabled' | 'splitSensitivity' | 'deadzoneEnabled';
-function mergeHydratedNumbers(previous: Record<string, number>, hydrated: Map<string, HydratedKeySettings>, field: HydratedNumberField) {
+function mergeHydratedNumbers(
+  previous: Record<string, number>,
+  hydrated: Map<string, HydratedKeySettings>,
+  field: HydratedNumberField
+) {
   const next = {
     ...previous
   };
@@ -62,7 +98,11 @@ function mergeHydratedNumbers(previous: Record<string, number>, hydrated: Map<st
   }
   return next;
 }
-function mergeHydratedBooleans(previous: Record<string, boolean>, hydrated: Map<string, HydratedKeySettings>, field: HydratedBooleanField) {
+function mergeHydratedBooleans(
+  previous: Record<string, boolean>,
+  hydrated: Map<string, HydratedKeySettings>,
+  field: HydratedBooleanField
+) {
   const next = {
     ...previous
   };
@@ -74,5 +114,20 @@ function mergeHydratedBooleans(previous: Record<string, boolean>, hydrated: Map<
   }
   return next;
 }
-export { clampNumber, snapToStep, snapToAllowedValue, RAPID_TRIGGER_VALUES, selectionHasMixedValues, normalizeHero68Selection, isWholeKeyboardSelected, mergePerKeyState, mergeHydratedNumbers, mergeHydratedBooleans, hallKeyLabel, HERO68_KEY_LABEL_BY_ID, HERO68_KEY_ID_SET, FACTORY_REMAP_LAYERS };
+export {
+  clampNumber,
+  snapToStep,
+  snapToAllowedValue,
+  RAPID_TRIGGER_VALUES,
+  selectionHasMixedValues,
+  normalizeHero68Selection,
+  isWholeKeyboardSelected,
+  mergePerKeyState,
+  mergeHydratedNumbers,
+  mergeHydratedBooleans,
+  hallKeyLabel,
+  HERO68_KEY_LABEL_BY_ID,
+  HERO68_KEY_ID_SET,
+  FACTORY_REMAP_LAYERS
+};
 export type { HydratedNumberField, HydratedBooleanField };

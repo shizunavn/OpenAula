@@ -1,1 +1,1 @@
-export * from '../hero68/keyPositions'
+export * from '../hero68/keyPositions';

@@ -6,7 +6,6 @@
   container-name: rapidpage;
 }
 
-
 .rapid-keyboard-stage {
   min-height: clamp(226px, 28vh, 292px);
   padding: 10px 0 4px;
@@ -39,7 +38,7 @@
   margin: 0;
   font-size: 23px;
   font-weight: 800;
-  letter-spacing: -.025em;
+  letter-spacing: -0.025em;
 }
 
 .rapid-title-wrap svg {
@@ -56,17 +55,19 @@
 .rapid-woot-card {
   min-height: 336px;
   padding: 20px 20px 18px;
-  border-color: rgba(255,255,255,.045);
+  border-color: rgba(255, 255, 255, 0.045);
   background: rgb(31, 32, 34);
   box-shadow: none;
 }
 
 .rapid-woot-card:hover:not(.is-unavailable) {
-  border-color: rgba(255,255,255,.065);
+  border-color: rgba(255, 255, 255, 0.065);
   background: rgb(31, 32, 34);
 }
 
-.rapid-woot-card.is-unavailable { opacity: 1; }
+.rapid-woot-card.is-unavailable {
+  opacity: 1;
+}
 
 .rapid-card-head {
   min-height: 34px;
@@ -85,11 +86,11 @@
   font-size: 20px;
   font-weight: 700;
   line-height: 1.2;
-  letter-spacing: -.017em;
+  letter-spacing: -0.017em;
 }
 
 .rapid-card-head .toggle {
-  transform: scale(.82);
+  transform: scale(0.82);
   transform-origin: right top;
 }
 
@@ -107,7 +108,7 @@
   color: #858e94;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: .035em;
+  letter-spacing: 0.035em;
 }
 
 .rapid-enabled-summary strong {
@@ -138,7 +139,7 @@
 }
 
 .rapid-split-row .toggle {
-  transform: scale(.78);
+  transform: scale(0.78);
   transform-origin: right center;
 }
 
@@ -156,7 +157,7 @@
   color: #7d878d;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
 }
 
 .rapid-sensitivity-card .range-wrap {
@@ -179,7 +180,7 @@
   color: #707980;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .025em;
+  letter-spacing: 0.025em;
 }
 
 .rapid-split-controls {
@@ -192,7 +193,7 @@
 
 .rapid-split-controls > div + div {
   padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,.035);
+  border-top: 1px solid rgba(255, 255, 255, 0.035);
 }
 
 .rapid-deadzone-copy {
@@ -208,8 +209,8 @@
 
 .rapid-deadzone-control-card {
   padding: 10px 8px 11px;
-  border-color: rgba(255,255,255,.045);
-  background: rgba(255,255,255,.012);
+  border-color: rgba(255, 255, 255, 0.045);
+  background: rgba(255, 255, 255, 0.012);
 }
 
 .rapid-deadzone-control-card .deadzone-head {

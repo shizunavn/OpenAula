@@ -17,13 +17,15 @@ export const BRAND = {
   /** Canonical web app origin; the pre-rename host shows a move notice. */
   webAppUrl: 'https://open-aula.pages.dev',
   /** Hosts that used to serve the web app and now only forward to webAppUrl. */
-  legacyHosts: ['open-hero68.pages.dev'],
-} as const
+  legacyHosts: ['open-hero68.pages.dev']
+} as const;
 
 /** True when this page was opened on a pre-rename host. */
 export const isLegacyHost = (hostname = typeof location === 'undefined' ? '' : location.hostname) =>
-  BRAND.legacyHosts.includes(hostname as (typeof BRAND.legacyHosts)[number])
+  BRAND.legacyHosts.includes(hostname as (typeof BRAND.legacyHosts)[number]);
 
 /** The same path and query on the canonical host, so deep links survive. */
 export const currentPageOnCanonicalHost = () =>
-  typeof location === 'undefined' ? BRAND.webAppUrl : BRAND.webAppUrl + location.pathname + location.search + location.hash
+  typeof location === 'undefined'
+    ? BRAND.webAppUrl
+    : BRAND.webAppUrl + location.pathname + location.search + location.hash;

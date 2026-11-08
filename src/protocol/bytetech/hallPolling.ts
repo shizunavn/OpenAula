@@ -1,1 +1,1 @@
-export * from '../hero68/hallPolling'
+export * from '../hero68/hallPolling';

@@ -2,7 +2,7 @@ import {
   allRegisteredKeyPositions,
   getBoard,
   maxRegisteredGamepadBindings,
-  type HeroDeviceModelId,
+  type HeroDeviceModelId
 } from './registry';
 import { WINDOWS_SCANS } from './windowsScans';
 
@@ -31,7 +31,7 @@ export const GAMEPAD_ACTIONS = [
   'RLeft',
   'RRight',
   'LT',
-  'RT',
+  'RT'
 ] as const;
 
 export type GamepadAction = (typeof GAMEPAD_ACTIONS)[number];
@@ -52,7 +52,7 @@ export const GAMEPAD_TOGGLE_MODIFIERS = [
   'ShiftRight',
   'AltLeft',
   'AltRight',
-  'MetaLeft',
+  'MetaLeft'
 ] as const;
 
 export const isToggleModifier = (keyId: string) =>
@@ -87,7 +87,7 @@ export function normalizeToggleKeybind(keys: readonly string[]): string[] {
 
 export function formatToggleKeybind(
   keys: readonly string[] | undefined,
-  labelForKey: (id: string) => string = id => id,
+  labelForKey: (id: string) => string = id => id
 ): string {
   if (!keys?.length) {
     return '';
@@ -146,34 +146,34 @@ export type GamepadConfiguration = {
 export const CURVE_PRESETS: Record<string, CurvePoint[]> = {
   Linear: [
     [0, 0],
-    [1, 1],
+    [1, 1]
   ],
   Aggressive: [
     [0, 0],
     [0.25, 0.55],
-    [1, 1],
+    [1, 1]
   ],
   Slow: [
     [0, 0],
     [0.7, 0.25],
-    [1, 1],
+    [1, 1]
   ],
   Smooth: [
     [0, 0],
     [0.25, 0.12],
     [0.75, 0.88],
-    [1, 1],
+    [1, 1]
   ],
   Instant: [
     [0, 0],
     [0.01, 1],
-    [1, 1],
-  ],
+    [1, 1]
+  ]
 };
 
 export const isAnalogAction = (action: GamepadAction) =>
   ['LUp', 'LDown', 'LLeft', 'LRight', 'RUp', 'RDown', 'RLeft', 'RRight', 'LT', 'RT'].includes(
-    action,
+    action
   );
 
 export function defaultGamepad(): GamepadConfiguration {
@@ -184,7 +184,7 @@ export function defaultGamepad(): GamepadConfiguration {
     ['KeyD', 'LRight'],
     ['KeyQ', 'LT'],
     ['KeyE', 'RT'],
-    ['Space', 'A'],
+    ['Space', 'A']
   ];
   return {
     version: 1,
@@ -193,20 +193,20 @@ export function defaultGamepad(): GamepadConfiguration {
       keyId,
       action,
       startMm: 0.1,
-      endMm: 3.4,
+      endMm: 3.4
     })),
     curve: [
       [0, 0],
       [0.33, 0.33],
       [0.67, 0.67],
-      [1, 1],
+      [1, 1]
     ],
     snappy: true,
     square: false,
     angleEnabled: false,
     angle: 45,
     suppressMappedKeys: false,
-    keyboardSuppressionMode: 'firmware',
+    keyboardSuppressionMode: 'firmware'
   };
 }
 
@@ -217,7 +217,7 @@ function isValidSuppressionMode(mode: unknown): mode is 'firmware' | 'hook' | un
 function isValidBindingRecord(
   b: GamepadBinding | undefined,
   validPositions: Readonly<Record<string, number>>,
-  seen: Set<string>,
+  seen: Set<string>
 ): b is GamepadBinding {
   if (!b) {
     return false;
@@ -240,7 +240,7 @@ function isValidBindingRecord(
 function isValidResponseCurvePoint(
   point: unknown,
   index: number,
-  allPoints: readonly CurvePoint[],
+  allPoints: readonly CurvePoint[]
 ): point is CurvePoint {
   if (!Array.isArray(point) || point.length !== 2) {
     return false;
@@ -315,7 +315,7 @@ export function validateGamepad(input: unknown, model?: HeroDeviceModelId): Game
   const invalidSuppressionFlag =
     v.suppressMappedKeys !== undefined && typeof v.suppressMappedKeys !== 'boolean';
   const invalidToggleFlags = (['snappy', 'square', 'angleEnabled'] as const).some(
-    k => typeof v[k] !== 'boolean',
+    k => typeof v[k] !== 'boolean'
   );
   const invalidAngle = !Number.isFinite(v.angle) || v.angle < 30 || v.angle > 60;
   if (invalidSuppressionFlag || invalidToggleFlags || invalidAngle) {
@@ -333,7 +333,7 @@ export function validateGamepad(input: unknown, model?: HeroDeviceModelId): Game
     angle: v.angle,
     suppressMappedKeys: v.suppressMappedKeys ?? false,
     keyboardSuppressionMode: v.keyboardSuppressionMode ?? 'firmware',
-    ...(toggleKeybind.length ? { toggleKeybind } : {}),
+    ...(toggleKeybind.length ? { toggleKeybind } : {})
   };
 }
 
@@ -382,7 +382,7 @@ export const GAMEPAD_BUTTONS: Partial<Record<GamepadAction, number>> = {
   A: 4096,
   B: 8192,
   X: 16384,
-  Y: 32768,
+  Y: 32768
 };
 
 export function mapGamepad(
@@ -393,7 +393,7 @@ export function mapGamepad(
       distanceMm: number;
       pressed: boolean;
     }
-  >,
+  >
 ): GamepadReport {
   const values: Partial<Record<GamepadAction, number>> = {};
   let buttons = 0;
@@ -412,8 +412,7 @@ export function mapGamepad(
     values[b.action] = Math.max(values[b.action] ?? 0, p);
   }
 
-  const axis = (p: number, n: number) =>
-    config.snappy ? (p === n ? 0 : p > n ? p : -n) : p - n;
+  const axis = (p: number, n: number) => (config.snappy ? (p === n ? 0 : p > n ? p : -n) : p - n);
 
   const stick = (prefix: 'L' | 'R') => {
     let x = axis(values[`${prefix}Right`] ?? 0, values[`${prefix}Left`] ?? 0);
@@ -436,7 +435,7 @@ export function mapGamepad(
     }
     return [
       Math.round(Math.max(-1, Math.min(1, x)) * 32767),
-      Math.round(Math.max(-1, Math.min(1, y)) * 32767),
+      Math.round(Math.max(-1, Math.min(1, y)) * 32767)
     ];
   };
 
@@ -449,7 +448,7 @@ export function mapGamepad(
     rx,
     ry,
     lt: Math.round((values.LT ?? 0) * 255),
-    rt: Math.round((values.RT ?? 0) * 255),
+    rt: Math.round((values.RT ?? 0) * 255)
   };
 }
 

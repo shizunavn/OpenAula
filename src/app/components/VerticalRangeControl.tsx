@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import type * as React from 'react'
-import { snapToStep } from '../helpers'
+import { useEffect, useState } from 'react';
+import type * as React from 'react';
+import { snapToStep } from '../helpers';
 
 function VerticalRangeControl({
   value,
@@ -12,42 +12,47 @@ function VerticalRangeControl({
   direction = 'bottom',
   mixed = false,
   mixedPlaceholder = 'Mixed',
-  onChange,
+  onChange
 }: {
-  value: number
-  min: number
-  max: number
-  step: number
-  suffix: string
-  disabled?: boolean
-  direction?: 'top' | 'bottom'
-  mixed?: boolean
-  mixedPlaceholder?: string
-  onChange: (value: number) => void
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  suffix: string;
+  disabled?: boolean;
+  direction?: 'top' | 'bottom';
+  mixed?: boolean;
+  mixedPlaceholder?: string;
+  onChange: (value: number) => void;
 }) {
-  const pct = ((value - min) / (max - min)) * 100
-  const markerStyle = direction === 'bottom' ? { bottom: `${pct}%` } : { top: `${pct}%` }
-  const fillStyle = direction === 'bottom' ? { height: `${pct}%`, bottom: 0, top: 'auto' } : { height: `${pct}%`, top: 0, bottom: 'auto' }
-  const [draftValue, setDraftValue] = useState(() => mixed ? '' : value.toFixed(2))
+  const pct = ((value - min) / (max - min)) * 100;
+  const markerStyle = direction === 'bottom' ? { bottom: `${pct}%` } : { top: `${pct}%` };
+  const fillStyle =
+    direction === 'bottom'
+      ? { height: `${pct}%`, bottom: 0, top: 'auto' }
+      : { height: `${pct}%`, top: 0, bottom: 'auto' };
+  const [draftValue, setDraftValue] = useState(() => (mixed ? '' : value.toFixed(2)));
 
   useEffect(() => {
-    setDraftValue(mixed ? '' : value.toFixed(2))
-  }, [value, mixed])
+    setDraftValue(mixed ? '' : value.toFixed(2));
+  }, [value, mixed]);
 
   const commitNumberInput = () => {
-    const normalized = draftValue.trim().replace(',', '.')
-    const parsed = Number(normalized)
+    const normalized = draftValue.trim().replace(',', '.');
+    const parsed = Number(normalized);
     if (!normalized || Number.isNaN(parsed)) {
-      setDraftValue(mixed ? '' : value.toFixed(2))
-      return
+      setDraftValue(mixed ? '' : value.toFixed(2));
+      return;
     }
-    const committed = snapToStep(parsed, min, max, step)
-    onChange(committed)
-    setDraftValue(committed.toFixed(2))
-  }
+    const committed = snapToStep(parsed, min, max, step);
+    onChange(committed);
+    setDraftValue(committed.toFixed(2));
+  };
 
   return (
-    <div className={`vertical-meter ${disabled ? 'is-disabled' : ''} ${mixed ? 'is-mixed' : ''} ${mixed && mixedPlaceholder !== '—' ? 'has-mixed-label' : ''} ${direction === 'top' ? 'is-top-oriented' : ''}`}>
+    <div
+      className={`vertical-meter ${disabled ? 'is-disabled' : ''} ${mixed ? 'is-mixed' : ''} ${mixed && mixedPlaceholder !== '—' ? 'has-mixed-label' : ''} ${direction === 'top' ? 'is-top-oriented' : ''}`}
+    >
       <span className="vertical-range-shell">
         <input
           className="vertical-range-input"
@@ -58,7 +63,7 @@ function VerticalRangeControl({
           value={value}
           disabled={disabled}
           aria-label="Vertical value"
-          onChange={(e) => onChange(snapToStep(Number(e.target.value), min, max, step))}
+          onChange={e => onChange(snapToStep(Number(e.target.value), min, max, step))}
         />
         <span className="meter-track" aria-hidden="true">
           <span className="meter-fill" style={fillStyle as React.CSSProperties} />
@@ -77,18 +82,18 @@ function VerticalRangeControl({
             value={draftValue}
             disabled={disabled}
             aria-label="Vertical value input"
-            onFocus={(e) => e.currentTarget.select()}
-            onChange={(e) => setDraftValue(e.target.value)}
+            onFocus={e => e.currentTarget.select()}
+            onChange={e => setDraftValue(e.target.value)}
             onBlur={commitNumberInput}
-            onKeyDown={(e) => {
+            onKeyDown={e => {
               if (e.key === 'Enter') {
-                e.preventDefault()
-                commitNumberInput()
-                e.currentTarget.blur()
+                e.preventDefault();
+                commitNumberInput();
+                e.currentTarget.blur();
               } else if (e.key === 'Escape') {
-                e.preventDefault()
-                setDraftValue(mixed ? '' : value.toFixed(2))
-                e.currentTarget.blur()
+                e.preventDefault();
+                setDraftValue(mixed ? '' : value.toFixed(2));
+                e.currentTarget.blur();
               }
             }}
           />
@@ -96,7 +101,7 @@ function VerticalRangeControl({
         <b className="value-suffix">{suffix}</b>
       </div>
     </div>
-  )
+  );
 }
 
-export { VerticalRangeControl }
+export { VerticalRangeControl };

@@ -1,1 +1,1 @@
-export * from '../hero68/types'
+export * from '../hero68/types';

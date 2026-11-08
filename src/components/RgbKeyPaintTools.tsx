@@ -18,29 +18,55 @@ export function RgbKeySelectionTools({
   disabled: boolean;
   children?: ReactNode;
 }) {
-  const {
-    tr
-  } = useI18n();
+  const { tr } = useI18n();
   const model = useContext(DeviceModelContext);
   const keyIds = heroLayout(model).keyIds;
-  const groups = [{
-    name: 'WASD',
-    keys: ['KeyW', 'KeyA', 'KeyS', 'KeyD']
-  }, {
-    name: 'Arrows',
-    keys: ['ArrowLeft', 'ArrowDown', 'ArrowUp', 'ArrowRight']
-  }, {
-    name: 'All keys',
-    keys: keyIds
-  }];
-  return <div className="rgb-key-paint-selection">
-    <span role="status" aria-live="polite">{selected.size} / {keyIds.length} {tr('selected')}</span>
-    <div role="group" aria-label={tr('Select key group')}>
-      {groups.map(group => <button key={group.name} type="button" className="secondary-button" disabled={disabled} aria-pressed={selected.size === group.keys.length && group.keys.every(id => selected.has(id))} onClick={() => onSelect(new Set(group.keys))}>{tr(group.name)}</button>)}
-      <button type="button" className="secondary-button" disabled={disabled || !selected.size} onClick={() => onSelect(new Set())}>{tr('Clear selection')}</button>
+  const groups = [
+    {
+      name: 'WASD',
+      keys: ['KeyW', 'KeyA', 'KeyS', 'KeyD']
+    },
+    {
+      name: 'Arrows',
+      keys: ['ArrowLeft', 'ArrowDown', 'ArrowUp', 'ArrowRight']
+    },
+    {
+      name: 'All keys',
+      keys: keyIds
+    }
+  ];
+  return (
+    <div className="rgb-key-paint-selection">
+      <span role="status" aria-live="polite">
+        {selected.size} / {keyIds.length} {tr('selected')}
+      </span>
+      <div role="group" aria-label={tr('Select key group')}>
+        {groups.map(group => (
+          <button
+            key={group.name}
+            type="button"
+            className="secondary-button"
+            disabled={disabled}
+            aria-pressed={
+              selected.size === group.keys.length && group.keys.every(id => selected.has(id))
+            }
+            onClick={() => onSelect(new Set(group.keys))}
+          >
+            {tr(group.name)}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={disabled || !selected.size}
+          onClick={() => onSelect(new Set())}
+        >
+          {tr('Clear selection')}
+        </button>
+      </div>
+      {children}
     </div>
-    {children}
-  </div>;
+  );
 }
 export default function RgbKeyPaintTools({
   selected,
@@ -57,9 +83,7 @@ export default function RgbKeyPaintTools({
   onPaint: () => void;
   disabled: boolean;
 }) {
-  const {
-    tr
-  } = useI18n();
+  const { tr } = useI18n();
   const [hex, setHex] = useState(color.toUpperCase());
   useEffect(() => setHex(color.toUpperCase()), [color]);
   function changeHex(next: string) {
@@ -68,24 +92,65 @@ export default function RgbKeyPaintTools({
       onColor('#' + next.replace('#', '').toLowerCase());
     }
   }
-  return <section className="rgb-key-paint-tools" aria-label={tr('Per-key painting')}>
-    <RgbKeySelectionTools selected={selected} onSelect={onSelect} disabled={disabled} />
-    <div className="rgb-key-paint-color">
-      <div className="rgb-custom-color-box is-active">
-        <label className="rgb-color-picker-trigger" title={tr('Color')}>
-          <RgbColorPicker label={tr('Paint selected keys')} value={color} disabled={disabled} onChange={onColor} />
-        </label>
-        <input className="rgb-color-hex-input" aria-label={tr('Brush HEX color')} value={hex} maxLength={7} spellCheck={false} disabled={disabled} onChange={event => changeHex(event.target.value)} onBlur={() => setHex(color.toUpperCase())} />
+  return (
+    <section className="rgb-key-paint-tools" aria-label={tr('Per-key painting')}>
+      <RgbKeySelectionTools selected={selected} onSelect={onSelect} disabled={disabled} />
+      <div className="rgb-key-paint-color">
+        <div className="rgb-custom-color-box is-active">
+          <label className="rgb-color-picker-trigger" title={tr('Color')}>
+            <RgbColorPicker
+              label={tr('Paint selected keys')}
+              value={color}
+              disabled={disabled}
+              onChange={onColor}
+            />
+          </label>
+          <input
+            className="rgb-color-hex-input"
+            aria-label={tr('Brush HEX color')}
+            value={hex}
+            maxLength={7}
+            spellCheck={false}
+            disabled={disabled}
+            onChange={event => changeHex(event.target.value)}
+            onBlur={() => setHex(color.toUpperCase())}
+          />
+        </div>
+        <div className="rgb-paint-palette" role="group" aria-label={tr('Palette')}>
+          {XSYD_COLOR_SLOTS.slice(1).map(slot => {
+            const swatchHex = slotHex(slot.rgb);
+            return (
+              <button
+                key={slot.index}
+                type="button"
+                className="rgb-paint-swatch"
+                disabled={disabled}
+                aria-pressed={color.toLowerCase() === swatchHex}
+                aria-label={tr(slot.name)}
+                title={tr(slot.name)}
+                onClick={() => onColor(swatchHex)}
+              >
+                <span
+                  className="rgb-swatch-dot"
+                  style={{
+                    background: swatchHex
+                  }}
+                  aria-hidden="true"
+                />
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="apply-button"
+          title={!selected.size ? tr('Select keys on the preview to paint.') : undefined}
+          disabled={disabled || !selected.size}
+          onClick={onPaint}
+        >
+          <Paintbrush size={15} /> {tr('Paint keys')}
+        </button>
       </div>
-      <div className="rgb-paint-palette" role="group" aria-label={tr('Palette')}>
-        {XSYD_COLOR_SLOTS.slice(1).map(slot => {
-          const swatchHex = slotHex(slot.rgb);
-          return <button key={slot.index} type="button" className="rgb-paint-swatch" disabled={disabled} aria-pressed={color.toLowerCase() === swatchHex} aria-label={tr(slot.name)} title={tr(slot.name)} onClick={() => onColor(swatchHex)}><span className="rgb-swatch-dot" style={{
-            background: swatchHex
-          }} aria-hidden="true" /></button>;
-        })}
-      </div>
-      <button type="button" className="apply-button" title={!selected.size ? tr('Select keys on the preview to paint.') : undefined} disabled={disabled || !selected.size} onClick={onPaint}><Paintbrush size={15} /> {tr('Paint keys')}</button>
-    </div>
-  </section>;
+    </section>
+  );
 }

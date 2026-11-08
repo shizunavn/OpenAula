@@ -5,7 +5,7 @@ export function acceptsRgbPreviewKey(event: KeyboardEvent) {
   if (event.repeat || !HERO68_KEY_IDS.includes(event.code)) {
     return false;
   }
-  const target = (event.target as HTMLElement | null);
+  const target = event.target as HTMLElement | null;
   if (target?.closest('input,textarea,select,[contenteditable]:not([contenteditable=false])')) {
     return false;
   }

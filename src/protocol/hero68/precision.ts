@@ -6,4 +6,4 @@
  * Keep every encoder/decoder/telemetry path on this single constant: the old
  * 0.001 value caused an exact x10 write/read bug.
  */
-export const HERO68_DISTANCE_UNIT_MM = 0.01 as const
+export const HERO68_DISTANCE_UNIT_MM = 0.01 as const;

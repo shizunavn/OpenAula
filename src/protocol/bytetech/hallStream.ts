@@ -1,1 +1,1 @@
-export * from '../hero68/hallStream'
+export * from '../hero68/hallStream';

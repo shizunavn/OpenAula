@@ -1,1 +1,1 @@
-export * from '../hero68/remap'
+export * from '../hero68/remap';

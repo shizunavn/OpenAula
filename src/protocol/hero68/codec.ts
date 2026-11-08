@@ -3,8 +3,8 @@
 // (firmware 0323). See ../README.md#sources-and-evidence for source provenance.
 // Original golden packet fixtures live in the external hero68_re workspace;
 // this repository carries runnable protocol checks in ../../../tests/.
-import type { DecodedReport } from "./types";
-export const REPORT_ID = (0x09 as const);
+import type { DecodedReport } from './types';
+export const REPORT_ID = 0x09 as const;
 export const PAYLOAD_LENGTH = 63;
 export const REPORT_LENGTH = 64;
 export const MAX_DATA_LENGTH = 56;
@@ -15,13 +15,13 @@ function assertByte(value: number, name: string): void {
 }
 export function checksum(payloadWithoutChecksum: Uint8Array): number {
   if (payloadWithoutChecksum.length !== 62) {
-    throw new RangeError("checksum input must contain 62 payload bytes");
+    throw new RangeError('checksum input must contain 62 payload bytes');
   }
   let sum = REPORT_ID;
   for (const value of payloadWithoutChecksum) {
     sum += value;
   }
-  return 0xff - (sum & 0xff) & 0xff;
+  return (0xff - (sum & 0xff)) & 0xff;
 }
 export interface BuildReportOptions {
   command: number;
@@ -32,19 +32,14 @@ export interface BuildReportOptions {
   data?: Iterable<number>;
 }
 export function buildReport(options: BuildReportOptions): Uint8Array {
-  const {
-    command,
-    zone = 0,
-    reserved = 0,
-    total = 1,
-    sequence = 0,
-    data = []
-  } = options;
+  const { command, zone = 0, reserved = 0, total = 1, sequence = 0, data = [] } = options;
   const body = Uint8Array.from(data);
   if (body.length > MAX_DATA_LENGTH) {
-    throw new RangeError("data is limited to 56 bytes");
+    throw new RangeError('data is limited to 56 bytes');
   }
-  [command, zone, reserved, total, sequence].forEach((value, index) => assertByte(value, `header[${index}]`));
+  [command, zone, reserved, total, sequence].forEach((value, index) =>
+    assertByte(value, `header[${index}]`)
+  );
   const report = new Uint8Array(REPORT_LENGTH);
   report[0] = REPORT_ID;
   report.set([command, zone, reserved, total, sequence, body.length], 1);
@@ -78,20 +73,22 @@ export function decodeReport(input: Uint8Array): DecodedReport {
   // dataLength but expose the meaningful response bytes in data.
   let effectiveDataLength = dataLength;
   if (command === 0x82 && dataLength === 0) {
-    effectiveDataLength = new Map([[0x01, 6],
-    // UUID: fixed 6-byte / 48-bit value
-    [0x02, 2],
-    // firmware version: MINOR, MAJOR
-    [0x03, 26],
-    // switch capability bitmap
-    [0x04, 56],
-    // GLOBAL + advanced bitmap/padding
-    [0x06, 1],
-    // RT precision multiplier
-    [0x08, 1],
-    // distance precision multiplier/sentinel
-    [0x09, 18] // rhythm support reads data[17]
-    ]).get(zone) ?? 0;
+    effectiveDataLength =
+      new Map([
+        [0x01, 6],
+        // UUID: fixed 6-byte / 48-bit value
+        [0x02, 2],
+        // firmware version: MINOR, MAJOR
+        [0x03, 26],
+        // switch capability bitmap
+        [0x04, 56],
+        // GLOBAL + advanced bitmap/padding
+        [0x06, 1],
+        // RT precision multiplier
+        [0x08, 1],
+        // distance precision multiplier/sentinel
+        [0x09, 18] // rhythm support reads data[17]
+      ]).get(zone) ?? 0;
   }
   return {
     reportId: REPORT_ID,
@@ -109,37 +106,42 @@ export function decodeReport(input: Uint8Array): DecodedReport {
 }
 export function u16be(value: number): number[] {
   if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
-    throw new RangeError("uint16 required");
+    throw new RangeError('uint16 required');
   }
-  return [value >>> 8 & 0xff, value & 0xff];
+  return [(value >>> 8) & 0xff, value & 0xff];
 }
 export function u32be(value: number): number[] {
   if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
-    throw new RangeError("uint32 required");
+    throw new RangeError('uint32 required');
   }
-  return [value >>> 24 & 0xff, value >>> 16 & 0xff, value >>> 8 & 0xff, value & 0xff];
+  return [(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff];
 }
 export function mmUnits(mm: number, precisionMm: number): number {
   if (!(precisionMm > 0)) {
-    throw new RangeError("precisionMm must be positive");
+    throw new RangeError('precisionMm must be positive');
   }
   return Math.round(mm / precisionMm);
 }
 export interface RemapRecord {
-  kind: "remap";
+  kind: 'remap';
   keyId: number;
   keycode: number;
 }
 export function decodeRemapRecords(data: Uint8Array): RemapRecord[] {
   if (data.length % 6 !== 0) {
-    throw new RangeError("remap data must contain six-byte records");
+    throw new RangeError('remap data must contain six-byte records');
   }
   const records: RemapRecord[] = [];
   for (let offset = 0; offset < data.length; offset += 6) {
     records.push({
-      kind: "remap",
-      keyId: data[offset] << 8 | data[offset + 1],
-      keycode: data[offset + 2] * 0x1000000 + (data[offset + 3] << 16) + (data[offset + 4] << 8) + data[offset + 5] >>> 0
+      kind: 'remap',
+      keyId: (data[offset] << 8) | data[offset + 1],
+      keycode:
+        (data[offset + 2] * 0x1000000 +
+          (data[offset + 3] << 16) +
+          (data[offset + 4] << 8) +
+          data[offset + 5]) >>>
+        0
     });
   }
   return records;
@@ -148,7 +150,7 @@ export function decodeBitmapLsbFirst(data: Uint8Array): number[] {
   const ids: number[] = [];
   for (let byteIndex = 0; byteIndex < data.length; byteIndex++) {
     for (let bit = 0; bit < 8; bit++) {
-      if ((data[byteIndex] & 1 << bit) !== 0) {
+      if ((data[byteIndex] & (1 << bit)) !== 0) {
         ids.push(byteIndex * 8 + bit);
       }
     }
@@ -172,7 +174,7 @@ export interface AdvancedKeyCapabilities {
 }
 export function decodeAdvancedKeyCapabilities(data: Uint8Array): AdvancedKeyCapabilities {
   if (data.length < 1) {
-    throw new RangeError("advanced capability payload is missing GLOBAL byte");
+    throw new RangeError('advanced capability payload is missing GLOBAL byte');
   }
   const bitmap = data.slice(1);
   return {
@@ -205,27 +207,27 @@ function assertSixByteRecords(data: Uint8Array, kind: string): void {
   }
 }
 export function decodeCalibrationRanges(data: Uint8Array): CalibrationRangeRecord[] {
-  assertSixByteRecords(data, "calibration range");
+  assertSixByteRecords(data, 'calibration range');
   const records: CalibrationRangeRecord[] = [];
   for (let offset = 0; offset < data.length; offset += 6) {
     records.push({
-      keyId: data[offset] << 8 | data[offset + 1],
-      maxAdc: data[offset + 2] << 8 | data[offset + 3],
-      minAdc: data[offset + 4] << 8 | data[offset + 5]
+      keyId: (data[offset] << 8) | data[offset + 1],
+      maxAdc: (data[offset + 2] << 8) | data[offset + 3],
+      minAdc: (data[offset + 4] << 8) | data[offset + 5]
     });
   }
   return records;
 }
 export function decodeCalibrationLive(data: Uint8Array): CalibrationLiveRecord[] {
-  assertSixByteRecords(data, "calibration live");
+  assertSixByteRecords(data, 'calibration live');
   const records: CalibrationLiveRecord[] = [];
   for (let offset = 0; offset < data.length; offset += 6) {
-    const current = data[offset + 2] << 8 | data[offset + 3];
+    const current = (data[offset + 2] << 8) | data[offset + 3];
     const pressed = (current & 0x8000) !== 0;
     records.push({
-      keyId: data[offset] << 8 | data[offset + 1],
+      keyId: (data[offset] << 8) | data[offset + 1],
       currentAdc: current & 0x7fff,
-      minAdc: data[offset + 4] << 8 | data[offset + 5],
+      minAdc: (data[offset + 4] << 8) | data[offset + 5],
       pressed,
       finished: !pressed
     });
@@ -233,13 +235,13 @@ export function decodeCalibrationLive(data: Uint8Array): CalibrationLiveRecord[]
   return records;
 }
 export function decodeDistanceCalibrationLive(data: Uint8Array): DistanceCalibrationLiveRecord[] {
-  assertSixByteRecords(data, "distance calibration live");
+  assertSixByteRecords(data, 'distance calibration live');
   const records: DistanceCalibrationLiveRecord[] = [];
   for (let offset = 0; offset < data.length; offset += 6) {
-    const adc = data[offset + 4] << 8 | data[offset + 5];
+    const adc = (data[offset + 4] << 8) | data[offset + 5];
     records.push({
-      keyId: data[offset] << 8 | data[offset + 1],
-      distanceUnits: data[offset + 2] << 8 | data[offset + 3],
+      keyId: (data[offset] << 8) | data[offset + 1],
+      distanceUnits: (data[offset + 2] << 8) | data[offset + 3],
       adc: adc & 0x7fff,
       pressed: (adc & 0x8000) !== 0
     });
@@ -254,7 +256,7 @@ export function decodeDistanceCalibrationLive(data: Uint8Array): DistanceCalibra
 // carries a write echo or a read response.
 
 export interface ActuationRecord {
-  kind: "actuation";
+  kind: 'actuation';
   keyId: number;
   distanceUnits: number;
   global: number;
@@ -263,16 +265,16 @@ export function decodeActuationRecords(data: Uint8Array): ActuationRecord[] {
   const records: ActuationRecord[] = [];
   for (let offset = 0; offset + 5 <= data.length; offset += 5) {
     records.push({
-      kind: "actuation",
-      keyId: data[offset] << 8 | data[offset + 1],
-      distanceUnits: data[offset + 2] << 8 | data[offset + 3],
+      kind: 'actuation',
+      keyId: (data[offset] << 8) | data[offset + 1],
+      distanceUnits: (data[offset + 2] << 8) | data[offset + 3],
       global: data[offset + 4]
     });
   }
   return records;
 }
 export interface RapidTriggerRecord {
-  kind: "rapid_trigger";
+  kind: 'rapid_trigger';
   keyId: number;
   enabled: number;
   releaseUnits: number;
@@ -283,18 +285,18 @@ export function decodeRapidTriggerRecords(data: Uint8Array): RapidTriggerRecord[
   const records: RapidTriggerRecord[] = [];
   for (let offset = 0; offset + 8 <= data.length; offset += 8) {
     records.push({
-      kind: "rapid_trigger",
-      keyId: data[offset] << 8 | data[offset + 1],
+      kind: 'rapid_trigger',
+      keyId: (data[offset] << 8) | data[offset + 1],
       enabled: data[offset + 2],
-      releaseUnits: data[offset + 3] << 8 | data[offset + 4],
-      pressUnits: data[offset + 5] << 8 | data[offset + 6],
+      releaseUnits: (data[offset + 3] << 8) | data[offset + 4],
+      pressUnits: (data[offset + 5] << 8) | data[offset + 6],
       global: data[offset + 7]
     });
   }
   return records;
 }
 export interface DeadZoneRecord {
-  kind: "dead_zone";
+  kind: 'dead_zone';
   keyId: number;
   topUnits: number;
   bottomUnits: number;
@@ -305,10 +307,10 @@ export function decodeDeadZoneRecords(data: Uint8Array): DeadZoneRecord[] {
   const records: DeadZoneRecord[] = [];
   for (let offset = 0; offset + 8 <= data.length; offset += 8) {
     records.push({
-      kind: "dead_zone",
-      keyId: data[offset] << 8 | data[offset + 1],
-      topUnits: data[offset + 2] << 8 | data[offset + 3],
-      bottomUnits: data[offset + 4] << 8 | data[offset + 5],
+      kind: 'dead_zone',
+      keyId: (data[offset] << 8) | data[offset + 1],
+      topUnits: (data[offset + 2] << 8) | data[offset + 3],
+      bottomUnits: (data[offset + 4] << 8) | data[offset + 5],
       global: data[offset + 6],
       enabled: data[offset + 7]
     });
@@ -316,7 +318,7 @@ export function decodeDeadZoneRecords(data: Uint8Array): DeadZoneRecord[] {
   return records;
 }
 export interface SwitchTypeRecord {
-  kind: "switch_type";
+  kind: 'switch_type';
   keyId: number;
   switchType: number;
 }
@@ -324,8 +326,8 @@ export function decodeSwitchTypeRecords(data: Uint8Array): SwitchTypeRecord[] {
   const records: SwitchTypeRecord[] = [];
   for (let offset = 0; offset + 3 <= data.length; offset += 3) {
     records.push({
-      kind: "switch_type",
-      keyId: data[offset] << 8 | data[offset + 1],
+      kind: 'switch_type',
+      keyId: (data[offset] << 8) | data[offset + 1],
       switchType: data[offset + 2]
     });
   }

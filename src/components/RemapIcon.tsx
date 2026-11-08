@@ -1,17 +1,19 @@
-const icons = (import.meta.glob('../assets/remap-icons/*.svg', {
+const icons = import.meta.glob('../assets/remap-icons/*.svg', {
   eager: true,
   query: '?raw',
   import: 'default'
-}) as Record<string, string>);
-export default function RemapIcon({
-  name
-}: {
-  name: string;
-}) {
+}) as Record<string, string>;
+export default function RemapIcon({ name }: { name: string }) {
   const svg = icons[`../assets/remap-icons/${name}.svg`];
-  return svg ? <span className="remap-svg-icon" aria-hidden="true" dangerouslySetInnerHTML={{
-    __html: svg
-  }} /> : null;
+  return svg ? (
+    <span
+      className="remap-svg-icon"
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{
+        __html: svg
+      }}
+    />
+  ) : null;
 }
 export const REMAP_ACTION_ICONS: Record<string, string> = {
   Right: 'arrow-right',
@@ -78,17 +80,36 @@ const supplementalIcons: Record<string, LucideIcon> = {
 export function hasRemapActionIcon(name: string): boolean {
   return !!(REMAP_ACTION_ICONS[name] || supplementalIcons[name]);
 }
-export function RemapActionIcon({
-  name,
-  label
-}: {
-  name: string;
-  label: string;
-}) {
+export function RemapActionIcon({ name, label }: { name: string; label: string }) {
   if (REMAP_ACTION_ICONS[name]) {
     return <RemapIcon name={REMAP_ACTION_ICONS[name]} />;
   }
   const Icon = supplementalIcons[name];
-  return Icon ? <span className="remap-svg-icon" aria-hidden="true"><Icon /></span> : <>{label}</>;
+  return Icon ? (
+    <span className="remap-svg-icon" aria-hidden="true">
+      <Icon />
+    </span>
+  ) : (
+    <>{label}</>
+  );
 }
-import { Apple, AppWindow, ClipboardPaste, Copy, Crosshair, Gauge, LockKeyhole, Monitor, PanelsTopLeft, Save, Scissors, Undo2, X, ZoomIn, ZoomOut, ListTodo, Ban, type LucideIcon } from 'lucide-react';
+import {
+  Apple,
+  AppWindow,
+  ClipboardPaste,
+  Copy,
+  Crosshair,
+  Gauge,
+  LockKeyhole,
+  Monitor,
+  PanelsTopLeft,
+  Save,
+  Scissors,
+  Undo2,
+  X,
+  ZoomIn,
+  ZoomOut,
+  ListTodo,
+  Ban,
+  type LucideIcon
+} from 'lucide-react';

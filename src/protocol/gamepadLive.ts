@@ -2,7 +2,7 @@ import {
   gamepadService,
   type GamepadInputFrame,
   type GamepadStatus,
-  type SharedHallSample,
+  type SharedHallSample
 } from './gamepadService';
 import type { GamepadReport } from '../keyboard/gamepad';
 
@@ -13,7 +13,7 @@ export const NEUTRAL_GAMEPAD: GamepadReport = {
   rx: 0,
   ry: 0,
   lt: 0,
-  rt: 0,
+  rt: 0
 };
 
 export type LiveGamepad = {
@@ -25,7 +25,7 @@ export type LiveGamepad = {
 const empty: LiveGamepad = {
   report: NEUTRAL_GAMEPAD,
   samples: [],
-  source: 'stopped',
+  source: 'stopped'
 };
 
 function isValidHallSample(s: SharedHallSample | undefined): boolean {
@@ -56,7 +56,7 @@ export function validInputFrame(frame: GamepadInputFrame) {
     return false;
   }
   const hasInvalidFlag = (['enabled', 'armed', 'stale', 'xinputVerified'] as const).some(
-    k => typeof frame[k] !== 'boolean',
+    k => typeof frame[k] !== 'boolean'
   );
   if (hasInvalidFlag) {
     return false;
@@ -111,7 +111,7 @@ export function browserXboxReport(pads: readonly (Gamepad | null)[]): GamepadRep
     ry: axis(3, true),
     lt: Math.round(p.buttons[6].value * 255),
     rt: Math.round(p.buttons[7].value * 255),
-    buttons: p.buttons.reduce((bits, b, i) => bits | (b.pressed ? (masks[i] ?? 0) : 0), 0),
+    buttons: p.buttons.reduce((bits, b, i) => bits | (b.pressed ? (masks[i] ?? 0) : 0), 0)
   };
 }
 
@@ -120,11 +120,9 @@ export function coherentBrowserReport(browser: GamepadReport | null, native: Gam
     return null;
   }
   const sticksMatch = (['lx', 'ly', 'rx', 'ry'] as const).every(
-    k => Math.abs(browser[k] - native[k]) <= 3277,
+    k => Math.abs(browser[k] - native[k]) <= 3277
   );
-  const triggersMatch = (['lt', 'rt'] as const).every(
-    k => Math.abs(browser[k] - native[k]) <= 26,
-  );
+  const triggersMatch = (['lt', 'rt'] as const).every(k => Math.abs(browser[k] - native[k]) <= 26);
   return sticksMatch && triggersMatch ? browser : null;
 }
 
@@ -171,7 +169,7 @@ export class GamepadLiveStore {
       this.latest = status
         ? {
             ...status,
-            sequence: 1,
+            sequence: 1
           }
         : null;
       this.receivedAt = performance.now();
@@ -194,7 +192,7 @@ export class GamepadLiveStore {
         try {
           report = coherentBrowserReport(
             browserXboxReport(navigator.getGamepads?.() ?? []),
-            f.report,
+            f.report
           );
         } catch {
           /* browser policy denies Gamepad API; native stream remains available */
@@ -203,7 +201,7 @@ export class GamepadLiveStore {
       next = {
         report: report ?? f.report,
         source: report ? 'browser' : 'service',
-        samples: f.samples.filter(s => Number.isFinite(s.ageMs) && (s.ageMs ?? 0) + elapsed < 50),
+        samples: f.samples.filter(s => Number.isFinite(s.ageMs) && (s.ageMs ?? 0) + elapsed < 50)
       };
     }
     const signature = JSON.stringify(next);
@@ -235,7 +233,7 @@ export class GamepadLiveStore {
             sequence = 0;
             this.latest = null;
           }
-        },
+        }
       );
     }
     this.raf = requestAnimationFrame(this.draw);

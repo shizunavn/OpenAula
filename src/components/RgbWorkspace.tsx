@@ -1,4 +1,11 @@
-import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../i18n';
 type Tab = 'onboard' | 'custom' | 'rhythm';
@@ -37,44 +44,80 @@ export function RgbWorkspace({
   output: Tab;
   children: ReactNode;
 }) {
-  const {
-    tr
-  } = useI18n();
+  const { tr } = useI18n();
   const root = useRef<HTMLDivElement>(null);
   const [actions, setActions] = useState<HTMLDivElement | null>(null);
   const [notices, setNotices] = useState<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
-    const header = root.current?.closest('.workspace')?.querySelector<HTMLElement>(':scope > .topbar');
+    const header = root.current
+      ?.closest('.workspace')
+      ?.querySelector<HTMLElement>(':scope > .topbar');
     if (!header) {
       return;
     }
-    const measure = () => root.current?.style.setProperty('--rgb-toolbar-top', `${header.getBoundingClientRect().height}px`);
+    const measure = () =>
+      root.current?.style.setProperty(
+        '--rgb-toolbar-top',
+        `${header.getBoundingClientRect().height}px`
+      );
     const observer = new ResizeObserver(measure);
     observer.observe(header);
     measure();
     return () => observer.disconnect();
   }, []);
-  return <ToolbarContext.Provider value={{
-    actions,
-    notices
-  }}>
-    <div ref={root} className="page settings-page rgb-settings-page page-enter">
-      <header className="rgb-page-heading"><h1>RGB</h1></header>
-      <div className="rgb-workspace-toolbar">
-        <div className="rgb-editor-tabs" role="group" aria-label={tr('RGB mode')}>
-          {([['onboard', 'Onboard Effects'], ['custom', 'Custom Effects'], ['rhythm', 'Rhythm Sync']] as const).map(([id, name]) => <button key={id} type="button" aria-pressed={tab === id} disabled={disabled} onClick={() => onTab(id)}>{tr(name)}</button>)}
+  return (
+    <ToolbarContext.Provider
+      value={{
+        actions,
+        notices
+      }}
+    >
+      <div ref={root} className="page settings-page rgb-settings-page page-enter">
+        <header className="rgb-page-heading">
+          <h1>RGB</h1>
+        </header>
+        <div className="rgb-workspace-toolbar">
+          <div className="rgb-editor-tabs" role="group" aria-label={tr('RGB mode')}>
+            {(
+              [
+                ['onboard', 'Onboard Effects'],
+                ['custom', 'Custom Effects'],
+                ['rhythm', 'Rhythm Sync']
+              ] as const
+            ).map(([id, name]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={tab === id}
+                disabled={disabled}
+                onClick={() => onTab(id)}
+              >
+                {tr(name)}
+              </button>
+            ))}
+          </div>
+          <div className="rgb-toolbar-output">
+            <span
+              className={`rgb-output-state ${output !== 'onboard' ? 'is-running' : ''}`}
+              role="status"
+            >
+              <i aria-hidden="true" />
+              {tr(
+                output === 'custom'
+                  ? 'Output: Custom'
+                  : output === 'rhythm'
+                    ? 'Output: Rhythm'
+                    : 'Using onboard lighting'
+              )}
+            </span>
+            <div className="rgb-toolbar-actions" ref={setActions} />
+          </div>
+          <div className="rgb-toolbar-notices" ref={setNotices} />
         </div>
-        <div className="rgb-toolbar-output">
-          <span className={`rgb-output-state ${output !== 'onboard' ? 'is-running' : ''}`} role="status">
-          <i aria-hidden="true" />{tr(output === 'custom' ? 'Output: Custom' : output === 'rhythm' ? 'Output: Rhythm' : 'Using onboard lighting')}
-        </span>
-          <div className="rgb-toolbar-actions" ref={setActions} />
-        </div>
-        <div className="rgb-toolbar-notices" ref={setNotices} />
+        {children}
       </div>
-      {children}
-    </div>
-  </ToolbarContext.Provider>;
+    </ToolbarContext.Provider>
+  );
 }
 export function RgbPreviewPanel({
   source,
@@ -89,18 +132,18 @@ export function RgbPreviewPanel({
   footer?: ReactNode;
   children: ReactNode;
 }) {
-  const {
-    tr
-  } = useI18n();
-  return <section className="rgb-preview-panel" aria-label={tr('Lighting preview')}>
-    <div className="rgb-preview-heading">
-      <div>
-        <span className="rgb-preview-source">{source}</span>
-        {hint && <span className="rgb-preview-hint">{hint}</span>}
+  const { tr } = useI18n();
+  return (
+    <section className="rgb-preview-panel" aria-label={tr('Lighting preview')}>
+      <div className="rgb-preview-heading">
+        <div>
+          <span className="rgb-preview-source">{source}</span>
+          {hint && <span className="rgb-preview-hint">{hint}</span>}
+        </div>
+        {actions}
       </div>
-      {actions}
-    </div>
-    <div className="rgb-preview-stage">{children}</div>
-    {footer && <div className="rgb-preview-tools">{footer}</div>}
-  </section>;
+      <div className="rgb-preview-stage">{children}</div>
+      {footer && <div className="rgb-preview-tools">{footer}</div>}
+    </section>
+  );
 }

@@ -1,1 +1,1 @@
-export * from '../../state/macros'
+export * from '../../state/macros';

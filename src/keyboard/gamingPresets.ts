@@ -10,50 +10,50 @@ import type { RgbColor } from '../protocol/hero68/rgb';
 export const GAMING_PRESETS_DEFAULT_COLORS: Readonly<Record<number, Record<string, RgbColor>>> = {
   // Mode 22: Gaming Preset 1 (WASD / FPS)
   22: {
-    KeyW: [0, 255, 255],     // Movement - Cyan
+    KeyW: [0, 255, 255], // Movement - Cyan
     KeyA: [0, 255, 255],
     KeyS: [0, 255, 255],
     KeyD: [0, 255, 255],
-    ArrowUp: [255, 220, 0],  // Directional - Yellow
+    ArrowUp: [255, 220, 0], // Directional - Yellow
     ArrowDown: [255, 220, 0],
     ArrowLeft: [255, 220, 0],
     ArrowRight: [255, 220, 0],
     ShiftLeft: [255, 80, 0], // Sprint - Orange
     ControlLeft: [255, 80, 0], // Crouch
-    Space: [255, 80, 0],     // Jump
-    KeyR: [0, 255, 120],     // Reload - Green
-    Digit1: [255, 180, 0],   // Weapons - Gold
+    Space: [255, 80, 0], // Jump
+    KeyR: [0, 255, 120], // Reload - Green
+    Digit1: [255, 180, 0], // Weapons - Gold
     Digit2: [255, 180, 0],
     Digit3: [255, 180, 0],
-    Escape: [255, 0, 80],    // Menu - Red
+    Escape: [255, 0, 80] // Menu - Red
   },
   // Mode 23: Gaming Preset 2 (MOBA)
   23: {
-    KeyQ: [0, 220, 255],     // Abilities - Cyan / Sky Blue
+    KeyQ: [0, 220, 255], // Abilities - Cyan / Sky Blue
     KeyW: [0, 220, 255],
     KeyE: [0, 220, 255],
-    KeyR: [255, 0, 100],     // Ultimate - Crimson / Magenta
-    KeyD: [255, 180, 0],     // Summoner Spells - Amber
+    KeyR: [255, 0, 100], // Ultimate - Crimson / Magenta
+    KeyD: [255, 180, 0], // Summoner Spells - Amber
     KeyF: [255, 180, 0],
-    Digit1: [0, 255, 120],   // Active items - Lime Green
+    Digit1: [0, 255, 120], // Active items - Lime Green
     Digit2: [0, 255, 120],
     Digit3: [0, 255, 120],
     Digit4: [0, 255, 120],
     Digit5: [0, 255, 120],
     Digit6: [0, 255, 120],
-    Digit7: [255, 220, 0],   // Trinket / Ward - Yellow
-    KeyB: [180, 50, 255],    // Recall / Base - Purple
-    Tab: [100, 200, 255],    // Scoreboard
-    Space: [0, 255, 255],    // Center camera
+    Digit7: [255, 220, 0], // Trinket / Ward - Yellow
+    KeyB: [180, 50, 255], // Recall / Base - Purple
+    Tab: [100, 200, 255], // Scoreboard
+    Space: [0, 255, 255] // Center camera
   },
   // Mode 24: Gaming Preset 3 (RTS)
   24: {
-    Digit1: [0, 150, 255],   // Control groups - Blue
+    Digit1: [0, 150, 255], // Control groups - Blue
     Digit2: [0, 150, 255],
     Digit3: [0, 150, 255],
     Digit4: [0, 150, 255],
     Digit5: [0, 150, 255],
-    KeyQ: [255, 140, 0],     // Grid unit & build commands - Orange
+    KeyQ: [255, 140, 0], // Grid unit & build commands - Orange
     KeyW: [255, 140, 0],
     KeyE: [255, 140, 0],
     KeyR: [255, 140, 0],
@@ -65,16 +65,16 @@ export const GAMING_PRESETS_DEFAULT_COLORS: Readonly<Record<number, Record<strin
     KeyX: [255, 140, 0],
     KeyC: [255, 140, 0],
     KeyV: [255, 140, 0],
-    KeyH: [255, 220, 0],     // Hold / Base / Stop - Yellow
+    KeyH: [255, 220, 0], // Hold / Base / Stop - Yellow
     KeyM: [255, 220, 0],
     KeyP: [255, 220, 0],
     ShiftLeft: [0, 255, 150], // Waypoint / Queue
     ControlLeft: [0, 255, 150],
-    Space: [0, 255, 255],
+    Space: [0, 255, 255]
   },
   // Mode 25: Gaming Preset 4 (MMO)
   25: {
-    Digit1: [255, 80, 0],    // Action bar 1..12 - Red-Orange
+    Digit1: [255, 80, 0], // Action bar 1..12 - Red-Orange
     Digit2: [255, 80, 0],
     Digit3: [255, 80, 0],
     Digit4: [255, 80, 0],
@@ -86,20 +86,20 @@ export const GAMING_PRESETS_DEFAULT_COLORS: Readonly<Record<number, Record<strin
     Digit0: [255, 80, 0],
     Minus: [255, 80, 0],
     Equal: [255, 80, 0],
-    KeyW: [0, 255, 255],     // Movement - Cyan
+    KeyW: [0, 255, 255], // Movement - Cyan
     KeyA: [0, 255, 255],
     KeyS: [0, 255, 255],
     KeyD: [0, 255, 255],
-    KeyQ: [0, 255, 255],     // Strafe
+    KeyQ: [0, 255, 255], // Strafe
     KeyE: [0, 255, 255],
-    Tab: [180, 70, 255],     // Target - Purple
+    Tab: [180, 70, 255], // Target - Purple
     Space: [180, 70, 255],
     ShiftLeft: [180, 70, 255],
     ControlLeft: [180, 70, 255],
-    KeyI: [255, 220, 0],     // UI panels (Inventory, Map, Character) - Yellow
+    KeyI: [255, 220, 0], // UI panels (Inventory, Map, Character) - Yellow
     KeyM: [255, 220, 0],
-    KeyC: [255, 220, 0],
-  },
+    KeyC: [255, 220, 0]
+  }
 };
 
 /**
@@ -140,7 +140,7 @@ export function getGamingPresetDefaultColors(
   const result: Record<string, RgbColor> = {};
   if (allKeyIds) {
     for (const id of allKeyIds) {
-      result[id] = defaults[id] ? [...defaults[id]] as RgbColor : [0, 0, 0];
+      result[id] = defaults[id] ? ([...defaults[id]] as RgbColor) : [0, 0, 0];
     }
   } else {
     for (const [id, color] of Object.entries(defaults)) {

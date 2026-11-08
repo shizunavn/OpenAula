@@ -1,29 +1,29 @@
-import type { CSSProperties } from 'react'
-import { heroLayout } from '../../keyboard/layout'
-import type { HeroDeviceModelId } from '../../keyboard/devices'
-import { SwitchStemMenuIcon } from './SwitchStemMenuIcon'
+import type { CSSProperties } from 'react';
+import { heroLayout } from '../../keyboard/layout';
+import type { HeroDeviceModelId } from '../../keyboard/devices';
+import { SwitchStemMenuIcon } from './SwitchStemMenuIcon';
 
 // React's CSSProperties has no index signature for custom properties.
-const keyUnits = (units: number) => ({ '--key-units': units }) as CSSProperties
+const keyUnits = (units: number) => ({ '--key-units': units }) as CSSProperties;
 
 function SwitchSelectorBoard({
   model,
   selectedKeys,
   onToggleKey,
-  switchImagesByKey,
+  switchImagesByKey
 }: {
-  model: HeroDeviceModelId
-  selectedKeys: Set<string>
-  onToggleKey: (keyId: string) => void
-  switchImagesByKey: Record<string, string>
+  model: HeroDeviceModelId;
+  selectedKeys: Set<string>;
+  onToggleKey: (keyId: string) => void;
+  switchImagesByKey: Record<string, string>;
 }) {
-  const rows = heroLayout(model).rows
+  const rows = heroLayout(model).rows;
   return (
     <div className={`switch-board-wrap is-${model}`}>
       <div className="switch-board-preview">
         {rows.map((row, rowIndex) => (
           <div className="switch-board-row" key={rowIndex}>
-            {row.map((key) => (
+            {row.map(key => (
               <button
                 key={key.id}
                 type="button"
@@ -32,17 +32,28 @@ function SwitchSelectorBoard({
                 onClick={() => onToggleKey(key.id)}
                 aria-label={key.label}
               >
-                {switchImagesByKey[key.id]
-                  ? <img src={switchImagesByKey[key.id]} alt="" aria-hidden="true" className="switch-board-switch" />
-                  : <span className="switch-board-generic" aria-hidden="true"><SwitchStemMenuIcon /></span>}
-                <span className="switch-board-key-label" aria-hidden="true">{key.label}</span>
+                {switchImagesByKey[key.id] ? (
+                  <img
+                    src={switchImagesByKey[key.id]}
+                    alt=""
+                    aria-hidden="true"
+                    className="switch-board-switch"
+                  />
+                ) : (
+                  <span className="switch-board-generic" aria-hidden="true">
+                    <SwitchStemMenuIcon />
+                  </span>
+                )}
+                <span className="switch-board-key-label" aria-hidden="true">
+                  {key.label}
+                </span>
               </button>
             ))}
           </div>
         ))}
       </div>
     </div>
-  )
+  );
 }
 
-export { SwitchSelectorBoard }
+export { SwitchSelectorBoard };

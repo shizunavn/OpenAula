@@ -2,7 +2,12 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { RgbProfile } from '../protocol/hero68/rgb';
 import { restoreCustomRgb } from '../keyboard/customRgbModel';
 import { rgbService } from '../protocol/rgbService';
-import { publishRgbServiceStatus, refreshRgbService, unsupportedRgbEffects, useRgbServiceState } from '../protocol/rgbServiceState';
+import {
+  publishRgbServiceStatus,
+  refreshRgbService,
+  unsupportedRgbEffects,
+  useRgbServiceState
+} from '../protocol/rgbServiceState';
 import { hero68DeviceManager } from '../protocol/hero68/webhid';
 import { hero68HallStream } from '../protocol/hero68/hallStream';
 import { xsydDeviceManager } from '../protocol/xsyd/device';
@@ -12,16 +17,23 @@ import {
   startXsydCustomRgb,
   stopXsydCustomRgb,
   subscribeXsydCustomRgb,
-  updateXsydCustomRgbProfile,
+  updateXsydCustomRgbProfile
 } from '../protocol/serviceLighting';
-import { CustomRgbSession, customSignature, mergeRunningCustom, type CustomSessionState } from '../protocol/customRgbSession';
+import {
+  CustomRgbSession,
+  customSignature,
+  mergeRunningCustom,
+  type CustomSessionState
+} from '../protocol/customRgbSession';
 import { BRAND } from '../brand';
-export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbProfile) => void, onSetup: () => void, slot = 0, editing = true) {
-  const {
-    status,
-    checking,
-    reconnecting
-  } = useRgbServiceState();
+export function useCustomRgbPlayback(
+  value: RgbProfile,
+  onChange: (value: RgbProfile) => void,
+  onSetup: () => void,
+  slot = 0,
+  editing = true
+) {
+  const { status, checking, reconnecting } = useRgbServiceState();
   const [state, setState] = useState<CustomSessionState>({
     session: null,
     syncing: false,
@@ -32,7 +44,11 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
   const [error, setError] = useState<string | null>(null);
   const [previewOnly, setPreviewOnly] = useState(false);
   const xsydLive = useSyncExternalStore(subscribeXsydCustomRgb, isXsydCustomRgbActive, () => false);
-  const xsydRhythmLive = useSyncExternalStore(subscribeXsydCustomRgb, isXsydRhythmActive, () => false);
+  const xsydRhythmLive = useSyncExternalStore(
+    subscribeXsydCustomRgb,
+    isXsydRhythmActive,
+    () => false
+  );
   const [backup, setBackup] = useState<RgbProfile | null>(null);
   const current = useRef(value);
   current.current = value;
@@ -42,8 +58,16 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
   const queue = useRef<CustomRgbSession | null>(null);
   const config = restoreCustomRgb(value.custom, value);
   const unsupported = status ? unsupportedRgbEffects(config, status) : [];
-  const updateRequired = !!status && ((status.apiVersion ?? 0) < 3 || status.customRevision === undefined || unsupported.length > 0);
-  const applied = (xsydLive && !previewOnly) || (!!state.session && status?.sessionId === state.session && status.enabled && status.mode === 'custom' && !previewOnly);
+  const updateRequired =
+    !!status &&
+    ((status.apiVersion ?? 0) < 3 || status.customRevision === undefined || unsupported.length > 0);
+  const applied =
+    (xsydLive && !previewOnly) ||
+    (!!state.session &&
+      status?.sessionId === state.session &&
+      status.enabled &&
+      status.mode === 'custom' &&
+      !previewOnly);
   const signature = customSignature(value);
   const previousSignature = useRef(signature);
   const previousEditing = useRef(false);
@@ -76,8 +100,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
         setBackup(profile);
         try {
           localStorage.setItem(key, JSON.stringify(profile));
-        } catch {
-} /* Keep recovery in memory. */
+        } catch {} /* Keep recovery in memory. */
       },
       write: (profile, id, revision) => rgbService.update(profile, id, revision),
       status: publishRgbServiceStatus,
@@ -136,7 +159,7 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
       setBusy(true);
       setError(null);
       try {
-        if (!xsydDeviceManager.connected && await xsydDeviceManager.hasAuthorizedDevice()) {
+        if (!xsydDeviceManager.connected && (await xsydDeviceManager.hasAuthorizedDevice())) {
           await xsydDeviceManager.connect(false).catch(() => {});
         }
         const profile = {
@@ -208,7 +231,10 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
           enabled: true
         }
       };
-      if (fresh.customRevision === undefined || unsupportedRgbEffects(profile.custom, fresh).length) {
+      if (
+        fresh.customRevision === undefined ||
+        unsupportedRgbEffects(profile.custom, fresh).length
+      ) {
         throw Error('Update the background app to use this preset.');
       }
       if (hero68HallStream.getSnapshot().active || hero68HallStream.getSnapshot().starting) {
@@ -266,7 +292,9 @@ export function useCustomRgbPlayback(value: RgbProfile, onChange: (value: RgbPro
       }
       if (status) {
         await queue.current?.pause();
-        const result = await ((status.apiVersion ?? 0) >= 3 ? rgbService.mode('onboard') : rgbService.stop());
+        const result = await ((status.apiVersion ?? 0) >= 3
+          ? rgbService.mode('onboard')
+          : rgbService.stop());
         if (token !== action.current) {
           return;
         }

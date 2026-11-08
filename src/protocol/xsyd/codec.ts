@@ -26,26 +26,26 @@ function assertByte(value: number, name: string): void {
 }
 
 /**
-  * Byte 3 of the frame (VA 0xCF48 in firmware).
-  *
-  * The firmware sums magic + LEN + OPCODE + 0x35 + `buf[0x60 + LEN]`, i.e. the
-  * LAST payload byte only (pack[3 + LEN]) — never the whole body. Proven on all
-  * 4316 frames of 9 USB captures; whole-payload sums reproduce only the frames
-  * whose body happens to total 0x00/0xFF.
-  *
-  * Three families deviate, each explained by how the frame was assembled:
-  *   - `in` with OPCODE < 0x80 never passes through the reply packer (which sets
-  *     `opcode |= 0x80` before checksumming), so the byte stays 0x00;
-  *   - OPCODE 0x30 uses a fixed 0x43-byte slot, so the addend is pack[63];
-  *   - LEN > 60 pushes the addend past the 64-byte report: 0x00 for the 128-byte
-  *     Hall reply (0x92, LEN 0x80) and 0xFF when it carries a FF FF suffix
-  *     (LEN 0x82).
-  */
-export function xsydChecksum(frame: ArrayLike<number>, direction: "out" | "in" = "out"): number {
+ * Byte 3 of the frame (VA 0xCF48 in firmware).
+ *
+ * The firmware sums magic + LEN + OPCODE + 0x35 + `buf[0x60 + LEN]`, i.e. the
+ * LAST payload byte only (pack[3 + LEN]) — never the whole body. Proven on all
+ * 4316 frames of 9 USB captures; whole-payload sums reproduce only the frames
+ * whose body happens to total 0x00/0xFF.
+ *
+ * Three families deviate, each explained by how the frame was assembled:
+ *   - `in` with OPCODE < 0x80 never passes through the reply packer (which sets
+ *     `opcode |= 0x80` before checksumming), so the byte stays 0x00;
+ *   - OPCODE 0x30 uses a fixed 0x43-byte slot, so the addend is pack[63];
+ *   - LEN > 60 pushes the addend past the 64-byte report: 0x00 for the 128-byte
+ *     Hall reply (0x92, LEN 0x80) and 0xFF when it carries a FF FF suffix
+ *     (LEN 0x82).
+ */
+export function xsydChecksum(frame: ArrayLike<number>, direction: 'out' | 'in' = 'out'): number {
   const magic = frame[0] ?? 0;
   const length = frame[1] ?? 0;
   const opcode = frame[2] ?? 0;
-  if (direction === "in" && opcode < 0x80) {
+  if (direction === 'in' && opcode < 0x80) {
     return 0x00;
   }
   if (opcode === 0x30) {
@@ -60,7 +60,7 @@ export function xsydChecksum(frame: ArrayLike<number>, direction: "out" | "in" =
  * Bytes after the payload stay 0x00, matching what the firmware writes.
  */
 export function buildXsydFrame(opcode: number, payload: ArrayLike<number> = []): Uint8Array {
-  assertByte(opcode, "opcode");
+  assertByte(opcode, 'opcode');
   const length = payload.length;
   if (length > XSYD_MAX_PAYLOAD) {
     throw new RangeError(`payload is limited to ${XSYD_MAX_PAYLOAD} bytes`);
@@ -85,7 +85,7 @@ export function buildXsydFrame(opcode: number, payload: ArrayLike<number> = []):
 /** Split a frame into the report bodies WebHID expects (`sendReport(id, body)`). */
 export function xsydReports(frame: Uint8Array): Uint8Array[] {
   if (frame.length % XSYD_REPORT_LENGTH !== 0) {
-    throw new RangeError("frame length must be a multiple of 64");
+    throw new RangeError('frame length must be a multiple of 64');
   }
   const reports: Uint8Array[] = [];
   for (let offset = 0; offset < frame.length; offset += XSYD_REPORT_LENGTH) {
@@ -139,12 +139,12 @@ export class XsydFrameAssembler {
         op >= 0x80 &&
         op !== 0x92 &&
         report.length >= HEADER_LENGTH + len &&
-        report[3] === xsydChecksum(report, "in");
+        report[3] === xsydChecksum(report, 'in');
       const isFreshHallHeader =
         magic === XSYD_MAGIC &&
         (len === 0x80 || len === 0x82) &&
         op === 0x92 &&
-        report[3] === xsydChecksum(report, "in") &&
+        report[3] === xsydChecksum(report, 'in') &&
         (report[4] ?? 0xff) === 0x00 &&
         (report[5] === 0x01 || report[5] === 0x02 || report[5] === 0x03);
       if (isSingleReportReply || isFreshHallHeader) {
@@ -159,7 +159,8 @@ export class XsydFrameAssembler {
       if (length > XSYD_MAX_PAYLOAD) {
         return null;
       }
-      this.#expected = Math.ceil((HEADER_LENGTH + length) / XSYD_REPORT_LENGTH) * XSYD_REPORT_LENGTH;
+      this.#expected =
+        Math.ceil((HEADER_LENGTH + length) / XSYD_REPORT_LENGTH) * XSYD_REPORT_LENGTH;
     }
     const room = Math.min(report.length, this.#expected - this.#filled);
     for (let i = 0; i < room; i++) {
@@ -194,7 +195,7 @@ export const SILENT_REPLY: Readonly<XsydReply> = Object.freeze({
   status: 0,
   payload: new Uint8Array(0),
   raw: new Uint8Array(0)
-})
+});
 
 export function decodeXsydFrame(frame: Uint8Array): XsydReply {
   if (frame.length < HEADER_LENGTH || frame[0] !== XSYD_MAGIC) {
@@ -202,14 +203,16 @@ export function decodeXsydFrame(frame: Uint8Array): XsydReply {
   }
   const length = frame[1];
   if (HEADER_LENGTH + length > frame.length) {
-    throw new RangeError(`frame declares ${length} payload bytes but only ${frame.length - HEADER_LENGTH} are present`);
+    throw new RangeError(
+      `frame declares ${length} payload bytes but only ${frame.length - HEADER_LENGTH} are present`
+    );
   }
   const opcode = frame[2];
   return {
     opcode,
     requestOpcode: opcode & 0x7f,
     length,
-    checksumValid: frame[3] === xsydChecksum(frame, "in"),
+    checksumValid: frame[3] === xsydChecksum(frame, 'in'),
     status: frame[4] ?? 0,
     payload: frame.slice(HEADER_LENGTH, HEADER_LENGTH + length),
     raw: frame

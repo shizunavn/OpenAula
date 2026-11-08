@@ -23,9 +23,7 @@ export default function FeatureHelp({
   pinOnClick = true,
   disabled
 }: FeatureHelpProps) {
-  const {
-    tr
-  } = useI18n();
+  const { tr } = useI18n();
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -71,10 +69,17 @@ export default function FeatureHelp({
       }
       const anchor = trigger.current.getBoundingClientRect();
       const box = panel.current.getBoundingClientRect();
-      const above = anchor.bottom + box.height + 20 > window.innerHeight && anchor.top > box.height + 20;
+      const above =
+        anchor.bottom + box.height + 20 > window.innerHeight && anchor.top > box.height + 20;
       setPosition({
         left: Math.max(12, Math.min(anchor.left - 12, window.innerWidth - box.width - 12)),
-        top: Math.max(12, Math.min(above ? anchor.top - box.height - 10 : anchor.bottom + 10, window.innerHeight - box.height - 12)),
+        top: Math.max(
+          12,
+          Math.min(
+            above ? anchor.top - box.height - 10 : anchor.bottom + 10,
+            window.innerHeight - box.height - 12
+          )
+        ),
         above
       });
     };
@@ -91,7 +96,7 @@ export default function FeatureHelp({
       }
     };
     const onOutside = (event: PointerEvent) => {
-      const target = (event.target as Node);
+      const target = event.target as Node;
       if (!trigger.current?.contains(target) && !panel.current?.contains(target)) {
         dismiss();
       }
@@ -106,31 +111,65 @@ export default function FeatureHelp({
       document.removeEventListener('pointerdown', onOutside);
     };
   }, [open]);
-  return <>
-    <button ref={trigger} type="button" disabled={disabled} className={`${triggerClassName ?? 'feature-help-trigger'} ${open ? 'is-open' : ''}`} aria-label={triggerLabel ? tr(triggerLabel) : tr('About {title}', {
-      title: tr(title)
-    })} aria-describedby={open ? id : undefined} onMouseEnter={show} onMouseLeave={scheduleClose} onFocus={show} onBlur={() => {
-      if (!pinned.current) {
-        scheduleClose();
-      }
-    }} onClick={() => {
-      onActivate?.();
-      if (!pinOnClick) {
-        return;
-      }
-      if (pinned.current) {
-        dismiss();
-      } else {
-        pinned.current = true;
-        show();
-      }
-    }}>{icon ?? <CircleHelp size={16} aria-hidden="true" />}</button>
-    {createPortal(<div ref={panel} id={id} role="tooltip" aria-hidden={!open} className={`feature-help-panel ${paragraphs.length ? '' : 'is-compact'} ${open ? 'is-open' : ''} ${position.above ? 'is-above' : ''}`} style={{
-      left: position.left,
-      top: position.top
-    }} onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
-      <strong>{tr(title)}</strong>
-      {paragraphs.map(paragraph => <p key={paragraph}>{tr(paragraph)}</p>)}
-    </div>, document.body)}
-  </>;
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        disabled={disabled}
+        className={`${triggerClassName ?? 'feature-help-trigger'} ${open ? 'is-open' : ''}`}
+        aria-label={
+          triggerLabel
+            ? tr(triggerLabel)
+            : tr('About {title}', {
+                title: tr(title)
+              })
+        }
+        aria-describedby={open ? id : undefined}
+        onMouseEnter={show}
+        onMouseLeave={scheduleClose}
+        onFocus={show}
+        onBlur={() => {
+          if (!pinned.current) {
+            scheduleClose();
+          }
+        }}
+        onClick={() => {
+          onActivate?.();
+          if (!pinOnClick) {
+            return;
+          }
+          if (pinned.current) {
+            dismiss();
+          } else {
+            pinned.current = true;
+            show();
+          }
+        }}
+      >
+        {icon ?? <CircleHelp size={16} aria-hidden="true" />}
+      </button>
+      {createPortal(
+        <div
+          ref={panel}
+          id={id}
+          role="tooltip"
+          aria-hidden={!open}
+          className={`feature-help-panel ${paragraphs.length ? '' : 'is-compact'} ${open ? 'is-open' : ''} ${position.above ? 'is-above' : ''}`}
+          style={{
+            left: position.left,
+            top: position.top
+          }}
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+        >
+          <strong>{tr(title)}</strong>
+          {paragraphs.map(paragraph => (
+            <p key={paragraph}>{tr(paragraph)}</p>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  );
 }

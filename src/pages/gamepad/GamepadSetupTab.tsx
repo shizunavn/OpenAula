@@ -7,7 +7,7 @@ import {
   isAnalogAction,
   type GamepadAction,
   type GamepadBinding,
-  type GamepadConfiguration,
+  type GamepadConfiguration
 } from '../../keyboard/gamepad';
 import type { GamepadStatus } from '../../protocol/gamepadService';
 import { actionLabel, GAMEPAD_PALETTE, physicalLabel } from './gamepadDraftStorage';
@@ -31,7 +31,7 @@ export function GamepadSetupTab({
   onClearKeybind,
   onStartDragPaletteAction,
   onEndDrag,
-  onAssignKey,
+  onAssignKey
 }: {
   config: GamepadConfiguration;
   status: GamepadStatus | null;
@@ -82,13 +82,13 @@ export function GamepadSetupTab({
           <span className="gp-field-title">{t('Polling rate')}</span>
           <AppSelect
             value={config.rate}
-            options={[50, 100, 200].map((value) => ({
+            options={[50, 100, 200].map(value => ({
               value,
-              label: `${value} Hz`,
+              label: `${value} Hz`
             }))}
             label="Polling rate"
             disabled={disabled}
-            onChange={(value) => onPatch({ rate: value as 50 | 100 | 200 })}
+            onChange={value => onPatch({ rate: value as 50 | 100 | 200 })}
           />
         </label>
         <div className="gp-keybind-field">
@@ -149,7 +149,7 @@ export function GamepadSetupTab({
           )}
         </p>
         <div className="gp-palette">
-          {GAMEPAD_PALETTE.map((action) => (
+          {GAMEPAD_PALETTE.map(action => (
             <button
               key={action}
               className={
@@ -160,7 +160,7 @@ export function GamepadSetupTab({
               draggable={!disabled}
               disabled={disabled}
               aria-label={'Bind ' + action}
-              onDragStart={(event) => {
+              onDragStart={event => {
                 event.dataTransfer.setData('application/x-openhero-gamepad', action);
                 event.dataTransfer.effectAllowed = 'copy';
                 if (emptyDragImageRef.current) {
@@ -191,7 +191,7 @@ export function GamepadSetupTab({
                   max={binding.endMm - 0.01}
                   step=".01"
                   value={binding.startMm}
-                  onChange={(event) => {
+                  onChange={event => {
                     const nextStart = event.target.valueAsNumber;
                     if (
                       Number.isFinite(nextStart) &&
@@ -199,9 +199,9 @@ export function GamepadSetupTab({
                       nextStart <= binding.endMm - 0.01
                     ) {
                       onPatch({
-                        bindings: config.bindings.map((item) =>
+                        bindings: config.bindings.map(item =>
                           item === binding ? { ...item, startMm: nextStart } : item
-                        ),
+                        )
                       });
                     }
                   }}
@@ -215,7 +215,7 @@ export function GamepadSetupTab({
                   max="3.4"
                   step=".01"
                   value={binding.endMm}
-                  onChange={(event) => {
+                  onChange={event => {
                     const nextEnd = event.target.valueAsNumber;
                     if (
                       Number.isFinite(nextEnd) &&
@@ -223,9 +223,9 @@ export function GamepadSetupTab({
                       nextEnd <= 3.4
                     ) {
                       onPatch({
-                        bindings: config.bindings.map((item) =>
+                        bindings: config.bindings.map(item =>
                           item === binding ? { ...item, endMm: nextEnd } : item
-                        ),
+                        )
                       });
                     }
                   }}
@@ -247,7 +247,7 @@ export function GamepadSetupTab({
             role="switch"
             checked={!config.suppressMappedKeys}
             disabled={disabled || !status?.capabilities.keyboardSuppression}
-            onChange={(event) => onPatch({ suppressMappedKeys: !event.target.checked })}
+            onChange={event => onPatch({ suppressMappedKeys: !event.target.checked })}
           />
         </label>
         <label className="gp-switch">
@@ -257,7 +257,7 @@ export function GamepadSetupTab({
             role="switch"
             checked={config.suppressMappedKeys}
             disabled={disabled || !status?.capabilities.keyboardSuppression}
-            onChange={(event) => onPatch({ suppressMappedKeys: event.target.checked })}
+            onChange={event => onPatch({ suppressMappedKeys: event.target.checked })}
           />
         </label>
         <p>
@@ -268,7 +268,11 @@ export function GamepadSetupTab({
           )}
         </p>
         {!status?.capabilities.keyboardSuppression && (
-          <p>{t('Update the full Windows service package to 0.4.1 or later for mapped-key blocking.')}</p>
+          <p>
+            {t(
+              'Update the full Windows service package to 0.4.1 or later for mapped-key blocking.'
+            )}
+          </p>
         )}
         {status?.keyboardSuppressionError && (
           <p className="gp-error" role="alert">
@@ -277,7 +281,9 @@ export function GamepadSetupTab({
         )}
         {status?.firmwareRecoveryPending && (
           <p className="gp-error" role="alert">
-            {t('Keyboard remap recovery is pending. Reconnect the original HERO68; Stop retries recovery.')}
+            {t(
+              'Keyboard remap recovery is pending. Reconnect the original HERO68; Stop retries recovery.'
+            )}
           </p>
         )}
       </section>

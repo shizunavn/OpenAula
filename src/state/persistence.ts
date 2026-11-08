@@ -42,7 +42,20 @@ export type PersistedOpenHeroState = {
   remapLayers?: RemapLayers;
   profileDrafts?: Partial<Record<0 | 1 | 2, ProfileDraft>>;
 };
-export type ProfileDraft = Pick<PersistedOpenHeroState, 'assignedSwitchesByKey' | 'actuationByKey' | 'rapidTriggerByKey' | 'splitSensitivityByKey' | 'rapidSensitivityByKey' | 'pressSensitivityByKey' | 'releaseSensitivityByKey' | 'deadzoneEnabledByKey' | 'topDeadzoneByKey' | 'bottomDeadzoneByKey' | 'remapLayers'> & {
+export type ProfileDraft = Pick<
+  PersistedOpenHeroState,
+  | 'assignedSwitchesByKey'
+  | 'actuationByKey'
+  | 'rapidTriggerByKey'
+  | 'splitSensitivityByKey'
+  | 'rapidSensitivityByKey'
+  | 'pressSensitivityByKey'
+  | 'releaseSensitivityByKey'
+  | 'deadzoneEnabledByKey'
+  | 'topDeadzoneByKey'
+  | 'bottomDeadzoneByKey'
+  | 'remapLayers'
+> & {
   advancedBindings?: AdvancedBinding[];
   advancedBaseline?: AdvancedBinding[];
   dirtyKeys?: string[];
@@ -75,14 +88,15 @@ export function loadOpenHeroState(): PersistedOpenHeroState | null {
       delete parsed.languagePreference;
     }
     if (typeof parsed.languageManuallySet !== 'boolean') {
-      parsed.languageManuallySet = previousLanguagePreference === 'en' || previousLanguagePreference === 'vi';
+      parsed.languageManuallySet =
+        previousLanguagePreference === 'en' || previousLanguagePreference === 'vi';
     }
     // Older builds did not cache completion of automatic region detection.
     // Leave it false so they perform at most one final lookup, then persist it.
     if (typeof parsed.languageRegionDetected !== 'boolean') {
       parsed.languageRegionDetected = false;
     }
-    return (parsed as PersistedOpenHeroState);
+    return parsed as PersistedOpenHeroState;
   } catch {
     return null;
   }
@@ -93,6 +107,5 @@ export function saveOpenHeroState(state: PersistedOpenHeroState) {
   }
   try {
     window.localStorage.setItem(OPENHERO68_STATE_KEY, JSON.stringify(state));
-  } catch {
-} // Storage can be unavailable in private / restricted browser contexts.
+  } catch {} // Storage can be unavailable in private / restricted browser contexts.
 }

@@ -6,7 +6,7 @@ import {
   restoreGamepad,
   validateGamepad,
   type GamepadAction,
-  type GamepadConfiguration,
+  type GamepadConfiguration
 } from '../../keyboard/gamepad';
 
 const STORAGE_KEY = `${BRAND.storagePrefix}:gamepad:v1`;
@@ -14,7 +14,7 @@ const STORAGE_KEY = `${BRAND.storagePrefix}:gamepad:v1`;
 export const NEUTRAL_GAMEPAD_LIGHTING = Object.fromEntries(
   heroLayout('hero84')
     .rows.flat()
-    .map((key) => [key.id, '#35393b'])
+    .map(key => [key.id, '#35393b'])
 );
 
 export const GAMEPAD_PALETTE: GamepadAction[] = [
@@ -42,7 +42,7 @@ export const GAMEPAD_PALETTE: GamepadAction[] = [
   'LB',
   'LT',
   'RB',
-  'RT',
+  'RT'
 ];
 
 const ACTION_DISPLAY_LABELS: Partial<Record<GamepadAction, string>> = {
@@ -55,7 +55,7 @@ const ACTION_DISPLAY_LABELS: Partial<Record<GamepadAction, string>> = {
   RLeft: 'R ←',
   RRight: 'R →',
   LClick: 'L ⦿',
-  RClick: 'R ⦿',
+  RClick: 'R ⦿'
 };
 
 export const physicalLabel = (id: string): string => HERO68_KEY_LABEL_BY_ID[id] ?? id;
@@ -98,11 +98,11 @@ export function exportGamepadConfigJson(slot: number, config: GamepadConfigurati
         {
           version: 1,
           slot,
-          configuration: config,
+          configuration: config
         },
         null,
         2
-      ),
+      )
     ],
     { type: 'application/json' }
   );

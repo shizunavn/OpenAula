@@ -1,7 +1,7 @@
-export type LightingFrame = Record<string, string>
-export type LightingFrameListener = (frame: LightingFrame) => void
+export type LightingFrame = Record<string, string>;
+export type LightingFrameListener = (frame: LightingFrame) => void;
 
-const listeners = new Set<LightingFrameListener>()
+const listeners = new Set<LightingFrameListener>();
 
 /**
  * Tiny UI/backend boundary for the keyboard RGB preview.
@@ -12,12 +12,12 @@ const listeners = new Set<LightingFrameListener>()
  * The preview does not need to know anything about HID packets.
  */
 export function publishLightingFrame(frame: LightingFrame) {
-  listeners.forEach((listener) => listener(frame))
+  listeners.forEach(listener => listener(frame));
 }
 
 export function subscribeLightingFrame(listener: LightingFrameListener) {
-  listeners.add(listener)
+  listeners.add(listener);
   return () => {
-    listeners.delete(listener)
-  }
+    listeners.delete(listener);
+  };
 }

@@ -1,5 +1,8 @@
 export function normalizeHex(input: string) {
-  const clean = input.replace(/0x/gi, '').replace(/[^0-9a-f]/gi, '').toUpperCase();
+  const clean = input
+    .replace(/0x/gi, '')
+    .replace(/[^0-9a-f]/gi, '')
+    .toUpperCase();
   if (clean.length % 2 !== 0) {
     throw new Error('Hex input must contain complete bytes');
   }
@@ -14,11 +17,13 @@ export function hexToBytes(input: string): Uint8Array {
   return bytes;
 }
 export function bytesToHex(bytes: ArrayLike<number>, separator = ' ') {
-  return Array.from(bytes, value => value.toString(16).padStart(2, '0').toUpperCase()).join(separator);
+  return Array.from(bytes, value => value.toString(16).padStart(2, '0').toUpperCase()).join(
+    separator
+  );
 }
 export function u16be(value: number) {
-  return new Uint8Array([value >>> 8 & 0xff, value & 0xff]);
+  return new Uint8Array([(value >>> 8) & 0xff, value & 0xff]);
 }
 export function u16le(value: number) {
-  return new Uint8Array([value & 0xff, value >>> 8 & 0xff]);
+  return new Uint8Array([value & 0xff, (value >>> 8) & 0xff]);
 }

@@ -14,7 +14,9 @@ export function useKeySelection({
   keyIdSet,
   onBeforeDiscardSelection
 }: UseKeySelectionOptions) {
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => normalizeHero68Selection(initialSelectedKeys ?? [], initialKeyIds));
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() =>
+    normalizeHero68Selection(initialSelectedKeys ?? [], initialKeyIds)
+  );
   const hasSelection = selectedKeys.size > 0;
   const allSelected = isWholeKeyboardSelected(selectedKeys, modelKeyIds);
   function toggleKey(keyId: string) {
@@ -41,7 +43,7 @@ export function useKeySelection({
   }
   function discardSelection() {
     onBeforeDiscardSelection?.();
-    setSelectedKeys(previous => previous.size === 0 ? previous : new Set());
+    setSelectedKeys(previous => (previous.size === 0 ? previous : new Set()));
   }
   function normalizeForModel(nextKeyIds: readonly string[]) {
     setSelectedKeys(previous => normalizeHero68Selection(previous, nextKeyIds));

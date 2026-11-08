@@ -17,7 +17,7 @@ export function useGamepadDragAndCurve({
   keyboardRef,
   onPatch,
   onRemoveBinding,
-  onCurveDragStateChange,
+  onCurveDragStateChange
 }: {
   config: GamepadConfiguration;
   disabled: boolean;
@@ -60,7 +60,7 @@ export function useGamepadDragAndCurve({
   }
 
   function startCurveDrag(index: number, pointerId: number, target: SVGCircleElement) {
-    curveBeforeDragRef.current = config.curve.map((p) => [...p] as CurvePoint);
+    curveBeforeDragRef.current = config.curve.map(p => [...p] as CurvePoint);
     onCurveDragStateChange?.(true);
     setCurveDragging(true);
     dragIndexRef.current = index;
@@ -71,13 +71,13 @@ export function useGamepadDragAndCurve({
     if (disabled || index <= 0 || index >= config.curve.length - 1) {
       return;
     }
-    const next = config.curve.map((p) => [...p] as CurvePoint);
+    const next = config.curve.map(p => [...p] as CurvePoint);
     const before = next[index - 1];
     const after = next[index + 1];
     const gap = Math.min(0.005, (after[0] - before[0]) / 3);
     next[index] = [
       Math.max(before[0] + gap, Math.min(after[0] - gap, x)),
-      Math.max(before[1], Math.min(after[1], y)),
+      Math.max(before[1], Math.min(after[1], y))
     ];
     onPatch({ curve: next });
   }
@@ -186,6 +186,6 @@ export function useGamepadDragAndCurve({
     startCurveDrag,
     moveCurveDrag,
     finishCurve,
-    changeCurve,
+    changeCurve
   };
 }

@@ -1,9 +1,9 @@
-import type { GamepadConfiguration, GamepadReport } from "../keyboard/gamepad";
-import { GAMEPAD_TOGGLE_SERVICE_VERSION } from "../keyboard/gamepad";
-import { fetchLocalService } from "./localServiceAccess";
-import { hero68DeviceManager } from "./hero68/webhid";
-import { hero68HallStream } from "./hero68/hallStream";
-import { xsydDeviceManager } from "./xsyd/device";
+import type { GamepadConfiguration, GamepadReport } from '../keyboard/gamepad';
+import { GAMEPAD_TOGGLE_SERVICE_VERSION } from '../keyboard/gamepad';
+import { fetchLocalService } from './localServiceAccess';
+import { hero68DeviceManager } from './hero68/webhid';
+import { hero68HallStream } from './hero68/hallStream';
+import { xsydDeviceManager } from './xsyd/device';
 export type SharedHallSample = {
   keyId: string;
   pos: number;
@@ -41,7 +41,7 @@ export type GamepadStatus = {
   neutralCount: number;
   error: string;
   report: GamepadReport;
-  backend: "vigem";
+  backend: 'vigem';
   slot: number;
   configuration: GamepadConfiguration;
   capabilities: {
@@ -64,27 +64,42 @@ export type GamepadStatus = {
   };
   samples: SharedHallSample[];
 };
-export type GamepadInputFrame = Pick<GamepadStatus, "enabled" | "armed" | "stale" | "xinputVerified" | "report" | "samples"> & {
+export type GamepadInputFrame = Pick<
+  GamepadStatus,
+  'enabled' | 'armed' | 'stale' | 'xinputVerified' | 'report' | 'samples'
+> & {
   sequence: number;
 };
 export type GamepadToggleOptions = {
-  source?: "hotkey" | "ui";
+  source?: 'hotkey' | 'ui';
   expectedEnabled?: boolean;
 };
-const endpoint = "http://127.0.0.1:16868";
-export const VIGEMBUS_RELEASE = "https://github.com/nefarius/ViGEmBus/releases/tag/v1.22.0";
-export const VIGEMBUS_DOWNLOAD = "https://github.com/nefarius/ViGEmBus/releases/download/v1.22.0/ViGEmBus_1.22.0_x64_x86_arm64.exe";
+const endpoint = 'http://127.0.0.1:16868';
+export const VIGEMBUS_RELEASE = 'https://github.com/nefarius/ViGEmBus/releases/tag/v1.22.0';
+export const VIGEMBUS_DOWNLOAD =
+  'https://github.com/nefarius/ViGEmBus/releases/download/v1.22.0/ViGEmBus_1.22.0_x64_x86_arm64.exe';
 async function request(path: string, value?: unknown): Promise<GamepadStatus> {
-  const r = await fetchLocalService(endpoint + path, {
-    method: value === undefined ? "GET" : "POST",
-    headers: value === undefined ? undefined : {
-      "Content-Type": "application/json"
+  const r = await fetchLocalService(
+    endpoint + path,
+    {
+      method: value === undefined ? 'GET' : 'POST',
+      headers:
+        value === undefined
+          ? undefined
+          : {
+              'Content-Type': 'application/json'
+            },
+      body: value === undefined ? undefined : JSON.stringify(value)
     },
-    body: value === undefined ? undefined : JSON.stringify(value)
-  }, path === "/gamepad/start" || path === "/gamepad/toggle" ? 30000 : 5000);
+    path === '/gamepad/start' || path === '/gamepad/toggle' ? 30000 : 5000
+  );
   const v = await r.json();
   if (!r.ok) {
-    throw Error(path === "/gamepad/toggle" && r.status === 404 ? outOfDateToggleModifier() : v.error ?? "Gamepad service unavailable");
+    throw Error(
+      path === '/gamepad/toggle' && r.status === 404
+        ? outOfDateToggleModifier()
+        : (v.error ?? 'Gamepad service unavailable')
+    );
   }
   return v;
 }
@@ -110,58 +125,66 @@ export async function useSharedHallService() {
 }
 export const gamepadService = {
   inputStream(onFrame: (frame: GamepadInputFrame) => void, onError: () => void) {
-    const stream = new EventSource(endpoint + "/gamepad/input/events");
+    const stream = new EventSource(endpoint + '/gamepad/input/events');
     stream.onmessage = e => {
       try {
         onFrame(JSON.parse(e.data));
-      } catch {
-} /* ignore invalid frame */
+      } catch {} /* ignore invalid frame */
     };
 
     stream.onerror = onError;
     return () => stream.close();
   },
-  status: () => request("/gamepad/status"),
-  configure: (slot: number, configuration: GamepadConfiguration) => request("/gamepad/config", {
-    slot,
-    configuration
-  }),
-  profile: (slot: number) => request("/gamepad/profile", {
-    slot
-  }),
+  status: () => request('/gamepad/status'),
+  configure: (slot: number, configuration: GamepadConfiguration) =>
+    request('/gamepad/config', {
+      slot,
+      configuration
+    }),
+  profile: (slot: number) =>
+    request('/gamepad/profile', {
+      slot
+    }),
   async start(slot: number, configuration: GamepadConfiguration) {
     await useSharedHallService();
-    return request("/gamepad/start", {
+    return request('/gamepad/start', {
       slot,
       configuration
     });
   },
-  stop: () => request("/gamepad/stop", {}),
-  async toggle(slot?: number, configuration?: GamepadConfiguration, options?: GamepadToggleOptions) {
+  stop: () => request('/gamepad/stop', {}),
+  async toggle(
+    slot?: number,
+    configuration?: GamepadConfiguration,
+    options?: GamepadToggleOptions
+  ) {
     if (options?.expectedEnabled !== false) {
       await useSharedHallService();
     }
-    return request("/gamepad/toggle", {
-      ...(slot === undefined ? {} : {
-        slot
-      }),
-      ...(configuration === undefined ? {} : {
-        configuration
-      }),
+    return request('/gamepad/toggle', {
+      ...(slot === undefined
+        ? {}
+        : {
+            slot
+          }),
+      ...(configuration === undefined
+        ? {}
+        : {
+            configuration
+          }),
       ...options
     });
   },
   stream(onStatus: (status: GamepadStatus) => void, onError: () => void) {
-    const stream = new EventSource(endpoint + "/gamepad/events");
+    const stream = new EventSource(endpoint + '/gamepad/events');
     stream.onmessage = e => {
       try {
-        const parsed = (JSON.parse(e.data) as GamepadStatus);
+        const parsed = JSON.parse(e.data) as GamepadStatus;
         if (parsed.enabled && hero68DeviceManager.connected && !hero68DeviceManager.viaService) {
           void useSharedHallService().catch(() => {});
         }
         onStatus(parsed);
-      } catch {
-} /* malformed event */
+      } catch {} /* malformed event */
     };
 
     stream.onerror = onError;

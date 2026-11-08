@@ -2,7 +2,7 @@ import { HERO68_KEY_IDS } from './hero68Layout';
 import { allRegisteredKeyIds, getBoard, isBoardModelId, type HeroDeviceModelId } from './registry';
 import type { RgbColor, RgbProfile, RgbZone } from '../protocol/hero68/rgb';
 
-export const CUSTOM_RGB_DIRECTIONS = ([
+export const CUSTOM_RGB_DIRECTIONS = [
   { id: 'top-left', label: 'Top Left', dx: -1, dy: -1 },
   { id: 'top', label: 'Top', dx: 0, dy: -1 },
   { id: 'top-right', label: 'Top Right', dx: 1, dy: -1 },
@@ -12,9 +12,9 @@ export const CUSTOM_RGB_DIRECTIONS = ([
   { id: 'bottom-left', label: 'Bottom Left', dx: -1, dy: 1 },
   { id: 'bottom', label: 'Bottom', dx: 0, dy: 1 },
   { id: 'bottom-right', label: 'Bottom Right', dx: 1, dy: 1 }
-] as const);
+] as const;
 
-export type CustomRgbDirection9 = typeof CUSTOM_RGB_DIRECTIONS[number]['id'];
+export type CustomRgbDirection9 = (typeof CUSTOM_RGB_DIRECTIONS)[number]['id'];
 export type CustomRgbDirection = 'horizontal' | 'vertical' | CustomRgbDirection9;
 
 const VALID_CUSTOM_RGB_DIRECTIONS = new Set<string>([
@@ -27,85 +27,113 @@ export function isValidCustomRgbDirection(value: unknown): value is CustomRgbDir
   return typeof value === 'string' && VALID_CUSTOM_RGB_DIRECTIONS.has(value);
 }
 
-export const CUSTOM_RGB_EFFECTS = ([{
-  id: 'aurora',
-  name: 'Aurora',
-  detail: 'Soft ribbons of light drift across the keyboard.'
-}, {
-  id: 'wave',
-  name: 'Dynamic Wave',
-  detail: 'Multi-directional color waves across 9 directions (including radial Center) with seamless circular palette transitions.'
-}, {
-  id: 'trigger',
-  name: 'Trigger Response',
-  detail: 'Each key press launches a smooth cross-shaped row and column wave that cycles through the palette and blends additively.'
-}, {
-  id: 'comet',
-  name: 'Comet',
-  detail: 'Bright shooting stars leave gently fading tails.'
-}, {
-  id: 'pressure-wave',
-  name: 'Pressure Wave',
-  detail: 'Faster strikes emit brighter waves, then settle while held. Strike strength is estimated from Hall motion.'
-}, {
-  id: 'jelly',
-  name: 'Jelly',
-  detail: 'The illuminated area expands with analog key travel.'
-}, {
-  id: 'scan',
-  name: 'Scan',
-  detail: 'A moving band sweeps back and forth. Multicolor flows through a spectrum with smooth turns.'
-}, {
-  id: 'breath',
-  name: 'Breath',
-  detail: 'The layer gently fades in and out.'
-}, {
-  id: 'ripple',
-  name: 'Ripple',
-  detail: 'Expanding rings follow each key press.'
-}, {
-  id: 'touch',
-  name: 'Touch',
-  detail: 'The number row displays the deepest analog key travel as a bar.'
-}, {
-  id: 'reaction',
-  name: 'Reaction',
-  detail: 'Pressed keys light up and fade after release.'
-}, {
-  id: 'aoe',
-  name: 'AOE',
-  detail: 'Travel controls the brightness of a fixed area around each key.'
-}, {
-  id: 'mixing',
-  name: 'Mixing',
-  detail: 'Left, Down and Right arrow travel mix red, green and blue.'
-}, {
-  id: 'trail',
-  name: 'Trail',
-  detail: 'Each key press lights that key, then fades over time.'
-}, {
-  id: 'rt',
-  name: 'RT Display',
-  detail: 'Green/red shows the reported Hall pressed flag. Its correspondence to firmware RT output is unverified.'
-}, {
-  id: 'ember',
-  name: 'Ember',
-  detail: 'Warm firelight breathes up from the bottom row, with sparks that drift upward and fade.'
-}, {
-  id: 'starlight',
-  name: 'Starlight',
-  detail: 'Keys twinkle one at a time like stars: a quick glint, then a long, soft fade.'
-}, {
-  id: 'afterglow',
-  name: 'Afterglow',
-  detail: 'A press leaves a hot core that cools through the palette like glowing metal, with a soft halo on nearby keys.'
-}, {
-  id: 'pulse',
-  name: 'Tempo Pulse (BPM)',
-  detail: 'Soft rings bloom from the center on every beat, with a stronger accent on the first beat of each bar. Set the tempo in BPM.'
-}] as const);
-export type CustomRgbEffect = typeof CUSTOM_RGB_EFFECTS[number]['id'];
-export const RGB_GRADIENT_PALETTES = ({
+export const CUSTOM_RGB_EFFECTS = [
+  {
+    id: 'aurora',
+    name: 'Aurora',
+    detail: 'Soft ribbons of light drift across the keyboard.'
+  },
+  {
+    id: 'wave',
+    name: 'Dynamic Wave',
+    detail:
+      'Multi-directional color waves across 9 directions (including radial Center) with seamless circular palette transitions.'
+  },
+  {
+    id: 'trigger',
+    name: 'Trigger Response',
+    detail:
+      'Each key press launches a smooth cross-shaped row and column wave that cycles through the palette and blends additively.'
+  },
+  {
+    id: 'comet',
+    name: 'Comet',
+    detail: 'Bright shooting stars leave gently fading tails.'
+  },
+  {
+    id: 'pressure-wave',
+    name: 'Pressure Wave',
+    detail:
+      'Faster strikes emit brighter waves, then settle while held. Strike strength is estimated from Hall motion.'
+  },
+  {
+    id: 'jelly',
+    name: 'Jelly',
+    detail: 'The illuminated area expands with analog key travel.'
+  },
+  {
+    id: 'scan',
+    name: 'Scan',
+    detail:
+      'A moving band sweeps back and forth. Multicolor flows through a spectrum with smooth turns.'
+  },
+  {
+    id: 'breath',
+    name: 'Breath',
+    detail: 'The layer gently fades in and out.'
+  },
+  {
+    id: 'ripple',
+    name: 'Ripple',
+    detail: 'Expanding rings follow each key press.'
+  },
+  {
+    id: 'touch',
+    name: 'Touch',
+    detail: 'The number row displays the deepest analog key travel as a bar.'
+  },
+  {
+    id: 'reaction',
+    name: 'Reaction',
+    detail: 'Pressed keys light up and fade after release.'
+  },
+  {
+    id: 'aoe',
+    name: 'AOE',
+    detail: 'Travel controls the brightness of a fixed area around each key.'
+  },
+  {
+    id: 'mixing',
+    name: 'Mixing',
+    detail: 'Left, Down and Right arrow travel mix red, green and blue.'
+  },
+  {
+    id: 'trail',
+    name: 'Trail',
+    detail: 'Each key press lights that key, then fades over time.'
+  },
+  {
+    id: 'rt',
+    name: 'RT Display',
+    detail:
+      'Green/red shows the reported Hall pressed flag. Its correspondence to firmware RT output is unverified.'
+  },
+  {
+    id: 'ember',
+    name: 'Ember',
+    detail:
+      'Warm firelight breathes up from the bottom row, with sparks that drift upward and fade.'
+  },
+  {
+    id: 'starlight',
+    name: 'Starlight',
+    detail: 'Keys twinkle one at a time like stars: a quick glint, then a long, soft fade.'
+  },
+  {
+    id: 'afterglow',
+    name: 'Afterglow',
+    detail:
+      'A press leaves a hot core that cools through the palette like glowing metal, with a soft halo on nearby keys.'
+  },
+  {
+    id: 'pulse',
+    name: 'Tempo Pulse (BPM)',
+    detail:
+      'Soft rings bloom from the center on every beat, with a stronger accent on the first beat of each bar. Set the tempo in BPM.'
+  }
+] as const;
+export type CustomRgbEffect = (typeof CUSTOM_RGB_EFFECTS)[number]['id'];
+export const RGB_GRADIENT_PALETTES = {
   aurora: {
     name: 'Aurora',
     colors: ['#22d3ee', '#8b5cf6', '#ec4899']
@@ -143,12 +171,24 @@ export const RGB_GRADIENT_PALETTES = ({
     name: 'Synthwave',
     colors: ['#ff2a85', '#8a3ffc', '#12d6ff']
   }
-} as const);
+} as const;
 export type RgbGradientPalette = keyof typeof RGB_GRADIENT_PALETTES;
 // Effects an app that predates `supportedEffects` can render. Newer effects must be listed
 // in NEWER_RGB_EFFECTS so that an old background app is asked to update instead of failing.
-const NEWER_RGB_EFFECTS: readonly string[] = ['aurora', 'wave', 'trigger', 'comet', 'pressure-wave', 'ember', 'starlight', 'afterglow', 'pulse'];
-export const LEGACY_RGB_EFFECTS = CUSTOM_RGB_EFFECTS.filter(e => !NEWER_RGB_EFFECTS.includes(e.id)).map(e => e.id);
+const NEWER_RGB_EFFECTS: readonly string[] = [
+  'aurora',
+  'wave',
+  'trigger',
+  'comet',
+  'pressure-wave',
+  'ember',
+  'starlight',
+  'afterglow',
+  'pulse'
+];
+export const LEGACY_RGB_EFFECTS = CUSTOM_RGB_EFFECTS.filter(
+  e => !NEWER_RGB_EFFECTS.includes(e.id)
+).map(e => e.id);
 type EffectMetadata = {
   width?: string;
   widthUnit?: string;
@@ -176,14 +216,14 @@ export const RGB_EFFECT_METADATA: Record<CustomRgbEffect, EffectMetadata> = {
       palette: 'aurora',
       opacity: 75,
       width: 2.5,
-      speed: .5
+      speed: 0.5
     }
   },
   wave: {
     width: 'Wave width',
-    widthRange: [.5, 8, .25],
+    widthRange: [0.5, 8, 0.25],
     speed: '×',
-    speedRange: [.25, 6, .25],
+    speedRange: [0.25, 6, 0.25],
     direction: true,
     multiDirection: true,
     gradient: true,
@@ -199,9 +239,9 @@ export const RGB_EFFECT_METADATA: Record<CustomRgbEffect, EffectMetadata> = {
   },
   trigger: {
     width: 'Cross width',
-    widthRange: [.5, 4, .25],
+    widthRange: [0.5, 4, 0.25],
     speed: '×',
-    speedRange: [.25, 5, .25],
+    speedRange: [0.25, 5, 0.25],
     duration: 'Fade duration',
     gradient: true,
     defaults: {
@@ -282,9 +322,9 @@ export const RGB_EFFECT_METADATA: Record<CustomRgbEffect, EffectMetadata> = {
   },
   ember: {
     width: 'Flame height',
-    widthRange: [.75, 5, .25],
+    widthRange: [0.75, 5, 0.25],
     speed: '×',
-    speedRange: [.25, 4, .25],
+    speedRange: [0.25, 4, 0.25],
     gradient: true,
     defaults: {
       color: [255, 122, 0],
@@ -298,9 +338,9 @@ export const RGB_EFFECT_METADATA: Record<CustomRgbEffect, EffectMetadata> = {
   starlight: {
     width: 'Density',
     widthUnit: '/ 10',
-    widthRange: [.3, 9.5, .1],
+    widthRange: [0.3, 9.5, 0.1],
     speed: '×',
-    speedRange: [.25, 4, .25],
+    speedRange: [0.25, 4, 0.25],
     gradient: true,
     defaults: {
       color: [200, 225, 255],
@@ -340,22 +380,43 @@ export const RGB_EFFECT_METADATA: Record<CustomRgbEffect, EffectMetadata> = {
     }
   }
 };
-export function needsRgbAnalogHall(config?: CustomRgbConfiguration, modelOrKeyIds?: HeroDeviceModelId | readonly string[]) {
+export function needsRgbAnalogHall(
+  config?: CustomRgbConfiguration,
+  modelOrKeyIds?: HeroDeviceModelId | readonly string[]
+) {
   return rgbHallKeys(config, modelOrKeyIds).length > 0;
 }
 /** Input sources differ from the LEDs affected by a layer. */
-export function rgbHallKeys(config?: CustomRgbConfiguration, modelOrKeyIds: HeroDeviceModelId | readonly string[] = 'hero68'): string[] {
-  const boardKeyIds: readonly string[] = typeof modelOrKeyIds === 'string' ? isBoardModelId(modelOrKeyIds) ? getBoard(modelOrKeyIds).keyIds : HERO68_KEY_IDS : modelOrKeyIds;
+export function rgbHallKeys(
+  config?: CustomRgbConfiguration,
+  modelOrKeyIds: HeroDeviceModelId | readonly string[] = 'hero68'
+): string[] {
+  const boardKeyIds: readonly string[] =
+    typeof modelOrKeyIds === 'string'
+      ? isBoardModelId(modelOrKeyIds)
+        ? getBoard(modelOrKeyIds).keyIds
+        : HERO68_KEY_IDS
+      : modelOrKeyIds;
   const allowedKeys = new Set(allRegisteredKeyIds());
   for (const id of boardKeyIds) {
     allowedKeys.add(id);
   }
   const keys = new Set<string>();
   for (const layer of config?.layers ?? []) {
-    if (!layer.enabled || layer.opacity <= 0 || !layer.keys.length || !RGB_EFFECT_METADATA[layer.effect]?.hall) {
+    if (
+      !layer.enabled ||
+      layer.opacity <= 0 ||
+      !layer.keys.length ||
+      !RGB_EFFECT_METADATA[layer.effect]?.hall
+    ) {
       continue;
     }
-    const sources = layer.effect === 'pressure-wave' ? layer.keys : layer.effect === 'mixing' ? ['ArrowLeft', 'ArrowDown', 'ArrowRight'] : boardKeyIds;
+    const sources =
+      layer.effect === 'pressure-wave'
+        ? layer.keys
+        : layer.effect === 'mixing'
+          ? ['ArrowLeft', 'ArrowDown', 'ArrowRight']
+          : boardKeyIds;
     for (const id of sources) {
       if (allowedKeys.has(id)) {
         keys.add(id);
@@ -396,8 +457,13 @@ export type CustomRgbConfiguration = {
 };
 export const MAX_RGB_LAYERS = 8;
 const clamp = (v: number, low: number, high: number) => Math.max(low, Math.min(high, v));
-const finite = (v: unknown, fallback: number, low: number, high: number) => typeof v === 'number' && Number.isFinite(v) ? clamp(v, low, high) : fallback;
-export function createRgbLayer(effect: CustomRgbEffect = 'ripple', id: string = crypto.randomUUID(), keyIds: readonly string[] = HERO68_KEY_IDS): CustomRgbLayer {
+const finite = (v: unknown, fallback: number, low: number, high: number) =>
+  typeof v === 'number' && Number.isFinite(v) ? clamp(v, low, high) : fallback;
+export function createRgbLayer(
+  effect: CustomRgbEffect = 'ripple',
+  id: string = crypto.randomUUID(),
+  keyIds: readonly string[] = HERO68_KEY_IDS
+): CustomRgbLayer {
   return {
     id,
     effect,
@@ -414,7 +480,10 @@ export function createRgbLayer(effect: CustomRgbEffect = 'ripple', id: string = 
   };
 }
 function isXsydLikeZone(zone?: Partial<RgbZone>): boolean {
-  return Boolean(zone && (zone.colorIndex !== undefined || zone.reverse !== undefined || Array.isArray(zone.palette)));
+  return Boolean(
+    zone &&
+    (zone.colorIndex !== undefined || zone.reverse !== undefined || Array.isArray(zone.palette))
+  );
 }
 export function defaultCustomRgb(profile: RgbProfile): CustomRgbConfiguration {
   const isXsyd = isXsydLikeZone(profile.keys);
@@ -432,12 +501,16 @@ export function defaultCustomRgb(profile: RgbProfile): CustomRgbConfiguration {
     layers: []
   };
 }
-export function restoreCustomRgb(value: unknown, profile: RgbProfile, validKeyIds?: readonly string[]): CustomRgbConfiguration {
+export function restoreCustomRgb(
+  value: unknown,
+  profile: RgbProfile,
+  validKeyIds?: readonly string[]
+): CustomRgbConfiguration {
   const fallback = defaultCustomRgb(profile);
   if (!value || typeof value !== 'object') {
     return fallback;
   }
-  const v = (value as Partial<CustomRgbConfiguration>);
+  const v = value as Partial<CustomRgbConfiguration>;
   const base = v.base;
   if (v.version !== 1 || !base || !Array.isArray(v.layers)) {
     return fallback;
@@ -448,7 +521,7 @@ export function restoreCustomRgb(value: unknown, profile: RgbProfile, validKeyId
   const restoredBase: RgbZone = {
     mode: Math.round(finite(base.mode, fallback.base.mode, 0, 255)),
     mix: typeof base.mix === 'boolean' ? base.mix : fallback.base.mix,
-    rgb: ([0, 1, 2].map(i => Math.round(finite(base.rgb?.[i], 255, 0, 255))) as RgbColor),
+    rgb: [0, 1, 2].map(i => Math.round(finite(base.rgb?.[i], 255, 0, 255))) as RgbColor,
     brightness: Math.round(finite(base.brightness, fallback.base.brightness, 0, 20)),
     speed: Math.round(finite(base.speed, 2, 0, 4)),
     ...(typeof base.reverse === 'boolean' ? { reverse: base.reverse } : {}),
@@ -457,79 +530,124 @@ export function restoreCustomRgb(value: unknown, profile: RgbProfile, validKeyId
       : {}),
     ...(Array.isArray(base.palette) && base.palette.length === 7
       ? {
-          palette: base.palette.map(c => ([
-            Math.round(finite(c?.[0], 255, 0, 255)),
-            Math.round(finite(c?.[1], 255, 0, 255)),
-            Math.round(finite(c?.[2], 255, 0, 255)),
-          ] as RgbColor)),
+          palette: base.palette.map(
+            c =>
+              [
+                Math.round(finite(c?.[0], 255, 0, 255)),
+                Math.round(finite(c?.[1], 255, 0, 255)),
+                Math.round(finite(c?.[2], 255, 0, 255))
+              ] as RgbColor
+          )
         }
-      : {}),
+      : {})
   };
   return {
     version: 1,
     enabled: v.enabled === true,
     base: restoredBase,
-    ...(v.baseEffect?.effect === 'aurora' ? {
-      baseEffect: {
-        effect: ('aurora' as const),
-        palette: Object.hasOwn(RGB_GRADIENT_PALETTES, v.baseEffect.palette) ? v.baseEffect.palette : ('aurora' as const),
-        width: finite(v.baseEffect.width, 2.5, .25, 12),
-        speed: finite(v.baseEffect.speed, .5, .5, 30)
-      }
-    } : v.baseEffect?.effect === 'wave' ? {
-      baseEffect: {
-        effect: ('wave' as const),
-        palette: Object.hasOwn(RGB_GRADIENT_PALETTES, v.baseEffect.palette) ? v.baseEffect.palette : ('wave' as const),
-        width: finite(v.baseEffect.width, 2.5, .5, 8),
-        speed: finite(v.baseEffect.speed, 1.5, .25, 6),
-        direction: isValidCustomRgbDirection(v.baseEffect.direction) ? v.baseEffect.direction : 'left'
-      }
-    } : {}),
-    ...(v.presetColors && typeof v.presetColors === 'object' ? {
-      presetColors: Object.fromEntries(
-        Object.entries(v.presetColors).flatMap(([modeKey, cols]) => {
-          const modeNum = Number(modeKey);
-          if (!Number.isFinite(modeNum) || !cols || typeof cols !== 'object') {
-            return [];
+    ...(v.baseEffect?.effect === 'aurora'
+      ? {
+          baseEffect: {
+            effect: 'aurora' as const,
+            palette: Object.hasOwn(RGB_GRADIENT_PALETTES, v.baseEffect.palette)
+              ? v.baseEffect.palette
+              : ('aurora' as const),
+            width: finite(v.baseEffect.width, 2.5, 0.25, 12),
+            speed: finite(v.baseEffect.speed, 0.5, 0.5, 30)
           }
-          const restoredEntries = Object.entries(cols).flatMap(([keyId, c]) => {
-            if (!Array.isArray(c) || c.length < 3) return [];
-            return [[keyId, [0, 1, 2].map(i => Math.round(finite(c[i], 0, 0, 255))) as RgbColor]];
-          });
-          return [[modeNum, Object.fromEntries(restoredEntries)]];
-        })
-      )
-    } : {}),
+        }
+      : v.baseEffect?.effect === 'wave'
+        ? {
+            baseEffect: {
+              effect: 'wave' as const,
+              palette: Object.hasOwn(RGB_GRADIENT_PALETTES, v.baseEffect.palette)
+                ? v.baseEffect.palette
+                : ('wave' as const),
+              width: finite(v.baseEffect.width, 2.5, 0.5, 8),
+              speed: finite(v.baseEffect.speed, 1.5, 0.25, 6),
+              direction: isValidCustomRgbDirection(v.baseEffect.direction)
+                ? v.baseEffect.direction
+                : 'left'
+            }
+          }
+        : {}),
+    ...(v.presetColors && typeof v.presetColors === 'object'
+      ? {
+          presetColors: Object.fromEntries(
+            Object.entries(v.presetColors).flatMap(([modeKey, cols]) => {
+              const modeNum = Number(modeKey);
+              if (!Number.isFinite(modeNum) || !cols || typeof cols !== 'object') {
+                return [];
+              }
+              const restoredEntries = Object.entries(cols).flatMap(([keyId, c]) => {
+                if (!Array.isArray(c) || c.length < 3) return [];
+                return [
+                  [keyId, [0, 1, 2].map(i => Math.round(finite(c[i], 0, 0, 255))) as RgbColor]
+                ];
+              });
+              return [[modeNum, Object.fromEntries(restoredEntries)]];
+            })
+          )
+        }
+      : {}),
     layers: v.layers.slice(0, MAX_RGB_LAYERS).flatMap(layer => {
       if (!layer || !CUSTOM_RGB_EFFECTS.some(e => e.id === layer.effect)) {
         return [];
       }
-      const id = typeof layer.id === 'string' && layer.id && !ids.has(layer.id) ? layer.id : `layer-${ids.size}`;
+      const id =
+        typeof layer.id === 'string' && layer.id && !ids.has(layer.id)
+          ? layer.id
+          : `layer-${ids.size}`;
       if (ids.has(id)) {
         return [];
       }
       ids.add(id);
       const defaults = createRgbLayer(layer.effect, id, defaultKeys);
-      const hasValidPalette = Boolean(layer.palette && Object.hasOwn(RGB_GRADIENT_PALETTES, layer.palette));
-      return [{
-        id,
-        effect: layer.effect,
-        enabled: layer.enabled !== false,
-        color: ([0, 1, 2].map(i => Math.round(finite(layer.color?.[i], defaults.color[i], 0, 255))) as RgbColor),
-        multicolor: layer.multicolor === undefined ? defaults.multicolor : layer.multicolor === true,
-        opacity: finite(layer.opacity, defaults.opacity, 0, 100),
-        width: finite(layer.width, defaults.width, RGB_EFFECT_METADATA[layer.effect].widthRange?.[0] ?? .25, RGB_EFFECT_METADATA[layer.effect].widthRange?.[1] ?? 12),
-        speed: finite(layer.speed, defaults.speed, RGB_EFFECT_METADATA[layer.effect].speedRange?.[0] ?? .5, RGB_EFFECT_METADATA[layer.effect].speedRange?.[1] ?? 30),
-        duration: finite(layer.duration, defaults.duration, 100, 4000),
-        direction: isValidCustomRgbDirection(layer.direction) ? layer.direction : defaults.direction,
-        ...(layer.effect === 'scan' ? {
-          scanPauseMs: finite(layer.scanPauseMs, 0, 0, 5000)
-        } : {}),
-        ...(RGB_EFFECT_METADATA[layer.effect].gradient || hasValidPalette ? {
-          palette: hasValidPalette ? layer.palette : defaults.palette
-        } : {}),
-        keys: Array.isArray(layer.keys) ? [...new Set(layer.keys.filter(id => allowedSet.has(id)))] : [...defaultKeys]
-      }];
+      const hasValidPalette = Boolean(
+        layer.palette && Object.hasOwn(RGB_GRADIENT_PALETTES, layer.palette)
+      );
+      return [
+        {
+          id,
+          effect: layer.effect,
+          enabled: layer.enabled !== false,
+          color: [0, 1, 2].map(i =>
+            Math.round(finite(layer.color?.[i], defaults.color[i], 0, 255))
+          ) as RgbColor,
+          multicolor:
+            layer.multicolor === undefined ? defaults.multicolor : layer.multicolor === true,
+          opacity: finite(layer.opacity, defaults.opacity, 0, 100),
+          width: finite(
+            layer.width,
+            defaults.width,
+            RGB_EFFECT_METADATA[layer.effect].widthRange?.[0] ?? 0.25,
+            RGB_EFFECT_METADATA[layer.effect].widthRange?.[1] ?? 12
+          ),
+          speed: finite(
+            layer.speed,
+            defaults.speed,
+            RGB_EFFECT_METADATA[layer.effect].speedRange?.[0] ?? 0.5,
+            RGB_EFFECT_METADATA[layer.effect].speedRange?.[1] ?? 30
+          ),
+          duration: finite(layer.duration, defaults.duration, 100, 4000),
+          direction: isValidCustomRgbDirection(layer.direction)
+            ? layer.direction
+            : defaults.direction,
+          ...(layer.effect === 'scan'
+            ? {
+                scanPauseMs: finite(layer.scanPauseMs, 0, 0, 5000)
+              }
+            : {}),
+          ...(RGB_EFFECT_METADATA[layer.effect].gradient || hasValidPalette
+            ? {
+                palette: hasValidPalette ? layer.palette : defaults.palette
+              }
+            : {}),
+          keys: Array.isArray(layer.keys)
+            ? [...new Set(layer.keys.filter(id => allowedSet.has(id)))]
+            : [...defaultKeys]
+        }
+      ];
     })
   };
 }

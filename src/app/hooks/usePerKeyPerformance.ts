@@ -1,8 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
-import { mergeHydratedBooleans, mergeHydratedNumbers, mergePerKeyState, RAPID_TRIGGER_VALUES, selectionHasMixedValues, snapToAllowedValue, snapToStep } from '../helpers';
-import { SWITCH_IMAGES, SWITCH_OPTIONS, WIN68_SWITCH_OPTIONS, type SwitchOption, type SwitchTone } from '../switchAssets';
+import {
+  mergeHydratedBooleans,
+  mergeHydratedNumbers,
+  mergePerKeyState,
+  RAPID_TRIGGER_VALUES,
+  selectionHasMixedValues,
+  snapToAllowedValue,
+  snapToStep
+} from '../helpers';
+import {
+  SWITCH_IMAGES,
+  SWITCH_OPTIONS,
+  WIN68_SWITCH_OPTIONS,
+  type SwitchOption,
+  type SwitchTone
+} from '../switchAssets';
 import type { HydratedKeySettings } from '../../protocol/hero68/hero68Encoder';
-import { isSwitchProfileId, normalizeSwitchProfileId, switchProfileLabel } from '../../protocol/hero68/switchProfiles';
+import {
+  isSwitchProfileId,
+  normalizeSwitchProfileId,
+  switchProfileLabel
+} from '../../protocol/hero68/switchProfiles';
 import type { PersistedOpenHeroState, ProfileDraft } from '../../state/persistence';
 export type UsePerKeyPerformanceOptions = {
   persistedState: PersistedOpenHeroState | null | undefined;
@@ -32,21 +50,54 @@ export function usePerKeyPerformance({
   const [deadzoneEnabled, setDeadzoneEnabled] = useState(true);
   const [topDeadzone, setTopDeadzone] = useState(0);
   const [bottomDeadzone, setBottomDeadzone] = useState(0);
-  const [actuationByKey, setActuationByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.actuationByKey, 1.6, modelKeyIds));
-  const [rapidTriggerByKey, setRapidTriggerByKey] = useState<Record<string, boolean>>(() => mergePerKeyState(persistedState?.rapidTriggerByKey, false, modelKeyIds));
-  const [splitSensitivityByKey, setSplitSensitivityByKey] = useState<Record<string, boolean>>(() => mergePerKeyState(persistedState?.splitSensitivityByKey, false, modelKeyIds));
-  const [rapidSensitivityByKey, setRapidSensitivityByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.rapidSensitivityByKey, 0.65, modelKeyIds));
-  const [pressSensitivityByKey, setPressSensitivityByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.pressSensitivityByKey, 0.5, modelKeyIds));
-  const [releaseSensitivityByKey, setReleaseSensitivityByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.releaseSensitivityByKey, 0.55, modelKeyIds));
-  const [deadzoneEnabledByKey, setDeadzoneEnabledByKey] = useState<Record<string, boolean>>(() => mergePerKeyState(persistedState?.deadzoneEnabledByKey, true, modelKeyIds));
-  const [topDeadzoneByKey, setTopDeadzoneByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.topDeadzoneByKey, 0, modelKeyIds));
-  const [bottomDeadzoneByKey, setBottomDeadzoneByKey] = useState<Record<string, number>>(() => mergePerKeyState(persistedState?.bottomDeadzoneByKey, 0, modelKeyIds));
-  const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(() => new Set(persistedState?.profileDrafts?.[persistedState?.profileSlot ?? 1]?.dirtyKeys ?? []));
-  const [selectedSwitchId, setSelectedSwitchId] = useState<SwitchTone>(() => isSwitchProfileId(persistedState?.selectedSwitchId) ? normalizeSwitchProfileId(persistedState.selectedSwitchId) : 'white');
-  const [assignedSwitchesByKey, setAssignedSwitchesByKey] = useState<Record<string, SwitchTone>>(() => mergePerKeyState((persistedState?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined), ('white' as SwitchTone), modelKeyIds));
+  const [actuationByKey, setActuationByKey] = useState<Record<string, number>>(() =>
+    mergePerKeyState(persistedState?.actuationByKey, 1.6, modelKeyIds)
+  );
+  const [rapidTriggerByKey, setRapidTriggerByKey] = useState<Record<string, boolean>>(() =>
+    mergePerKeyState(persistedState?.rapidTriggerByKey, false, modelKeyIds)
+  );
+  const [splitSensitivityByKey, setSplitSensitivityByKey] = useState<Record<string, boolean>>(() =>
+    mergePerKeyState(persistedState?.splitSensitivityByKey, false, modelKeyIds)
+  );
+  const [rapidSensitivityByKey, setRapidSensitivityByKey] = useState<Record<string, number>>(() =>
+    mergePerKeyState(persistedState?.rapidSensitivityByKey, 0.65, modelKeyIds)
+  );
+  const [pressSensitivityByKey, setPressSensitivityByKey] = useState<Record<string, number>>(() =>
+    mergePerKeyState(persistedState?.pressSensitivityByKey, 0.5, modelKeyIds)
+  );
+  const [releaseSensitivityByKey, setReleaseSensitivityByKey] = useState<Record<string, number>>(
+    () => mergePerKeyState(persistedState?.releaseSensitivityByKey, 0.55, modelKeyIds)
+  );
+  const [deadzoneEnabledByKey, setDeadzoneEnabledByKey] = useState<Record<string, boolean>>(() =>
+    mergePerKeyState(persistedState?.deadzoneEnabledByKey, true, modelKeyIds)
+  );
+  const [topDeadzoneByKey, setTopDeadzoneByKey] = useState<Record<string, number>>(() =>
+    mergePerKeyState(persistedState?.topDeadzoneByKey, 0, modelKeyIds)
+  );
+  const [bottomDeadzoneByKey, setBottomDeadzoneByKey] = useState<Record<string, number>>(() =>
+    mergePerKeyState(persistedState?.bottomDeadzoneByKey, 0, modelKeyIds)
+  );
+  const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(
+    () =>
+      new Set(persistedState?.profileDrafts?.[persistedState?.profileSlot ?? 1]?.dirtyKeys ?? [])
+  );
+  const [selectedSwitchId, setSelectedSwitchId] = useState<SwitchTone>(() =>
+    isSwitchProfileId(persistedState?.selectedSwitchId)
+      ? normalizeSwitchProfileId(persistedState.selectedSwitchId)
+      : 'white'
+  );
+  const [assignedSwitchesByKey, setAssignedSwitchesByKey] = useState<Record<string, SwitchTone>>(
+    () =>
+      mergePerKeyState(
+        persistedState?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined,
+        'white' as SwitchTone,
+        modelKeyIds
+      )
+  );
   const normalizedSelectedSwitchId = normalizeSwitchProfileId(selectedSwitchId);
-  const selectedSwitch: SwitchOption =
-    WIN68_SWITCH_OPTIONS.find(option => option.id === normalizedSelectedSwitchId) ??
+  const selectedSwitch: SwitchOption = WIN68_SWITCH_OPTIONS.find(
+    option => option.id === normalizedSelectedSwitchId
+  ) ??
     SWITCH_OPTIONS.find(option => option.id === normalizedSelectedSwitchId) ?? {
       id: normalizedSelectedSwitchId,
       name: switchProfileLabel(normalizedSelectedSwitchId),
@@ -54,7 +105,7 @@ export function usePerKeyPerformance({
       brand: 'Stored keyboard profile',
       accent: '#9ba3a8',
       note: '',
-      ...SWITCH_IMAGES[normalizedSelectedSwitchId],
+      ...SWITCH_IMAGES[normalizedSelectedSwitchId]
     };
   const switchTopImageById = useMemo(() => {
     const entries: Record<string, string> = {};
@@ -68,32 +119,71 @@ export function usePerKeyPerformance({
     }
     return entries as Record<SwitchTone, string>;
   }, []);
-  const switchPreviewByKey = useMemo(() => (Object.fromEntries(modelKeyIds.map(keyId => {
-    const sw = normalizeSwitchProfileId(assignedSwitchesByKey[keyId] ?? 'white');
-    return [keyId, switchTopImageById[sw] ?? switchTopImageById.white ?? ''];
-  })) as Record<string, string>), [modelKeyIds, assignedSwitchesByKey, switchTopImageById]);
-  const rapidPreviewByKey = useMemo(() => (Object.fromEntries(modelKeyIds.map(keyId => {
-    const split = splitSensitivityByKey[keyId] ?? false;
-    const primary = split ? pressSensitivityByKey[keyId] ?? 0.5 : rapidSensitivityByKey[keyId] ?? 0.65;
-    return [keyId, {
-      primary: primary.toFixed(2),
-      secondary: split ? (releaseSensitivityByKey[keyId] ?? 0.55).toFixed(2) : undefined,
-      active: rapidTriggerByKey[keyId] ?? false
-    }];
-  })) as Record<string, {
-    primary: string;
-    secondary?: string;
-    active: boolean;
-  }>), [modelKeyIds, splitSensitivityByKey, pressSensitivityByKey, releaseSensitivityByKey, rapidSensitivityByKey, rapidTriggerByKey]);
-  const deadzonePreviewByKey = useMemo(() => (Object.fromEntries(modelKeyIds.map(keyId => [keyId, {
-    top: (topDeadzoneByKey[keyId] ?? 0).toFixed(2),
-    bottom: (bottomDeadzoneByKey[keyId] ?? 0).toFixed(2),
-    active: deadzoneEnabledByKey[keyId] ?? true
-  }])) as Record<string, {
-    top: string;
-    bottom: string;
-    active: boolean;
-  }>), [modelKeyIds, topDeadzoneByKey, bottomDeadzoneByKey, deadzoneEnabledByKey]);
+  const switchPreviewByKey = useMemo(
+    () =>
+      Object.fromEntries(
+        modelKeyIds.map(keyId => {
+          const sw = normalizeSwitchProfileId(assignedSwitchesByKey[keyId] ?? 'white');
+          return [keyId, switchTopImageById[sw] ?? switchTopImageById.white ?? ''];
+        })
+      ) as Record<string, string>,
+    [modelKeyIds, assignedSwitchesByKey, switchTopImageById]
+  );
+  const rapidPreviewByKey = useMemo(
+    () =>
+      Object.fromEntries(
+        modelKeyIds.map(keyId => {
+          const split = splitSensitivityByKey[keyId] ?? false;
+          const primary = split
+            ? (pressSensitivityByKey[keyId] ?? 0.5)
+            : (rapidSensitivityByKey[keyId] ?? 0.65);
+          return [
+            keyId,
+            {
+              primary: primary.toFixed(2),
+              secondary: split ? (releaseSensitivityByKey[keyId] ?? 0.55).toFixed(2) : undefined,
+              active: rapidTriggerByKey[keyId] ?? false
+            }
+          ];
+        })
+      ) as Record<
+        string,
+        {
+          primary: string;
+          secondary?: string;
+          active: boolean;
+        }
+      >,
+    [
+      modelKeyIds,
+      splitSensitivityByKey,
+      pressSensitivityByKey,
+      releaseSensitivityByKey,
+      rapidSensitivityByKey,
+      rapidTriggerByKey
+    ]
+  );
+  const deadzonePreviewByKey = useMemo(
+    () =>
+      Object.fromEntries(
+        modelKeyIds.map(keyId => [
+          keyId,
+          {
+            top: (topDeadzoneByKey[keyId] ?? 0).toFixed(2),
+            bottom: (bottomDeadzoneByKey[keyId] ?? 0).toFixed(2),
+            active: deadzoneEnabledByKey[keyId] ?? true
+          }
+        ])
+      ) as Record<
+        string,
+        {
+          top: string;
+          bottom: string;
+          active: boolean;
+        }
+      >,
+    [modelKeyIds, topDeadzoneByKey, bottomDeadzoneByKey, deadzoneEnabledByKey]
+  );
   const hasSelection = selectedKeys.size > 0;
   const actuationMixed = selectionHasMixedValues(selectedKeys, actuationByKey);
   const rapidTriggerMixed = selectionHasMixedValues(selectedKeys, rapidTriggerByKey);
@@ -126,7 +216,19 @@ export function usePerKeyPerformance({
     if (assignedSwitch) {
       setSelectedSwitchId(normalizeSwitchProfileId(assignedSwitch));
     }
-  }, [selectedKeys, actuationByKey, rapidTriggerByKey, splitSensitivityByKey, rapidSensitivityByKey, pressSensitivityByKey, releaseSensitivityByKey, deadzoneEnabledByKey, topDeadzoneByKey, bottomDeadzoneByKey, assignedSwitchesByKey]);
+  }, [
+    selectedKeys,
+    actuationByKey,
+    rapidTriggerByKey,
+    splitSensitivityByKey,
+    rapidSensitivityByKey,
+    pressSensitivityByKey,
+    releaseSensitivityByKey,
+    deadzoneEnabledByKey,
+    topDeadzoneByKey,
+    bottomDeadzoneByKey,
+    assignedSwitchesByKey
+  ]);
   function markSelectedKeysDirty() {
     if (!selectedKeys.size) {
       return;
@@ -314,10 +416,21 @@ export function usePerKeyPerformance({
     setDeadzoneEnabledByKey(previous => mergePerKeyState(previous, true, nextKeyIds));
     setTopDeadzoneByKey(previous => mergePerKeyState(previous, 0, nextKeyIds));
     setBottomDeadzoneByKey(previous => mergePerKeyState(previous, 0, nextKeyIds));
-    setAssignedSwitchesByKey(previous => mergePerKeyState(previous, ('white' as SwitchTone), nextKeyIds));
+    setAssignedSwitchesByKey(previous =>
+      mergePerKeyState(previous, 'white' as SwitchTone, nextKeyIds)
+    );
   }
-  function restoreFromDraft(draft: ProfileDraft | undefined, keyIds: readonly string[] = modelKeyIds) {
-    setAssignedSwitchesByKey(mergePerKeyState((draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined), ('white' as SwitchTone), keyIds));
+  function restoreFromDraft(
+    draft: ProfileDraft | undefined,
+    keyIds: readonly string[] = modelKeyIds
+  ) {
+    setAssignedSwitchesByKey(
+      mergePerKeyState(
+        draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined,
+        'white' as SwitchTone,
+        keyIds
+      )
+    );
     setActuationByKey(mergePerKeyState(draft?.actuationByKey, 1.6, keyIds));
     setRapidTriggerByKey(mergePerKeyState(draft?.rapidTriggerByKey, false, keyIds));
     setSplitSensitivityByKey(mergePerKeyState(draft?.splitSensitivityByKey, false, keyIds));
@@ -329,7 +442,10 @@ export function usePerKeyPerformance({
     setBottomDeadzoneByKey(mergePerKeyState(draft?.bottomDeadzoneByKey, 0, keyIds));
     setDirtyKeys(new Set(draft?.dirtyKeys ?? []));
   }
-  function applyHydratedPerformance(hydrated: Map<string, HydratedKeySettings>, draft?: ProfileDraft) {
+  function applyHydratedPerformance(
+    hydrated: Map<string, HydratedKeySettings>,
+    draft?: ProfileDraft
+  ) {
     function preserveEdits<T>(fresh: Record<string, T>, saved?: Record<string, T>) {
       for (const keyId of draft?.dirtyKeys ?? []) {
         if (saved?.[keyId] !== undefined) {
@@ -338,15 +454,57 @@ export function usePerKeyPerformance({
       }
       return fresh;
     }
-    setActuationByKey(previous => preserveEdits(mergeHydratedNumbers(previous, hydrated, 'actuationMm'), draft?.actuationByKey));
-    setRapidTriggerByKey(previous => preserveEdits(mergeHydratedBooleans(previous, hydrated, 'rapidTriggerEnabled'), draft?.rapidTriggerByKey));
-    setSplitSensitivityByKey(previous => preserveEdits(mergeHydratedBooleans(previous, hydrated, 'splitSensitivity'), draft?.splitSensitivityByKey));
-    setRapidSensitivityByKey(previous => preserveEdits(mergeHydratedNumbers(previous, hydrated, 'rapidSensitivityMm'), draft?.rapidSensitivityByKey));
-    setPressSensitivityByKey(previous => preserveEdits(mergeHydratedNumbers(previous, hydrated, 'pressSensitivityMm'), draft?.pressSensitivityByKey));
-    setReleaseSensitivityByKey(previous => preserveEdits(mergeHydratedNumbers(previous, hydrated, 'releaseSensitivityMm'), draft?.releaseSensitivityByKey));
-    setDeadzoneEnabledByKey(previous => preserveEdits(mergeHydratedBooleans(previous, hydrated, 'deadzoneEnabled'), draft?.deadzoneEnabledByKey));
-    setTopDeadzoneByKey(previous => preserveEdits(mergeHydratedNumbers(previous, hydrated, 'topDeadzoneMm'), draft?.topDeadzoneByKey));
-    setBottomDeadzoneByKey(previous => preserveEdits(mergeHydratedNumbers(previous, hydrated, 'bottomDeadzoneMm'), draft?.bottomDeadzoneByKey));
+    setActuationByKey(previous =>
+      preserveEdits(mergeHydratedNumbers(previous, hydrated, 'actuationMm'), draft?.actuationByKey)
+    );
+    setRapidTriggerByKey(previous =>
+      preserveEdits(
+        mergeHydratedBooleans(previous, hydrated, 'rapidTriggerEnabled'),
+        draft?.rapidTriggerByKey
+      )
+    );
+    setSplitSensitivityByKey(previous =>
+      preserveEdits(
+        mergeHydratedBooleans(previous, hydrated, 'splitSensitivity'),
+        draft?.splitSensitivityByKey
+      )
+    );
+    setRapidSensitivityByKey(previous =>
+      preserveEdits(
+        mergeHydratedNumbers(previous, hydrated, 'rapidSensitivityMm'),
+        draft?.rapidSensitivityByKey
+      )
+    );
+    setPressSensitivityByKey(previous =>
+      preserveEdits(
+        mergeHydratedNumbers(previous, hydrated, 'pressSensitivityMm'),
+        draft?.pressSensitivityByKey
+      )
+    );
+    setReleaseSensitivityByKey(previous =>
+      preserveEdits(
+        mergeHydratedNumbers(previous, hydrated, 'releaseSensitivityMm'),
+        draft?.releaseSensitivityByKey
+      )
+    );
+    setDeadzoneEnabledByKey(previous =>
+      preserveEdits(
+        mergeHydratedBooleans(previous, hydrated, 'deadzoneEnabled'),
+        draft?.deadzoneEnabledByKey
+      )
+    );
+    setTopDeadzoneByKey(previous =>
+      preserveEdits(
+        mergeHydratedNumbers(previous, hydrated, 'topDeadzoneMm'),
+        draft?.topDeadzoneByKey
+      )
+    );
+    setBottomDeadzoneByKey(previous =>
+      preserveEdits(
+        mergeHydratedNumbers(previous, hydrated, 'bottomDeadzoneMm'),
+        draft?.bottomDeadzoneByKey
+      )
+    );
     setAssignedSwitchesByKey(previous => {
       const next = {
         ...previous
@@ -356,7 +514,10 @@ export function usePerKeyPerformance({
           next[keyId] = normalizeSwitchProfileId(settings.switchProfile);
         }
       }
-      return preserveEdits(next, (draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined));
+      return preserveEdits(
+        next,
+        draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined
+      );
     });
     setDirtyKeys(new Set(draft?.dirtyKeys ?? []));
   }

@@ -1,79 +1,98 @@
 import { getBoard, type HeroDeviceModelId } from './registry';
-export const RHYTHM_MODES = ([{
-  id: 169,
-  name: 'Dazzling Rock',
-  description: 'Rings burst outward with every beat.',
-  shape: 'rings'
-}, {
-  id: 170,
-  name: 'Clouds',
-  description: 'Moving light and shadows across the rows.',
-  shape: 'clouds'
-}, {
-  id: 171,
-  name: 'Light Field',
-  description: 'The whole keyboard changes with the music.',
-  shape: 'field'
-}, {
-  id: 172,
-  name: 'Gurgling Stream',
-  description: 'A wave of sound travels across the keys.',
-  shape: 'stream'
-}, {
-  id: 173,
-  name: 'Blooming Passion',
-  description: 'Flowers of light bloom from changing centers.',
-  shape: 'bloom'
-}, {
-  id: 428,
-  name: 'Dynamic Spectrum',
-  description: 'Frequency detail, from bass to treble.',
-  shape: 'spectrum'
-}, {
-  id: 429,
-  name: 'Spectrum Bars',
-  description: 'Frequency equalizer stretched across 16 log-spaced bands.',
-  shape: 'spectrum'
-}, {
-  id: 432,
-  name: 'Audio Marquee',
-  description: 'A wrapping band fills up the rows with the music level.',
-  shape: 'stream'
-}, {
-  id: 434,
-  name: 'Radial Chase',
-  description: 'A light front rolls outward from the centre.',
-  shape: 'rings'
-}, {
-  id: 180,
-  name: 'Off',
-  description: 'Clear the key LEDs while side rhythm continues.',
-  shape: 'off'
-}] as const);
-export const RHYTHM_SIDE_MODES = ([{
-  id: 500,
-  name: 'Leave onboard'
-}, {
-  id: 501,
-  name: 'One-end meter'
-}, {
-  id: 502,
-  name: 'Center-out meter'
-}, {
-  id: 503,
-  name: 'Light field'
-}, {
-  id: 504,
-  name: 'Loop 18 slots'
-}, {
-  id: 505,
-  name: 'Peak-hold meter'
-}, {
-  id: 506,
-  name: 'Far-end meter'
-}] as const);
-export type RhythmMode = typeof RHYTHM_MODES[number]['id'];
-export type RhythmSideMode = typeof RHYTHM_SIDE_MODES[number]['id'];
+export const RHYTHM_MODES = [
+  {
+    id: 169,
+    name: 'Dazzling Rock',
+    description: 'Rings burst outward with every beat.',
+    shape: 'rings'
+  },
+  {
+    id: 170,
+    name: 'Clouds',
+    description: 'Moving light and shadows across the rows.',
+    shape: 'clouds'
+  },
+  {
+    id: 171,
+    name: 'Light Field',
+    description: 'The whole keyboard changes with the music.',
+    shape: 'field'
+  },
+  {
+    id: 172,
+    name: 'Gurgling Stream',
+    description: 'A wave of sound travels across the keys.',
+    shape: 'stream'
+  },
+  {
+    id: 173,
+    name: 'Blooming Passion',
+    description: 'Flowers of light bloom from changing centers.',
+    shape: 'bloom'
+  },
+  {
+    id: 428,
+    name: 'Dynamic Spectrum',
+    description: 'Frequency detail, from bass to treble.',
+    shape: 'spectrum'
+  },
+  {
+    id: 429,
+    name: 'Spectrum Bars',
+    description: 'Frequency equalizer stretched across 16 log-spaced bands.',
+    shape: 'spectrum'
+  },
+  {
+    id: 432,
+    name: 'Audio Marquee',
+    description: 'A wrapping band fills up the rows with the music level.',
+    shape: 'stream'
+  },
+  {
+    id: 434,
+    name: 'Radial Chase',
+    description: 'A light front rolls outward from the centre.',
+    shape: 'rings'
+  },
+  {
+    id: 180,
+    name: 'Off',
+    description: 'Clear the key LEDs while side rhythm continues.',
+    shape: 'off'
+  }
+] as const;
+export const RHYTHM_SIDE_MODES = [
+  {
+    id: 500,
+    name: 'Leave onboard'
+  },
+  {
+    id: 501,
+    name: 'One-end meter'
+  },
+  {
+    id: 502,
+    name: 'Center-out meter'
+  },
+  {
+    id: 503,
+    name: 'Light field'
+  },
+  {
+    id: 504,
+    name: 'Loop 18 slots'
+  },
+  {
+    id: 505,
+    name: 'Peak-hold meter'
+  },
+  {
+    id: 506,
+    name: 'Far-end meter'
+  }
+] as const;
+export type RhythmMode = (typeof RHYTHM_MODES)[number]['id'];
+export type RhythmSideMode = (typeof RHYTHM_SIDE_MODES)[number]['id'];
 export type RhythmConfiguration = {
   version: 1;
   keyMode: RhythmMode;
@@ -112,9 +131,28 @@ export function validateRhythm(input: unknown): RhythmConfiguration {
   if (!input || typeof input !== 'object') {
     throw Error('Expected rhythm configuration');
   }
-  const v = (input as RhythmConfiguration);
-  const range = (n: number, low: number, high: number) => Number.isFinite(n) && n >= low && n <= high;
-  if (v.version !== 1 || !RHYTHM_MODES.some(m => m.id === v.keyMode) || !RHYTHM_SIDE_MODES.some(m => m.id === v.sideMode) || typeof v.endpoint !== 'string' || !v.endpoint.length || v.endpoint.length > 512 || /[\r\n\0]/.test(v.endpoint) || !range(v.brightness, 0, 100) || !range(v.sensitivity, .1, 10) || !range(v.releaseMs, 0, 200) || !/^#[0-9a-f]{6}$/i.test(v.color) || !['fixed', 'rainbow', 'aurora', 'fire'].includes(v.palette) || !v.spectrum || !range(v.spectrum.db, 0, 100) || !['hann', 'hamming', 'blackman'].includes(v.spectrum.window) || !Number.isInteger(v.spectrum.spatialRadius) || !range(v.spectrum.spatialRadius, 0, 16)) {
+  const v = input as RhythmConfiguration;
+  const range = (n: number, low: number, high: number) =>
+    Number.isFinite(n) && n >= low && n <= high;
+  if (
+    v.version !== 1 ||
+    !RHYTHM_MODES.some(m => m.id === v.keyMode) ||
+    !RHYTHM_SIDE_MODES.some(m => m.id === v.sideMode) ||
+    typeof v.endpoint !== 'string' ||
+    !v.endpoint.length ||
+    v.endpoint.length > 512 ||
+    /[\r\n\0]/.test(v.endpoint) ||
+    !range(v.brightness, 0, 100) ||
+    !range(v.sensitivity, 0.1, 10) ||
+    !range(v.releaseMs, 0, 200) ||
+    !/^#[0-9a-f]{6}$/i.test(v.color) ||
+    !['fixed', 'rainbow', 'aurora', 'fire'].includes(v.palette) ||
+    !v.spectrum ||
+    !range(v.spectrum.db, 0, 100) ||
+    !['hann', 'hamming', 'blackman'].includes(v.spectrum.window) ||
+    !Number.isInteger(v.spectrum.spatialRadius) ||
+    !range(v.spectrum.spatialRadius, 0, 16)
+  ) {
     throw Error('Invalid rhythm configuration');
   }
   return {
@@ -166,19 +204,34 @@ export function hslToHex(h: number, sPct: number, lPct: number): string {
   let g1 = 0;
   let b1 = 0;
   if (hue < 60) {
-    r1 = c; g1 = x; b1 = 0;
+    r1 = c;
+    g1 = x;
+    b1 = 0;
   } else if (hue < 120) {
-    r1 = x; g1 = c; b1 = 0;
+    r1 = x;
+    g1 = c;
+    b1 = 0;
   } else if (hue < 180) {
-    r1 = 0; g1 = c; b1 = x;
+    r1 = 0;
+    g1 = c;
+    b1 = x;
   } else if (hue < 240) {
-    r1 = 0; g1 = x; b1 = c;
+    r1 = 0;
+    g1 = x;
+    b1 = c;
   } else if (hue < 300) {
-    r1 = x; g1 = 0; b1 = c;
+    r1 = x;
+    g1 = 0;
+    b1 = c;
   } else {
-    r1 = c; g1 = 0; b1 = x;
+    r1 = c;
+    g1 = 0;
+    b1 = x;
   }
-  const toByteHex = (v: number) => Math.max(0, Math.min(255, Math.round((v + m) * 255))).toString(16).padStart(2, '0');
+  const toByteHex = (v: number) =>
+    Math.max(0, Math.min(255, Math.round((v + m) * 255)))
+      .toString(16)
+      .padStart(2, '0');
   return `#${toByteHex(r1)}${toByteHex(g1)}${toByteHex(b1)}`;
 }
 
@@ -202,7 +255,7 @@ export function logSpectrumBands(frequencyData: ArrayLike<number>) {
       energy += raw > 4 ? Math.pow((raw - 4) / 251, 2) : 0;
     }
     const magnitude = Math.sqrt(energy);
-    bands.push(magnitude > 0 ? Math.min(1, .9 * magnitude + .5 * Math.log(1.1 * magnitude)) : 0);
+    bands.push(magnitude > 0 ? Math.min(1, 0.9 * magnitude + 0.5 * Math.log(1.1 * magnitude)) : 0);
   }
   return bands;
 }
@@ -232,7 +285,10 @@ export function renderRhythmAudioFrame(
   let meter = 0;
 
   if (frequencyData && frequencyData.length > 0) {
-    const usableBins = Math.max(16, Math.min(frequencyData.length, Math.floor(frequencyData.length * 0.65)));
+    const usableBins = Math.max(
+      16,
+      Math.min(frequencyData.length, Math.floor(frequencyData.length * 0.65))
+    );
     const dbGain = 0.5 + (config.spectrum.db / 100) * 1.8;
     const sensGain = Math.max(0.2, config.sensitivity * 0.35);
     let energySum = 0;
@@ -332,22 +388,40 @@ export function renderRhythmAudioFrame(
           value = level;
           break;
         case 172: {
-          const streamAmp = allowSynthFallback ? Math.max(0.25, level) : level >= 0.008 ? Math.max(0.25, level) : 0;
-          value = streamAmp > 0 && ny > 1 - Math.exp(-((phase + nx * 0.7) % 1) * 7) * streamAmp ? 1 : 0;
+          const streamAmp = allowSynthFallback
+            ? Math.max(0.25, level)
+            : level >= 0.008
+              ? Math.max(0.25, level)
+              : 0;
+          value =
+            streamAmp > 0 && ny > 1 - Math.exp(-((phase + nx * 0.7) % 1) * 7) * streamAmp ? 1 : 0;
           break;
         }
         case 173:
-          value = Math.hypot(nx - (0.5 + 0.3 * Math.sin(Math.floor(t * 3) * 2)), ny - 0.5) < level * 0.7 ? 1 : 0;
+          value =
+            Math.hypot(nx - (0.5 + 0.3 * Math.sin(Math.floor(t * 3) * 2)), ny - 0.5) < level * 0.7
+              ? 1
+              : 0;
           break;
         case 428:
           value = allowSynthFallback
-            ? (ny >= 1 - colEnergy ? 1 : 0.02)
-            : (colEnergy >= 0.012 && ny >= 1 - colEnergy ? 1 : 0);
+            ? ny >= 1 - colEnergy
+              ? 1
+              : 0.02
+            : colEnergy >= 0.012 && ny >= 1 - colEnergy
+              ? 1
+              : 0;
           break;
         case 429: {
           const band = Math.max(0, Math.min(15, Math.floor(nx * 16)));
           const energy = bands[band] ?? 0;
-          value = allowSynthFallback ? (ny >= 1 - energy ? 1 : 0.02) : (energy >= 0.012 && ny >= 1 - energy ? 1 : 0);
+          value = allowSynthFallback
+            ? ny >= 1 - energy
+              ? 1
+              : 0.02
+            : energy >= 0.012 && ny >= 1 - energy
+              ? 1
+              : 0;
           break;
         }
         case 432: {
@@ -364,7 +438,8 @@ export function renderRhythmAudioFrame(
           if (travel < 0) {
             travel = (travel % 16) + 16;
           }
-          value = travel < front ? Math.max(0, Math.min(1, 1 - Math.max(0, travel - front + 2) / 2)) : 0;
+          value =
+            travel < front ? Math.max(0, Math.min(1, 1 - Math.max(0, travel - front + 2) / 2)) : 0;
           break;
         }
       }
@@ -374,13 +449,17 @@ export function renderRhythmAudioFrame(
           : config.palette === 'aurora'
             ? 160 + nx * 120
             : (nx * 300 + t * 25) % 360;
-      const fullBrightness = config.keyMode === 429 || config.keyMode === 432 || config.keyMode === 434;
+      const fullBrightness =
+        config.keyMode === 429 || config.keyMode === 432 || config.keyMode === 434;
       keys[key.id] =
         config.palette === 'fixed'
           ? '#' +
             [1, 3, 5]
               .map(i =>
-                Math.round((parseInt(config.color.slice(i, i + 2), 16) * value * config.brightness) / (fullBrightness ? 100 : 100 * 2))
+                Math.round(
+                  (parseInt(config.color.slice(i, i + 2), 16) * value * config.brightness) /
+                    (fullBrightness ? 100 : 100 * 2)
+                )
                   .toString(16)
                   .padStart(2, '0')
               )
@@ -414,6 +493,10 @@ export function renderRhythmAudioFrame(
 }
 
 /** Illustrative demo & synth fallback. Emits `#rrggbb` hex colors for every key. */
-export function rhythmDemo(config: RhythmConfiguration, timeMs: number, model: HeroDeviceModelId = 'hero68') {
+export function rhythmDemo(
+  config: RhythmConfiguration,
+  timeMs: number,
+  model: HeroDeviceModelId = 'hero68'
+) {
   return renderRhythmAudioFrame(config, timeMs, null, null, model, true);
 }

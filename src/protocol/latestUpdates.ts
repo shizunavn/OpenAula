@@ -1,6 +1,10 @@
 /** Send the latest value at a bounded rate, with one request in flight. Unlike a
  * debounce, continuous dragging still publishes intermediate changes. */
-export function latestUpdates<T>(send: (value: T) => Promise<unknown>, onError: (error: unknown) => void, intervalMs = 40) {
+export function latestUpdates<T>(
+  send: (value: T) => Promise<unknown>,
+  onError: (error: unknown) => void,
+  intervalMs = 40
+) {
   let pending: T | undefined;
   let hasPending = false;
   let running = false;
@@ -24,14 +28,17 @@ export function latestUpdates<T>(send: (value: T) => Promise<unknown>, onError: 
     hasPending = false;
     running = true;
     lastSent = performance.now();
-    void Promise.resolve().then(() => closed ? undefined : send(value)).catch(error => {
-      if (!closed) {
-        onError(error);
-      }
-    }).finally(() => {
-      running = false;
-      pump();
-    });
+    void Promise.resolve()
+      .then(() => (closed ? undefined : send(value)))
+      .catch(error => {
+        if (!closed) {
+          onError(error);
+        }
+      })
+      .finally(() => {
+        running = false;
+        pump();
+      });
   }
   return {
     stage(value: T) {

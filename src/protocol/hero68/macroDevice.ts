@@ -6,9 +6,15 @@ const MACRO_COMMAND = 0x05;
 const MAX_DURATION = 0x0fffff;
 const MAX_PACKET_COUNT = 0xff;
 const MAX_BLOB_LENGTH = MAX_DATA_LENGTH * MAX_PACKET_COUNT;
-const actionByName = new Map(catalog.map(action => ([action.name, action] as const)));
+const actionByName = new Map(catalog.map(action => [action.name, action] as const));
 export interface Hero68MacroRequester {
-  request(report: Uint8Array, expectedCommand: number, expectedZone?: number, timeoutMs?: number, predicate?: (reply: DecodedReport) => boolean): Promise<DecodedReport>;
+  request(
+    report: Uint8Array,
+    expectedCommand: number,
+    expectedZone?: number,
+    timeoutMs?: number,
+    predicate?: (reply: DecodedReport) => boolean
+  ): Promise<DecodedReport>;
 }
 function encodeEvent(event: MacroEvent): number[] {
   const action = actionByName.get(event.key);
@@ -19,7 +25,12 @@ function encodeEvent(event: MacroEvent): number[] {
     throw new RangeError(`Macro delay must be an integer between 0 and ${MAX_DURATION} ms.`);
   }
   const actionCode = event.type === 'up' ? action.up : action.down;
-  return [actionCode & 0xf0 | event.delayMs >>> 16 & 0x0f, event.delayMs >>> 8 & 0xff, event.delayMs & 0xff, action.value];
+  return [
+    (actionCode & 0xf0) | ((event.delayMs >>> 16) & 0x0f),
+    (event.delayMs >>> 8) & 0xff,
+    event.delayMs & 0xff,
+    action.value
+  ];
 }
 
 /**
@@ -66,14 +77,21 @@ export function encodeHero68MacroBlob(macros: readonly MacroDefinition[]): Uint8
     if (offset > 0xffff) {
       throw new RangeError('Macro table offset exceeds the device format.');
     }
-    bytes.push(offset & 0xff, offset >>> 8 & 0xff, entry.length & 0xff, entry.length >>> 8 & 0xff);
+    bytes.push(
+      offset & 0xff,
+      (offset >>> 8) & 0xff,
+      entry.length & 0xff,
+      (entry.length >>> 8) & 0xff
+    );
     offset += entry.length;
   }
   for (const entry of entries) {
     bytes.push(...entry);
   }
   if (bytes.length > MAX_BLOB_LENGTH) {
-    throw new RangeError(`Macro library is too large for CMD 0x05 framing (${bytes.length} > ${MAX_BLOB_LENGTH} bytes).`);
+    throw new RangeError(
+      `Macro library is too large for CMD 0x05 framing (${bytes.length} > ${MAX_BLOB_LENGTH} bytes).`
+    );
   }
   return Uint8Array.from(bytes);
 }
@@ -86,14 +104,16 @@ export function buildHero68MacroReports(macros: readonly MacroDefinition[]): Uin
   const reports: Uint8Array[] = [];
   for (let sequence = 0; sequence < total; sequence++) {
     const start = sequence * MAX_DATA_LENGTH;
-    reports.push(buildReport({
-      command: MACRO_COMMAND,
-      zone: 0,
-      reserved: 0,
-      total,
-      sequence,
-      data: blob.slice(start, start + MAX_DATA_LENGTH)
-    }));
+    reports.push(
+      buildReport({
+        command: MACRO_COMMAND,
+        zone: 0,
+        reserved: 0,
+        total,
+        sequence,
+        data: blob.slice(start, start + MAX_DATA_LENGTH)
+      })
+    );
   }
   return reports;
 }
@@ -116,7 +136,10 @@ function sleep(ms: number): Promise<void> {
  * Mirrors the official v3 controller's _send_macro_to_device():
  * 56-byte CMD 0x05 chunks and an exact echoed-report acknowledgement.
  */
-export async function syncHero68MacroLibrary(requester: Hero68MacroRequester, macros: readonly MacroDefinition[]): Promise<number> {
+export async function syncHero68MacroLibrary(
+  requester: Hero68MacroRequester,
+  macros: readonly MacroDefinition[]
+): Promise<number> {
   const reports = buildHero68MacroReports(macros);
   if (reports.length === 0) {
     return 0;
@@ -126,7 +149,14 @@ export async function syncHero68MacroLibrary(requester: Hero68MacroRequester, ma
     let sent = false;
     for (let attempt = 0; attempt < 5 && !sent; attempt++) {
       try {
-        await requester.request(report, MACRO_COMMAND, 0, 1000, reply => reply.total === report[4] && reply.sequence === report[5] && exactEcho(report, reply));
+        await requester.request(
+          report,
+          MACRO_COMMAND,
+          0,
+          1000,
+          reply =>
+            reply.total === report[4] && reply.sequence === report[5] && exactEcho(report, reply)
+        );
         sent = true;
       } catch (error) {
         lastError = error;
@@ -136,7 +166,9 @@ export async function syncHero68MacroLibrary(requester: Hero68MacroRequester, ma
       }
     }
     if (!sent) {
-      throw lastError instanceof Error ? lastError : new Error('HERO68 rejected the macro payload.');
+      throw lastError instanceof Error
+        ? lastError
+        : new Error('HERO68 rejected the macro payload.');
     }
   }
   return reports.length;

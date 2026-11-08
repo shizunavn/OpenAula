@@ -40,8 +40,17 @@ export default function GamepadDragPreview({
       cancelAnimationFrame(frame);
     };
   }, [x, y]);
-  return createPortal(<div ref={element} className={`gp-drag-cursor${removing ? ' is-removing' : ''}`} aria-hidden="true">
-    <div className="gp-drag-tile"><GamepadControlIcon action={action} /></div>
-    <span>{label}</span>
-  </div>, document.body);
+  return createPortal(
+    <div
+      ref={element}
+      className={`gp-drag-cursor${removing ? ' is-removing' : ''}`}
+      aria-hidden="true"
+    >
+      <div className="gp-drag-tile">
+        <GamepadControlIcon action={action} />
+      </div>
+      <span>{label}</span>
+    </div>,
+    document.body
+  );
 }

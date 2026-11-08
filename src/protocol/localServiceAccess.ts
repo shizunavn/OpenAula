@@ -7,12 +7,19 @@ type AccessState = {
 type PermissionQuery = () => Promise<PermissionStatus | null>;
 export class LocalServicePermissionError extends Error {
   constructor() {
-    super('Browser permission blocked. Open the site permissions beside the address bar and allow access to apps on this device.');
+    super(
+      'Browser permission blocked. Open the site permissions beside the address bar and allow access to apps on this device.'
+    );
     this.name = 'LocalServicePermissionError';
   }
 }
 async function queryPermission(): Promise<PermissionStatus | null> {
-  if (typeof navigator === 'undefined' || !navigator.permissions || typeof location === 'undefined' || location.protocol !== 'https:') {
+  if (
+    typeof navigator === 'undefined' ||
+    !navigator.permissions ||
+    typeof location === 'undefined' ||
+    location.protocol !== 'https:'
+  ) {
     return null;
   }
   const chromium = navigator.userAgent.match(/(?:Chrome|Chromium)\/(\d+)/);
@@ -27,15 +34,18 @@ async function queryPermission(): Promise<PermissionStatus | null> {
   for (const name of ['loopback-network', 'local-network-access']) {
     try {
       return await navigator.permissions.query({
-        name: (name as PermissionName)
+        name: name as PermissionName
       });
-    } catch {
-} /* Try the name used by earlier browsers. */
+    } catch {} /* Try the name used by earlier browsers. */
   }
 
   return null;
 }
-export function createLocalServiceAccess(query: PermissionQuery = queryPermission, send: typeof fetch = (...args) => fetch(...args), permissionTimeoutMs = 90_000) {
+export function createLocalServiceAccess(
+  query: PermissionQuery = queryPermission,
+  send: typeof fetch = (...args) => fetch(...args),
+  permissionTimeoutMs = 90_000
+) {
   let state: AccessState = {
     permission: 'unknown',
     requesting: false,
@@ -59,24 +69,28 @@ export function createLocalServiceAccess(query: PermissionQuery = queryPermissio
     };
   };
   function initialize() {
-    return permission ??= query().catch(() => null).then(result => {
-      if (result) {
-        const changed = () => {
-          if (result.state === 'denied') {
-            responded = false;
-          }
-          publish({
-            permission: result.state,
-            ...(result.state === 'granted' ? {
-              prompted: false
-            } : {})
-          });
-        };
-        result.addEventListener('change', changed);
-        changed();
-      }
-      return result;
-    });
+    return (permission ??= query()
+      .catch(() => null)
+      .then(result => {
+        if (result) {
+          const changed = () => {
+            if (result.state === 'denied') {
+              responded = false;
+            }
+            publish({
+              permission: result.state,
+              ...(result.state === 'granted'
+                ? {
+                    prompted: false
+                  }
+                : {})
+            });
+          };
+          result.addEventListener('change', changed);
+          changed();
+        }
+        return result;
+      }));
   }
   async function request(url: string, options: RequestInit = {}, timeoutMs = 1000) {
     await initialize();
@@ -89,14 +103,20 @@ export function createLocalServiceAccess(query: PermissionQuery = queryPermissio
     requests++;
     publish({
       requesting: true,
-      prompted: state.prompted || state.permission === 'prompt' && !responded
+      prompted: state.prompted || (state.permission === 'prompt' && !responded)
     });
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     let lastPermission: AccessState['permission'] = state.permission;
     const arm = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => controller.abort(new DOMException('Background service request timed out.', 'TimeoutError')), state.permission === 'prompt' && !responded ? permissionTimeoutMs : timeoutMs);
+      timer = setTimeout(
+        () =>
+          controller.abort(
+            new DOMException('Background service request timed out.', 'TimeoutError')
+          ),
+        state.permission === 'prompt' && !responded ? permissionTimeoutMs : timeoutMs
+      );
     };
     const stopWatching = subscribe(() => {
       if (state.permission === lastPermission) {

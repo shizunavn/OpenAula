@@ -15,7 +15,7 @@ function interpolate(text: string, vars?: TranslationVars) {
 
 export function createTranslator(language: Language) {
   return (text: string, vars?: TranslationVars) =>
-    interpolate(language === 'vi' ? VI[text] ?? text : text, vars);
+    interpolate(language === 'vi' ? (VI[text] ?? text) : text, vars);
 }
 
 const I18nContext = createContext<{
@@ -23,20 +23,14 @@ const I18nContext = createContext<{
   tr: ReturnType<typeof createTranslator>;
 }>({
   language: 'en',
-  tr: createTranslator('en'),
+  tr: createTranslator('en')
 });
 
-export function I18nProvider({
-  language,
-  children,
-}: {
-  language: Language;
-  children: ReactNode;
-}) {
+export function I18nProvider({ language, children }: { language: Language; children: ReactNode }) {
   const value = useMemo(
     () => ({
       language,
-      tr: createTranslator(language),
+      tr: createTranslator(language)
     }),
     [language]
   );

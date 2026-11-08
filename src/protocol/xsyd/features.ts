@@ -12,13 +12,13 @@
 //   payload[3+4k]     value low byte
 //   payload[4+4k]     value high byte
 
-import {buildXsydFrame, type XsydReply} from './codec'
-import {XSYD_KEYS} from './keymap'
+import { buildXsydFrame, type XsydReply } from './codec';
+import { XSYD_KEYS } from './keymap';
 
-export {XSYD_KEYS}
+export { XSYD_KEYS };
 
-export const XSYD_GLOBAL_ACTUATION_OPCODE = 0x29
-export const XSYD_GLOBAL_ACTUATION_REPLY_OPCODE = 0xa9
+export const XSYD_GLOBAL_ACTUATION_OPCODE = 0x29;
+export const XSYD_GLOBAL_ACTUATION_REPLY_OPCODE = 0xa9;
 
 /**
  * Field IDs verified against firmware v1.1.4 (`VA 0x1C6DC` write table,
@@ -71,35 +71,35 @@ export const XsydFeatureField = {
   /** Backwards-compatible alias for `RapidTriggerPress` (`0x14`). */
   RapidTrigger: 0x14,
   /** Backwards-compatible alias for `TopDeadzone` (`0x16`). */
-  Deadzone: 0x16,
-} as const
+  Deadzone: 0x16
+} as const;
 
-export type XsydFeatureFieldId = (typeof XsydFeatureField)[keyof typeof XsydFeatureField]
+export type XsydFeatureFieldId = (typeof XsydFeatureField)[keyof typeof XsydFeatureField];
 
 /** Slots per `0x23` frame. Handler `0x0AD7C` / `0x0ADEC` walks 14 slots. */
-export const XSYD_FEATURE_SLOTS = 14
+export const XSYD_FEATURE_SLOTS = 14;
 
 /** Empty slot marker: `pos = 0xFF`, nothing else. */
-const EMPTY_SLOT = [0xff, 0xff, 0x00, 0x00] as const
+const EMPTY_SLOT = [0xff, 0xff, 0x00, 0x00] as const;
 
 export interface XsydFieldWrite {
   /** 1-byte XSYD keyValue (HID usage low byte, `0x01` for Fn). */
-  pos: number
-  field: number
+  pos: number;
+  field: number;
   /** u16 value; for `Remap` and `Header` only the low byte is used by hardware. */
-  value: number
+  value: number;
 }
 
 /** Total micrometres of travel the firmware can address with a u16. */
-export const XSYD_TRAVEL_MAX_UM = 0xffff
+export const XSYD_TRAVEL_MAX_UM = 0xffff;
 
 /** Micrometres -> millimetres (the UI speaks mm, the wire speaks µm). */
 export function umToMm(um: number): number {
-  return um / 1000
+  return um / 1000;
 }
 
 export function mmToUm(mm: number): number {
-  return Math.round(mm * 1000)
+  return Math.round(mm * 1000);
 }
 
 /**
@@ -108,9 +108,9 @@ export function mmToUm(mm: number): number {
  * `5C 0F 29 C9 | 00 ...` -> `5C 0F A9 49 | 00 00 00 <u16_le global_travel_um> 00 ...`.
  */
 export function buildGlobalActuationReadFrame(): Uint8Array {
-  const payload = new Uint8Array(0x0f)
-  payload[0] = 0x00
-  return buildXsydFrame(XSYD_GLOBAL_ACTUATION_OPCODE, payload)
+  const payload = new Uint8Array(0x0f);
+  payload[0] = 0x00;
+  return buildXsydFrame(XSYD_GLOBAL_ACTUATION_OPCODE, payload);
 }
 
 /**
@@ -120,13 +120,13 @@ export function buildGlobalActuationReadFrame(): Uint8Array {
  */
 export function buildGlobalActuationWriteFrame(travelUm: number): Uint8Array {
   if (!Number.isInteger(travelUm) || travelUm < 100 || travelUm > 3400) {
-    throw new RangeError(`Global actuation travel must be 100..3400 µm, got ${travelUm}`)
+    throw new RangeError(`Global actuation travel must be 100..3400 µm, got ${travelUm}`);
   }
-  const payload = new Uint8Array(0x0f)
-  payload[0] = 0x01
-  payload[3] = travelUm & 0xff
-  payload[4] = (travelUm >> 8) & 0xff
-  return buildXsydFrame(XSYD_GLOBAL_ACTUATION_OPCODE, payload)
+  const payload = new Uint8Array(0x0f);
+  payload[0] = 0x01;
+  payload[3] = travelUm & 0xff;
+  payload[4] = (travelUm >> 8) & 0xff;
+  return buildXsydFrame(XSYD_GLOBAL_ACTUATION_OPCODE, payload);
 }
 
 /**
@@ -135,12 +135,12 @@ export function buildGlobalActuationWriteFrame(travelUm: number): Uint8Array {
  */
 export function decodeGlobalActuationReply(reply: XsydReply): number {
   if (reply.opcode !== XSYD_GLOBAL_ACTUATION_REPLY_OPCODE || !reply.checksumValid) {
-    throw new Error('Invalid XSYD 0x29 global actuation reply')
+    throw new Error('Invalid XSYD 0x29 global actuation reply');
   }
   if (reply.payload.length < 5) {
-    throw new Error(`Incomplete XSYD 0xA9 payload: ${reply.payload.length} bytes`)
+    throw new Error(`Incomplete XSYD 0xA9 payload: ${reply.payload.length} bytes`);
   }
-  return (reply.payload[3] ?? 0) | ((reply.payload[4] ?? 0) << 8)
+  return (reply.payload[3] ?? 0) | ((reply.payload[4] ?? 0) << 8);
 }
 
 /**
@@ -150,38 +150,38 @@ export function decodeGlobalActuationReply(reply: XsydReply): number {
  */
 export function buildFieldWritePayload(writes: readonly XsydFieldWrite[]): Uint8Array {
   if (writes.length > XSYD_FEATURE_SLOTS) {
-    throw new RangeError(`at most ${XSYD_FEATURE_SLOTS} slots per frame`)
+    throw new RangeError(`at most ${XSYD_FEATURE_SLOTS} slots per frame`);
   }
-  const payload = new Uint8Array(1 + 4 * XSYD_FEATURE_SLOTS).fill(0)
-  payload[0] = 0x01
+  const payload = new Uint8Array(1 + 4 * XSYD_FEATURE_SLOTS).fill(0);
+  payload[0] = 0x01;
   for (let k = 0; k < XSYD_FEATURE_SLOTS; k++) {
-    const slot = writes[k]
+    const slot = writes[k];
     if (!slot) {
-      payload.set([...EMPTY_SLOT], 1 + 4 * k)
-      continue
+      payload.set([...EMPTY_SLOT], 1 + 4 * k);
+      continue;
     }
-    const {pos, field, value} = slot
+    const { pos, field, value } = slot;
     if (!Number.isInteger(pos) || pos < 0 || pos > 0xfe) {
-      throw new RangeError(`pos must be a wire key id (0..0xfe), got ${pos}`)
+      throw new RangeError(`pos must be a wire key id (0..0xfe), got ${pos}`);
     }
     if (!Number.isInteger(field) || field < 0 || field > 0xff) {
-      throw new RangeError(`field must be a byte, got ${field}`)
+      throw new RangeError(`field must be a byte, got ${field}`);
     }
     if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
-      throw new RangeError(`value must be a u16, got ${value}`)
+      throw new RangeError(`value must be a u16, got ${value}`);
     }
-    const offset = 1 + 4 * k
-    payload[offset] = pos
-    payload[offset + 1] = field
-    payload[offset + 2] = value & 0xff
-    payload[offset + 3] = (value >> 8) & 0xff
+    const offset = 1 + 4 * k;
+    payload[offset] = pos;
+    payload[offset + 1] = field;
+    payload[offset + 2] = value & 0xff;
+    payload[offset + 3] = (value >> 8) & 0xff;
   }
-  return payload
+  return payload;
 }
 
 /** Full 64-byte report body for one `0x23` write frame. */
 export function buildFieldWriteFrame(writes: readonly XsydFieldWrite[]): Uint8Array {
-  return buildXsydFrame(0x23, buildFieldWritePayload(writes))
+  return buildXsydFrame(0x23, buildFieldWritePayload(writes));
 }
 
 /**
@@ -191,40 +191,40 @@ export function buildFieldWriteFrame(writes: readonly XsydFieldWrite[]): Uint8Ar
  * are padded with `ff ff 00 00`.
  */
 export function buildFieldReadPayload(
-  queries: readonly {pos: number; field: number}[] = []
+  queries: readonly { pos: number; field: number }[] = []
 ): Uint8Array {
   if (queries.length > XSYD_FEATURE_SLOTS) {
-    throw new RangeError(`at most ${XSYD_FEATURE_SLOTS} slots per frame`)
+    throw new RangeError(`at most ${XSYD_FEATURE_SLOTS} slots per frame`);
   }
-  const payload = new Uint8Array(1 + 4 * XSYD_FEATURE_SLOTS).fill(0)
-  payload[0] = 0x00
+  const payload = new Uint8Array(1 + 4 * XSYD_FEATURE_SLOTS).fill(0);
+  payload[0] = 0x00;
   for (let k = 0; k < XSYD_FEATURE_SLOTS; k++) {
-    const slot = queries[k]
+    const slot = queries[k];
     if (!slot) {
-      payload.set([...EMPTY_SLOT], 1 + 4 * k)
-      continue
+      payload.set([...EMPTY_SLOT], 1 + 4 * k);
+      continue;
     }
-    const {pos, field} = slot
+    const { pos, field } = slot;
     if (!Number.isInteger(pos) || pos < 0 || pos > 0xfe) {
-      throw new RangeError(`pos must be a wire key id (0..0xfe), got ${pos}`)
+      throw new RangeError(`pos must be a wire key id (0..0xfe), got ${pos}`);
     }
     if (!Number.isInteger(field) || field < 0 || field > 0xff) {
-      throw new RangeError(`field must be a byte, got ${field}`)
+      throw new RangeError(`field must be a byte, got ${field}`);
     }
-    const offset = 1 + 4 * k
-    payload[offset] = pos
-    payload[offset + 1] = field
-    payload[offset + 2] = 0x00
-    payload[offset + 3] = 0x00
+    const offset = 1 + 4 * k;
+    payload[offset] = pos;
+    payload[offset + 1] = field;
+    payload[offset + 2] = 0x00;
+    payload[offset + 3] = 0x00;
   }
-  return payload
+  return payload;
 }
 
 /** Full 64-byte report body for an `0x23` readback request (`payload[0] = 0x00`). */
 export function buildFieldReadFrame(
-  queries: readonly {pos: number; field: number}[] = []
+  queries: readonly { pos: number; field: number }[] = []
 ): Uint8Array {
-  return buildXsydFrame(0x23, buildFieldReadPayload(queries))
+  return buildXsydFrame(0x23, buildFieldReadPayload(queries));
 }
 
 /**
@@ -232,66 +232,69 @@ export function buildFieldReadFrame(
  * `ff ff 00 00` / `ff ff ff 00` and `00 00 00 00` padding slots (`wasd_deadzone.pcapng`).
  */
 export function decodeFieldWritePayload(payload: ArrayLike<number>): XsydFieldWrite[] {
-  const slots: XsydFieldWrite[] = []
+  const slots: XsydFieldWrite[] = [];
   for (let k = 0; k < XSYD_FEATURE_SLOTS; k++) {
-    const offset = 1 + 4 * k
-    if (offset + 3 >= payload.length) break
-    const pos = payload[offset]
-    const field = payload[offset + 1]
-    const lo = payload[offset + 2]
-    const hi = payload[offset + 3]
-    if (pos === 0xff || (pos === 0x00 && field === 0x00 && lo === 0x00 && hi === 0x00)) continue
+    const offset = 1 + 4 * k;
+    if (offset + 3 >= payload.length) break;
+    const pos = payload[offset];
+    const field = payload[offset + 1];
+    const lo = payload[offset + 2];
+    const hi = payload[offset + 3];
+    if (pos === 0xff || (pos === 0x00 && field === 0x00 && lo === 0x00 && hi === 0x00)) continue;
     slots.push({
       pos,
       field,
-      value: lo | (hi << 8),
-    })
+      value: lo | (hi << 8)
+    });
   }
-  return slots
+  return slots;
 }
 
 /** Split any number of writes into frames of 14 slots. */
 export function chunkFieldWrites(writes: readonly XsydFieldWrite[]): XsydFieldWrite[][] {
-  const frames: XsydFieldWrite[][] = []
+  const frames: XsydFieldWrite[][] = [];
   for (let i = 0; i < writes.length; i += XSYD_FEATURE_SLOTS) {
-    frames.push(writes.slice(i, i + XSYD_FEATURE_SLOTS))
+    frames.push(writes.slice(i, i + XSYD_FEATURE_SLOTS));
   }
-  return frames
+  return frames;
 }
 
 /** Convenience: one `Travel` write per key id. */
-export function travelWrites(
-  entries: readonly {pos: number; um: number}[]
-): XsydFieldWrite[] {
-  return entries.map(({pos, um}) => ({pos, field: XsydFeatureField.Travel, value: um}))
+export function travelWrites(entries: readonly { pos: number; um: number }[]): XsydFieldWrite[] {
+  return entries.map(({ pos, um }) => ({ pos, field: XsydFeatureField.Travel, value: um }));
 }
 
 const WIRE_POS_BY_CODE: ReadonlyMap<string, number> = new Map(
   XSYD_KEYS.map(key => [key.code, key.index])
-)
+);
 
 const KEY_VALUE_BY_CODE: ReadonlyMap<string, number> = new Map(
   XSYD_KEYS.flatMap(key => {
-    const val = key.usage & 0xff
-    return key.code === 'F1' ? [['F1', val], ['Fn', val]] : [[key.code, val]]
+    const val = key.usage & 0xff;
+    return key.code === 'F1'
+      ? [
+          ['F1', val],
+          ['Fn', val]
+        ]
+      : [[key.code, val]];
   })
-)
+);
 
 const CODE_BY_KEY_VALUE: ReadonlyMap<number, string> = new Map(
   XSYD_KEYS.map(key => [key.usage & 0xff, key.code === 'F1' ? 'Fn' : key.code])
-)
+);
 
 /** Wire key id for a `KeyboardEvent.code`, or `undefined` for an unsupported key. */
 export function wirePosForCode(code: string): number | undefined {
-  return WIRE_POS_BY_CODE.get(code)
+  return WIRE_POS_BY_CODE.get(code);
 }
 
 /** 1-byte `keyValue` (HID usage low byte) used by XSYD frames on the wire. */
 export function keyValueForCode(code: string): number | undefined {
-  return KEY_VALUE_BY_CODE.get(code)
+  return KEY_VALUE_BY_CODE.get(code);
 }
 
 /** UI keyId (`Escape`..`ArrowRight`, `Fn`) for a 1-byte XSYD `keyValue`. */
 export function codeForKeyValue(keyValue: number): string | undefined {
-  return CODE_BY_KEY_VALUE.get(keyValue)
+  return CODE_BY_KEY_VALUE.get(keyValue);
 }

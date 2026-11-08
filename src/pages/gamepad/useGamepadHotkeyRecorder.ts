@@ -3,7 +3,7 @@ import {
   GamepadToggleTracker,
   isToggleModifier,
   normalizeToggleKeybind,
-  type GamepadConfiguration,
+  type GamepadConfiguration
 } from '../../keyboard/gamepad';
 import { WINDOWS_SCANS } from '../../keyboard/windowsScans';
 
@@ -15,7 +15,7 @@ export function useGamepadHotkeyRecorder({
   statusEnabled,
   busy,
   onPatch,
-  onToggleHotkey,
+  onToggleHotkey
 }: {
   config: GamepadConfiguration;
   disabled: boolean;
@@ -145,6 +145,6 @@ export function useGamepadHotkeyRecorder({
     recordingKeybind,
     setRecordingKeybind,
     pendingKeybind,
-    setPendingKeybind,
+    setPendingKeybind
   };
 }

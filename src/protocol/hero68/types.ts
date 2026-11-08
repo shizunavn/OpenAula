@@ -6,7 +6,7 @@ export type ProfileSlot = 0 | 1 | 2;
 export type LayerId = 0 | 1 | 2;
 export type PhysicalKeyId = number;
 export type PollingRate = 125 | 250 | 500 | 1000 | 2000 | 4000 | 8000;
-export type Confidence = "confirmed" | "probable" | "unknown";
+export type Confidence = 'confirmed' | 'probable' | 'unknown';
 
 export interface ActuationConfig {
   profile: ProfileSlot;
@@ -29,14 +29,14 @@ export interface RapidTriggerConfig {
 }
 
 export interface CalibrationFrame {
-  phase: "start" | "sample" | "exit";
+  phase: 'start' | 'sample' | 'exit';
   keyIds: PhysicalKeyId[];
 }
 
 export interface AdvancedKeyBinding {
   layer: LayerId;
   keyId: PhysicalKeyId;
-  type: "DKS" | "MT" | "SOCD";
+  type: 'DKS' | 'MT' | 'SOCD';
   payload: Uint8Array;
 }
 

@@ -51,19 +51,29 @@ export function SwitchSelectorPage({
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const brandFilterRef = useRef<HTMLDivElement>(null);
   const modelOptions = useMemo(() => switchOptionsForModel(model), [model]);
-  const filteredSwitchOptions = useMemo(() => modelOptions.filter(option => {
-    const matchesSearch = !switchSearch || option.fullName.toLowerCase().includes(switchSearch.toLowerCase()) || option.name.toLowerCase().includes(switchSearch.toLowerCase());
-    const matchesBrand = switchBrandFilter === 'all' || option.brand === switchBrandFilter;
-    return matchesSearch && matchesBrand;
-  }), [modelOptions, switchSearch, switchBrandFilter]);
-  const switchBrands = useMemo(() => Array.from(new Set(modelOptions.map(option => option.brand))), [modelOptions]);
+  const filteredSwitchOptions = useMemo(
+    () =>
+      modelOptions.filter(option => {
+        const matchesSearch =
+          !switchSearch ||
+          option.fullName.toLowerCase().includes(switchSearch.toLowerCase()) ||
+          option.name.toLowerCase().includes(switchSearch.toLowerCase());
+        const matchesBrand = switchBrandFilter === 'all' || option.brand === switchBrandFilter;
+        return matchesSearch && matchesBrand;
+      }),
+    [modelOptions, switchSearch, switchBrandFilter]
+  );
+  const switchBrands = useMemo(
+    () => Array.from(new Set(modelOptions.map(option => option.brand))),
+    [modelOptions]
+  );
   const brandFilterLabel = switchBrandFilter === 'all' ? 'Filter by brand' : switchBrandFilter;
   useEffect(() => {
     if (!brandMenuOpen) {
       return;
     }
     const closeBrandMenu = (event: MouseEvent | TouchEvent) => {
-      if (!brandFilterRef.current?.contains((event.target as Node))) {
+      if (!brandFilterRef.current?.contains(event.target as Node)) {
         setBrandMenuOpen(false);
       }
     };
@@ -74,7 +84,8 @@ export function SwitchSelectorPage({
       document.removeEventListener('touchstart', closeBrandMenu);
     };
   }, [brandMenuOpen]);
-  return <div className="page settings-page switch-selector-page page-enter">
+  return (
+    <div className="page settings-page switch-selector-page page-enter">
       <div className="switch-page-actions">
         <button className="apply-button" onClick={onSave} disabled={!canSave || profileBusy}>
           {saveState === 'sent' ? tr('Saved') : tr('Save')}
@@ -82,22 +93,40 @@ export function SwitchSelectorPage({
       </div>
 
       <section className="switch-selector-stage">
-        <SwitchSelectorBoard model={model} selectedKeys={selectedKeys} onToggleKey={onToggleKey} switchImagesByKey={switchPreviewByKey} />
+        <SwitchSelectorBoard
+          model={model}
+          selectedKeys={selectedKeys}
+          onToggleKey={onToggleKey}
+          switchImagesByKey={switchPreviewByKey}
+        />
       </section>
 
       <div className="selection-instruction switch-selection-instruction">
-        {hasSelection ? tr(selectedKeys.size === 1 ? '{count} KEY SELECTED' : '{count} KEYS SELECTED', {
-        count: selectedKeys.size
-      }) : tr('SELECT ONE OR MORE KEYS FIRST')}
+        {hasSelection
+          ? tr(selectedKeys.size === 1 ? '{count} KEY SELECTED' : '{count} KEYS SELECTED', {
+              count: selectedKeys.size
+            })
+          : tr('SELECT ONE OR MORE KEYS FIRST')}
       </div>
 
       <div className="switch-selector-heading-row">
         <h1>{tr('Switch Selector')}</h1>
         <div className="selection-actions">
-          <button type="button" className="secondary-button" disabled={allSelected} aria-pressed={allSelected} onClick={onSelectAll}>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={allSelected}
+            aria-pressed={allSelected}
+            onClick={onSelectAll}
+          >
             {tr('Select all keys')}
           </button>
-          <button type="button" className={hasSelection ? 'secondary-button' : 'ghost-button'} disabled={!hasSelection} onClick={onDiscardSelection}>
+          <button
+            type="button"
+            className={hasSelection ? 'secondary-button' : 'ghost-button'}
+            disabled={!hasSelection}
+            onClick={onDiscardSelection}
+          >
             {tr('Discard selection')}
           </button>
         </div>
@@ -107,52 +136,111 @@ export function SwitchSelectorPage({
         <article className="settings-card switch-assignment-card">
           <div className="settings-card-head">
             <h2>{tr('Assign Switch Profiles')}</h2>
-            <p>{tr('Select keys on the keyboard preview, then choose a calibration profile for your installed switches. The keyboard reports its saved profile IDs; it does not detect the physical switch model.')}</p>
+            <p>
+              {tr(
+                'Select keys on the keyboard preview, then choose a calibration profile for your installed switches. The keyboard reports its saved profile IDs; it does not detect the physical switch model.'
+              )}
+            </p>
           </div>
 
           <div className="switch-toolbar">
             <label className="switch-search">
               <Search size={16} />
-              <input type="text" value={switchSearch} onChange={e => onSwitchSearchChange(e.target.value)} placeholder={tr('Search for a switch profile')} />
+              <input
+                type="text"
+                value={switchSearch}
+                onChange={e => onSwitchSearchChange(e.target.value)}
+                placeholder={tr('Search for a switch profile')}
+              />
             </label>
 
             <div className="switch-brand-filter" ref={brandFilterRef}>
-              <button type="button" className={`brand-filter-trigger ${brandMenuOpen ? 'is-open' : ''}`} aria-haspopup="listbox" aria-expanded={brandMenuOpen} onClick={() => setBrandMenuOpen(open => !open)}>
+              <button
+                type="button"
+                className={`brand-filter-trigger ${brandMenuOpen ? 'is-open' : ''}`}
+                aria-haspopup="listbox"
+                aria-expanded={brandMenuOpen}
+                onClick={() => setBrandMenuOpen(open => !open)}
+              >
                 <span>{tr(brandFilterLabel)}</span>
                 <ChevronDown size={16} />
               </button>
 
-              {brandMenuOpen && <div className="brand-filter-menu" role="listbox" aria-label={tr('Filter switch profiles by brand')}>
-                  <button type="button" role="option" aria-selected={switchBrandFilter === 'all'} className={switchBrandFilter === 'all' ? 'is-selected' : ''} onClick={() => {
-                onSwitchBrandFilterChange('all');
-                setBrandMenuOpen(false);
-              }}>
+              {brandMenuOpen && (
+                <div
+                  className="brand-filter-menu"
+                  role="listbox"
+                  aria-label={tr('Filter switch profiles by brand')}
+                >
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={switchBrandFilter === 'all'}
+                    className={switchBrandFilter === 'all' ? 'is-selected' : ''}
+                    onClick={() => {
+                      onSwitchBrandFilterChange('all');
+                      setBrandMenuOpen(false);
+                    }}
+                  >
                     {tr('All brands')}
                   </button>
-                  {switchBrands.map(brand => <button key={brand} type="button" role="option" aria-selected={switchBrandFilter === brand} className={switchBrandFilter === brand ? 'is-selected' : ''} onClick={() => {
-                onSwitchBrandFilterChange(brand);
-                setBrandMenuOpen(false);
-              }}>
+                  {switchBrands.map(brand => (
+                    <button
+                      key={brand}
+                      type="button"
+                      role="option"
+                      aria-selected={switchBrandFilter === brand}
+                      className={switchBrandFilter === brand ? 'is-selected' : ''}
+                      onClick={() => {
+                        onSwitchBrandFilterChange(brand);
+                        setBrandMenuOpen(false);
+                      }}
+                    >
                       {tr(brand)}
-                    </button>)}
-                </div>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="switch-profile-grid">
-            {filteredSwitchOptions.map(option => <button key={option.id} type="button" className={`switch-profile-card ${(!hasSelection || !switchProfileMixed) && option.id === selectedSwitch.id ? 'is-active' : ''}`} disabled={!hasSelection || profileBusy} title={!hasSelection ? tr('Select one or more keys first') : undefined} onClick={() => onAssignSwitchProfile(option.id)}>
-                <span className="switch-profile-thumb" style={{
-              color: option.accent
-            }}>
-                  {option.top ? <img src={option.top} alt={option.fullName} /> : <SwitchStemMenuIcon />}
+            {filteredSwitchOptions.map(option => (
+              <button
+                key={option.id}
+                type="button"
+                className={`switch-profile-card ${(!hasSelection || !switchProfileMixed) && option.id === selectedSwitch.id ? 'is-active' : ''}`}
+                disabled={!hasSelection || profileBusy}
+                title={!hasSelection ? tr('Select one or more keys first') : undefined}
+                onClick={() => onAssignSwitchProfile(option.id)}
+              >
+                <span
+                  className="switch-profile-thumb"
+                  style={{
+                    color: option.accent
+                  }}
+                >
+                  {option.top ? (
+                    <img src={option.top} alt={option.fullName} />
+                  ) : (
+                    <SwitchStemMenuIcon />
+                  )}
                 </span>
-                <span className="switch-profile-brand">{option.note ? `${tr(option.brand)} · ${option.note}` : tr(option.brand)}</span>
+                <span className="switch-profile-brand">
+                  {option.note ? `${tr(option.brand)} · ${option.note}` : tr(option.brand)}
+                </span>
                 <strong>{option.fullName}</strong>
-              </button>)}
-            {!filteredSwitchOptions.length && <div className="switch-profile-empty">{tr('No switch profiles match the current search.')}</div>}
+              </button>
+            ))}
+            {!filteredSwitchOptions.length && (
+              <div className="switch-profile-empty">
+                {tr('No switch profiles match the current search.')}
+              </div>
+            )}
           </div>
         </article>
       </section>
-    </div>;
+    </div>
+  );
 }
 export default SwitchSelectorPage;

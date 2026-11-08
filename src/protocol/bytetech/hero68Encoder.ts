@@ -1,1 +1,1 @@
-export * from '../hero68/hero68Encoder'
+export * from '../hero68/hero68Encoder';

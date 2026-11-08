@@ -6,7 +6,14 @@ import { hero68ProtocolEncoder } from './hero68Encoder';
 import { reportTrace } from './reportTrace';
 import type { DecodedReport } from './types';
 import { rgbService } from '../rgbService';
-import { detectHeroDeviceFamily, detectHeroDeviceModelFromProductName, detectHeroDeviceModelFromUuid, HERO_USB_FILTERS, heroDeviceModel, type HeroDeviceModelId } from '../../keyboard/devices';
+import {
+  detectHeroDeviceFamily,
+  detectHeroDeviceModelFromProductName,
+  detectHeroDeviceModelFromUuid,
+  HERO_USB_FILTERS,
+  heroDeviceModel,
+  type HeroDeviceModelId
+} from '../../keyboard/devices';
 const HERO68_USAGE = 0x0061;
 const HERO68_REPORT_ID = 0x09;
 interface HIDReportInfoLike {
@@ -45,7 +52,10 @@ interface HIDDeviceLike {
   close(): Promise<void>;
   sendReport(reportId: number, data: BufferSource): Promise<void>;
   addEventListener(type: 'inputreport', listener: (event: HIDInputReportEventLike) => void): void;
-  removeEventListener(type: 'inputreport', listener: (event: HIDInputReportEventLike) => void): void;
+  removeEventListener(
+    type: 'inputreport',
+    listener: (event: HIDInputReportEventLike) => void
+  ): void;
 }
 interface NavigatorHIDLike {
   getDevices(): Promise<HIDDeviceLike[]>;
@@ -57,8 +67,14 @@ interface NavigatorHIDLike {
       usage?: number;
     }>;
   }): Promise<HIDDeviceLike[]>;
-  addEventListener?(type: 'connect' | 'disconnect', listener: (event: HIDConnectionEventLike) => void): void;
-  removeEventListener?(type: 'connect' | 'disconnect', listener: (event: HIDConnectionEventLike) => void): void;
+  addEventListener?(
+    type: 'connect' | 'disconnect',
+    listener: (event: HIDConnectionEventLike) => void
+  ): void;
+  removeEventListener?(
+    type: 'connect' | 'disconnect',
+    listener: (event: HIDConnectionEventLike) => void
+  ): void;
 }
 type ReportWaiter = {
   expectedCommand: number;
@@ -68,7 +84,8 @@ type ReportWaiter = {
   reject: (error: Error) => void;
   timer: number;
 };
-export type Hero68ConnectionState = 'unsupported' | 'disconnected' | 'connecting' | 'connected' | 'error';
+export type Hero68ConnectionState =
+  'unsupported' | 'disconnected' | 'connecting' | 'connected' | 'error';
 export type Hero68DeviceSnapshot = {
   state: Hero68ConnectionState;
   deviceName: string;
@@ -95,18 +112,25 @@ function getHid(): NavigatorHIDLike | undefined {
   if (typeof navigator === 'undefined') {
     return undefined;
   }
-  return (navigator as Navigator & {
-    hid?: NavigatorHIDLike;
-  }).hid;
+  return (
+    navigator as Navigator & {
+      hid?: NavigatorHIDLike;
+    }
+  ).hid;
 }
-function collectionMatches(collection: HIDCollectionInfoLike, usagePages: readonly number[]): boolean {
+function collectionMatches(
+  collection: HIDCollectionInfoLike,
+  usagePages: readonly number[]
+): boolean {
   if (usagePages.includes(collection.usagePage ?? -1) && collection.usage === HERO68_USAGE) {
     return true;
   }
   return collection.children?.some(child => collectionMatches(child, usagePages)) ?? false;
 }
 function isHero68ControlDevice(device: HIDDeviceLike): boolean {
-  const filters = HERO_USB_FILTERS.filter(filter => filter.vendorId === device.vendorId && filter.productId === device.productId);
+  const filters = HERO_USB_FILTERS.filter(
+    filter => filter.vendorId === device.vendorId && filter.productId === device.productId
+  );
   if (filters.length === 0) {
     return false;
   }
@@ -121,9 +145,12 @@ function isHero68ControlDevice(device: HIDDeviceLike): boolean {
  * may be opened for identification and must never receive a report.
  */
 function isUnsupportedCommandSet(device: HIDDeviceLike): boolean {
-  return detectHeroDeviceFamily(device.productName, device.vendorId, device.productId) === 'win68HeMax';
+  return (
+    detectHeroDeviceFamily(device.productName, device.vendorId, device.productId) === 'win68HeMax'
+  );
 }
-const MAX_HE_UNSUPPORTED_MESSAGE = 'AULA WIN 68 HE MAX detected: this board is not the HERO68 and OpenAula does not know its HID command set yet, so no settings were read or written.';
+const MAX_HE_UNSUPPORTED_MESSAGE =
+  'AULA WIN 68 HE MAX detected: this board is not the HERO68 and OpenAula does not know its HID command set yet, so no settings were read or written.';
 function inferModelFromHidDevice(device: HIDDeviceLike): HeroDeviceModelId | null {
   const byName = detectHeroDeviceModelFromProductName(device.productName);
   if (byName) {
@@ -177,7 +204,9 @@ export class Hero68DeviceManager implements Hero68Transport {
     });
   }
   get connected(): boolean {
-    return this.#snapshot.state === 'connected' && (this.#viaService || Boolean(this.#device?.opened));
+    return (
+      this.#snapshot.state === 'connected' && (this.#viaService || Boolean(this.#device?.opened))
+    );
   }
   getSnapshot = (): Hero68DeviceSnapshot => this.#snapshot;
   subscribe = (listener: () => void): (() => void) => {
@@ -199,7 +228,10 @@ export class Hero68DeviceManager implements Hero68Transport {
     }
     if (typeof location !== 'undefined' && location.protocol.startsWith('http')) {
       const service = await rgbService.status().catch(() => null);
-      if (service && ((service.apiVersion ?? 0) >= 3 || service.enabled && (service.apiVersion ?? 0) >= 2)) {
+      if (
+        service &&
+        ((service.apiVersion ?? 0) >= 3 || (service.enabled && (service.apiVersion ?? 0) >= 2))
+      ) {
         try {
           await this.connectViaService();
           if (this.connected) {
@@ -255,7 +287,9 @@ export class Hero68DeviceManager implements Hero68Transport {
         devices = requested.filter(isHero68ControlDevice);
       }
       if (devices.length !== 1) {
-        throw new Error(`Expected one authorized HERO68 control interface, found ${devices.length}.`);
+        throw new Error(
+          `Expected one authorized HERO68 control interface, found ${devices.length}.`
+        );
       }
       const device = devices[0];
       // Refuse before opening anything: the MAX speaks a different command set,
@@ -299,10 +333,15 @@ export class Hero68DeviceManager implements Hero68Transport {
   }
   async #readModelUuid(): Promise<HeroDeviceModelId | null> {
     try {
-      const reply = await this.request(buildReport({
-        command: 0x82,
-        zone: 1
-      }), 0x82, 1, 600);
+      const reply = await this.request(
+        buildReport({
+          command: 0x82,
+          zone: 1
+        }),
+        0x82,
+        1,
+        600
+      );
       return detectHeroDeviceModelFromUuid(reply.data);
     } catch {
       return null;
@@ -331,10 +370,15 @@ export class Hero68DeviceManager implements Hero68Transport {
       return fromDevice;
     }
     try {
-      const reply = await this.request(buildReport({
-        command: 0x82,
-        zone: 1
-      }), 0x82, 1, 600);
+      const reply = await this.request(
+        buildReport({
+          command: 0x82,
+          zone: 1
+        }),
+        0x82,
+        1,
+        600
+      );
       const fromUuid = detectHeroDeviceModelFromUuid(reply.data);
       if (fromUuid) {
         // Keep a detailed productName ("AULA HERO 84 HE") instead of the generic
@@ -347,8 +391,7 @@ export class Hero68DeviceManager implements Hero68Transport {
         });
         return fromUuid;
       }
-    } catch {
-} /* Preserve existing model selection if UUID read is unsupported in a mock/fixture. */
+    } catch {} /* Preserve existing model selection if UUID read is unsupported in a mock/fixture. */
 
     return null;
   }
@@ -397,10 +440,12 @@ export class Hero68DeviceManager implements Hero68Transport {
       // Identity read verifies native helper access and returns the 6-byte deviceId UUID.
       // It is the only model source on this transport: without it the app would
       // write another model's key tables, so refuse instead of guessing.
-      const identity = await rgbService.deviceRequest(buildReport({
-        command: 0x82,
-        zone: 1
-      }));
+      const identity = await rgbService.deviceRequest(
+        buildReport({
+          command: 0x82,
+          zone: 1
+        })
+      );
       const detectedModel = detectHeroDeviceModelFromUuid(identity?.data);
       if (!detectedModel) {
         throw new Error('This keyboard did not report a HERO68/HERO84 device UUID');
@@ -458,12 +503,18 @@ export class Hero68DeviceManager implements Hero68Transport {
         usage: collection.usage ?? null,
         type: collection.type ?? null,
         inputReportIds: (collection.inputReports ?? []).map(report => Number(report.reportId ?? 0)),
-        outputReportIds: (collection.outputReports ?? []).map(report => Number(report.reportId ?? 0)),
-        featureReportIds: (collection.featureReports ?? []).map(report => Number(report.featureId ?? report.reportId ?? 0))
+        outputReportIds: (collection.outputReports ?? []).map(report =>
+          Number(report.reportId ?? 0)
+        ),
+        featureReportIds: (collection.featureReports ?? []).map(report =>
+          Number(report.featureId ?? report.reportId ?? 0)
+        )
       });
       (collection.children ?? []).forEach((child, index) => visit(child, `${path}.${index + 1}`));
     };
-    (this.#device?.collections ?? []).forEach((collection, index) => visit(collection, `C${index + 1}`));
+    (this.#device?.collections ?? []).forEach((collection, index) =>
+      visit(collection, `C${index + 1}`)
+    );
     return result;
   }
   async send(report: Uint8Array): Promise<void> {
@@ -526,12 +577,13 @@ export class Hero68DeviceManager implements Hero68Transport {
           this.#setSnapshot({
             state: 'connected',
             detectedModel,
-            deviceName: candidate.productName || (detectedModel ? heroDeviceModel(detectedModel).label : 'AULA Hero68'),
+            deviceName:
+              candidate.productName ||
+              (detectedModel ? heroDeviceModel(detectedModel).label : 'AULA Hero68'),
             error: null
           });
           return;
-        } catch {
-} // Keep polling until the timeout.
+        } catch {} // Keep polling until the timeout.
       }
 
       await new Promise(resolve => window.setTimeout(resolve, 120));
@@ -600,10 +652,15 @@ export class Hero68DeviceManager implements Hero68Transport {
           throw new Error('HERO68 disconnected');
         }
         device.addEventListener('inputreport', this.#onInputReport);
-        await this.#requestOnce(buildReport({
-          command: 0x82,
-          zone: 1
-        }), 0x82, 1, 1500);
+        await this.#requestOnce(
+          buildReport({
+            command: 0x82,
+            zone: 1
+          }),
+          0x82,
+          1,
+          1500
+        );
       } finally {
         if (this.#device === device) {
           device.removeEventListener('inputreport', this.#onInputReport);
@@ -620,33 +677,53 @@ export class Hero68DeviceManager implements Hero68Transport {
     });
   }
   #queueControlOperation<T>(run: () => Promise<T>): Promise<T> {
-    const work = () => !this.#viaService && typeof navigator !== 'undefined' && navigator.locks ? navigator.locks.request('openhero68:hid-control', run) : run();
+    const work = () =>
+      !this.#viaService && typeof navigator !== 'undefined' && navigator.locks
+        ? navigator.locks.request('openhero68:hid-control', run)
+        : run();
     const next = this.#requestTail.then(work);
     this.#requestTail = next.catch(() => {});
     return next;
   }
-  async request(report: Uint8Array, expectedCommand: number, expectedZone?: number, timeoutMs = 800, predicate?: (report: DecodedReport) => boolean): Promise<DecodedReport> {
+  async request(
+    report: Uint8Array,
+    expectedCommand: number,
+    expectedZone?: number,
+    timeoutMs = 800,
+    predicate?: (report: DecodedReport) => boolean
+  ): Promise<DecodedReport> {
     const work = async () => {
       const run = async () => {
-        const selecting = report[1] === 0x10 && report[2] === 0 && report[6] === 1 && report[7] <= 2;
-        for (let attempt = 0;; attempt++) {
+        const selecting =
+          report[1] === 0x10 && report[2] === 0 && report[6] === 1 && report[7] <= 2;
+        for (let attempt = 0; ; attempt++) {
           try {
-            return await this.#requestOnce(report, expectedCommand, expectedZone, timeoutMs, predicate);
+            return await this.#requestOnce(
+              report,
+              expectedCommand,
+              expectedZone,
+              timeoutMs,
+              predicate
+            );
           } catch (error) {
             if (!selecting || !/timed out|timeout/i.test(errorMessage(error))) {
               throw error;
             }
             try {
-              const active = await this.#requestOnce(buildReport({
-                command: 0x90,
-                data: [0]
-              }), 0x90, 0, timeoutMs);
+              const active = await this.#requestOnce(
+                buildReport({
+                  command: 0x90,
+                  data: [0]
+                }),
+                0x90,
+                0,
+                timeoutMs
+              );
               const verified = decodeReport(report);
               if (active.data[0] === report[7] && (!predicate || predicate(verified))) {
                 return verified;
               }
-            } catch {
-} /* Retry only the same profile selection. */
+            } catch {} /* Retry only the same profile selection. */
             if (attempt >= 2) {
               throw error;
             }
@@ -657,7 +734,13 @@ export class Hero68DeviceManager implements Hero68Transport {
     };
     return this.#queueControlOperation(work);
   }
-  async #requestOnce(report: Uint8Array, expectedCommand: number, expectedZone?: number, timeoutMs = 800, predicate?: (report: DecodedReport) => boolean): Promise<DecodedReport> {
+  async #requestOnce(
+    report: Uint8Array,
+    expectedCommand: number,
+    expectedZone?: number,
+    timeoutMs = 800,
+    predicate?: (report: DecodedReport) => boolean
+  ): Promise<DecodedReport> {
     // connect() asks for the UUID before the snapshot turns 'connected'.
     if (!this.#device?.opened && !this.#viaService) {
       throw new Error('HERO68 is not connected');
@@ -666,7 +749,11 @@ export class Hero68DeviceManager implements Hero68Transport {
       reportTrace.add('out', report[0] ?? 0, report);
       const reply = await rgbService.deviceRequest(report);
       reportTrace.add('in', reply.reportId, reply.raw);
-      if (reply.command !== expectedCommand || expectedZone !== undefined && reply.zone !== expectedZone || predicate && !predicate(reply)) {
+      if (
+        reply.command !== expectedCommand ||
+        (expectedZone !== undefined && reply.zone !== expectedZone) ||
+        (predicate && !predicate(reply))
+      ) {
         throw Error('Unexpected service configuration reply');
       }
       this.#reportListeners.forEach(listener => listener(reply));
@@ -674,8 +761,13 @@ export class Hero68DeviceManager implements Hero68Transport {
     }
     return new Promise<DecodedReport>((resolve, reject) => {
       const timeoutError = (stage: 'read' | 'send') => {
-        const zoneText = expectedZone === undefined ? '' : `, zone=0x${expectedZone.toString(16).padStart(2, '0')}`;
-        return new Error(`HERO68 ${stage} timed out (command=0x${expectedCommand.toString(16).padStart(2, '0')}${zoneText})`);
+        const zoneText =
+          expectedZone === undefined
+            ? ''
+            : `, zone=0x${expectedZone.toString(16).padStart(2, '0')}`;
+        return new Error(
+          `HERO68 ${stage} timed out (command=0x${expectedCommand.toString(16).padStart(2, '0')}${zoneText})`
+        );
       };
       const waiter: ReportWaiter = {
         expectedCommand,
@@ -683,31 +775,39 @@ export class Hero68DeviceManager implements Hero68Transport {
         predicate,
         resolve,
         reject,
-        timer: window.setTimeout(() => {
-          this.#waiters.delete(waiter);
-          const error = timeoutError('send');
-          reject(error);
-          this.#setSnapshot({
-            state: 'error',
-            error: error.message
-          });
-        }, Math.max(2000, timeoutMs))
+        timer: window.setTimeout(
+          () => {
+            this.#waiters.delete(waiter);
+            const error = timeoutError('send');
+            reject(error);
+            this.#setSnapshot({
+              state: 'error',
+              error: error.message
+            });
+          },
+          Math.max(2000, timeoutMs)
+        )
       };
       this.#waiters.add(waiter);
-      void this.send(report).then(() => {
-        if (!this.#waiters.has(waiter)) {
-          return;
-        }
-        window.clearTimeout(waiter.timer);
-        waiter.timer = window.setTimeout(() => {
+      void this.send(report)
+        .then(() => {
+          if (!this.#waiters.has(waiter)) {
+            return;
+          }
+          window.clearTimeout(waiter.timer);
+          waiter.timer = window.setTimeout(
+            () => {
+              this.#waiters.delete(waiter);
+              reject(timeoutError('read'));
+            },
+            Math.max(0, timeoutMs)
+          );
+        })
+        .catch(error => {
+          window.clearTimeout(waiter.timer);
           this.#waiters.delete(waiter);
-          reject(timeoutError('read'));
-        }, Math.max(0, timeoutMs));
-      }).catch(error => {
-        window.clearTimeout(waiter.timer);
-        this.#waiters.delete(waiter);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      });
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
     });
   }
   #rejectWaiters(error: Error) {
@@ -777,5 +877,9 @@ export class Hero68DeviceManager implements Hero68Transport {
 export const hero68DeviceManager = new Hero68DeviceManager();
 registerHero68Protocol(hero68ProtocolEncoder, hero68DeviceManager);
 export function useHero68Device(): Hero68DeviceSnapshot {
-  return useSyncExternalStore(hero68DeviceManager.subscribe, hero68DeviceManager.getSnapshot, hero68DeviceManager.getSnapshot);
+  return useSyncExternalStore(
+    hero68DeviceManager.subscribe,
+    hero68DeviceManager.getSnapshot,
+    hero68DeviceManager.getSnapshot
+  );
 }

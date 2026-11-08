@@ -6,12 +6,12 @@
 
 export type XsydKeyEntry = {
   /** Wire index reported by the keyboard. */
-  index: number
+  index: number;
   /** Physical key name (KeyboardEvent.code style). */
-  code: string
+  code: string;
   /** HID usage id, or a firmware action code (0xF0xx). */
-  usage: number
-}
+  usage: number;
+};
 
 /** Every key the board reports, in firmware wire order. */
 export const XSYD_KEYS: readonly XsydKeyEntry[] = [
@@ -82,10 +82,10 @@ export const XSYD_KEYS: readonly XsydKeyEntry[] = [
   { index: 116, code: 'ControlRight', usage: 0x00e4 },
   { index: 117, code: 'ArrowLeft', usage: 0x0050 },
   { index: 118, code: 'ArrowDown', usage: 0x0051 },
-  { index: 119, code: 'ArrowRight', usage: 0x004f },
-]
+  { index: 119, code: 'ArrowRight', usage: 0x004f }
+];
 
 /** Lookup by wire index, for decoding a Hall/switch report. */
 export const XSYD_KEYS_BY_INDEX: ReadonlyMap<number, XsydKeyEntry> = new Map(
   XSYD_KEYS.map(key => [key.index, key])
-)
+);

@@ -6,7 +6,12 @@ export function rgbPreviewDarkReason(zone: RgbZone, side = false, isWin68 = fals
       return 'Brightness is 0%.';
     }
     const effect = WIN68_KEY_RGB_MODES.find(item => item.id === zone.mode);
-    if (effect?.color && !zone.mix && zone.colorIndex !== 0 && zone.rgb.every(channel => channel === 0)) {
+    if (
+      effect?.color &&
+      !zone.mix &&
+      zone.colorIndex !== 0 &&
+      zone.rgb.every(channel => channel === 0)
+    ) {
       return 'Single color is black (#000000).';
     }
     return null;
@@ -18,7 +23,11 @@ export function rgbPreviewDarkReason(zone: RgbZone, side = false, isWin68 = fals
     return 'Brightness is 0%.';
   }
   const effect = (side ? SIDE_RGB_MODES : KEY_RGB_MODES).find(effect => effect.id === zone.mode);
-  if (effect?.color && !(zone.mixValue === 7 || zone.mixValue === undefined && zone.mix) && zone.rgb.every(channel => channel === 0)) {
+  if (
+    effect?.color &&
+    !(zone.mixValue === 7 || (zone.mixValue === undefined && zone.mix)) &&
+    zone.rgb.every(channel => channel === 0)
+  ) {
     return 'Single color is black (#000000).';
   }
   return null;

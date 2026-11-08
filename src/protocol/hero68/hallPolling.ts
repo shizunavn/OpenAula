@@ -65,7 +65,8 @@ export async function runHallPolling({
               if (!isActive()) {
                 return;
               }
-              const detail = recoveryError instanceof Error ? recoveryError.message : String(recoveryError);
+              const detail =
+                recoveryError instanceof Error ? recoveryError.message : String(recoveryError);
               if (!/timed out|timeout/i.test(detail)) {
                 throw recoveryError;
               }

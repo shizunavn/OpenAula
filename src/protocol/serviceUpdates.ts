@@ -26,15 +26,14 @@ export function useServiceUpdate(supported: boolean) {
         if (!response.ok) {
           throw Error('Cannot read update status');
         }
-        const result = (await response.json() as ServiceUpdate);
+        const result = (await response.json()) as ServiceUpdate;
         if (active) {
           setUpdate(result);
           if (finished(result.phase)) {
             setWaiting(false);
           }
         }
-      } catch {
-} /* The app can be offline while its independent worker installs/restarts it. */
+      } catch {} /* The app can be offline while its independent worker installs/restarts it. */
     };
 
     void poll();
@@ -53,13 +52,17 @@ export function useServiceUpdate(supported: boolean) {
       phase: 'checking'
     });
     try {
-      const response = await fetchLocalService(base + '/updates/apply', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
+      const response = await fetchLocalService(
+        base + '/updates/apply',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: '{}'
         },
-        body: '{}'
-      }, 5000);
+        5000
+      );
       const result = await response.json();
       if (!response.ok) {
         throw Error(result.error ?? 'Update failed');
@@ -92,5 +95,9 @@ export function updateMessage(update: ServiceUpdate, vi: boolean) {
     'rolling-back': ['Restoring the previous version', 'Đang khôi phục bản cũ'],
     failed: ['Update failed', 'Cập nhật thất bại']
   };
-  return (labels[update.phase]?.[vi ? 1 : 0] ?? update.phase) + (update.version ? ' · ' + update.version : '') + (update.error ? ' — ' + update.error : '');
+  return (
+    (labels[update.phase]?.[vi ? 1 : 0] ?? update.phase) +
+    (update.version ? ' · ' + update.version : '') +
+    (update.error ? ' — ' + update.error : '')
+  );
 }

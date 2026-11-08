@@ -13,7 +13,7 @@ export function GamepadTesterTab({
   liveStore,
   t,
   onSetDemo,
-  onSetDemoSamples,
+  onSetDemoSamples
 }: {
   config: GamepadConfiguration;
   status: GamepadStatus | null;
@@ -37,7 +37,7 @@ export function GamepadTesterTab({
             type="checkbox"
             role="switch"
             checked={demo}
-            onChange={(event) => {
+            onChange={event => {
               onSetDemo(event.target.checked);
               onSetDemoSamples({});
             }}
@@ -53,7 +53,7 @@ export function GamepadTesterTab({
       <GamepadLiveControls store={liveStore} />
       {demo && (
         <div className="gp-demo-sliders">
-          {config.bindings.map((binding) => (
+          {config.bindings.map(binding => (
             <label key={binding.keyId}>
               {physicalLabel(binding.keyId)} → {actionLabel(binding.action)}
               <input
@@ -62,14 +62,14 @@ export function GamepadTesterTab({
                 max="3.4"
                 step=".01"
                 value={demoSamples[binding.keyId]?.distanceMm ?? 0}
-                onChange={(event) => {
+                onChange={event => {
                   const distanceMm = event.target.valueAsNumber;
-                  onSetDemoSamples((prev) => ({
+                  onSetDemoSamples(prev => ({
                     ...prev,
                     [binding.keyId]: {
                       distanceMm,
-                      pressed: distanceMm >= 1.6,
-                    },
+                      pressed: distanceMm >= 1.6
+                    }
                   }));
                 }}
               />
@@ -86,15 +86,15 @@ export function GamepadTesterTab({
         <summary>{t('Diagnostics')}</summary>
         <h3>{t('Hall consumers')}</h3>
         <div className="gp-consumers">
-          {status?.hall.consumers.map((consumer) => (
+          {status?.hall.consumers.map(consumer => (
             <span key={consumer.id}>
-              {consumer.id.startsWith('web:') ? 'Hall Stream' : consumer.id}:{' '}
-              {consumer.keys.length} keys · {consumer.hz} Hz
+              {consumer.id.startsWith('web:') ? 'Hall Stream' : consumer.id}: {consumer.keys.length}{' '}
+              keys · {consumer.hz} Hz
             </span>
           ))}
         </div>
         <div className="gp-samples">
-          {(status?.hall.keys ?? []).map((keyStat) => (
+          {(status?.hall.keys ?? []).map(keyStat => (
             <div key={keyStat.pos}>
               <b>{physicalLabel(keyStat.keyId)}</b>
               <span>

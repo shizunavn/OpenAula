@@ -2,7 +2,16 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { PersistedOpenHeroState } from '../../state/persistence';
 import { hero68DeviceManager } from '../../protocol/hero68/webhid';
 import { hero68HallStream } from '../../protocol/hero68/hallStream';
-import { liveIdle, POLLING_RATES, readAutoCalibration, readHallDebounce, readOsMode, readPollingRate, readWinLock, writePollingRate } from '../../protocol/hero68/commands';
+import {
+  liveIdle,
+  POLLING_RATES,
+  readAutoCalibration,
+  readHallDebounce,
+  readOsMode,
+  readPollingRate,
+  readWinLock,
+  writePollingRate
+} from '../../protocol/hero68/commands';
 import { readXsydPollingRate, xsydDeviceManager } from '../../protocol/xsyd/device';
 import { setTachyonLighting } from '../../protocol/tachyon';
 import { rgbService } from '../../protocol/rgbService';
@@ -73,13 +82,23 @@ export function useDeviceSettings({
       unsubscribeService();
     };
   }, []);
-  const [devicePollingRate, setDevicePollingRateState] = useState<PollingRate | null>(() => persistedState?.pollingRate ?? null);
+  const [devicePollingRate, setDevicePollingRateState] = useState<PollingRate | null>(
+    () => persistedState?.pollingRate ?? null
+  );
   const [deviceOsModeMac, setDeviceOsModeMac] = useState(() => persistedState?.osModeMac ?? false);
   const [deviceWinLock, setDeviceWinLock] = useState(() => persistedState?.winLock ?? false);
-  const [deviceHallDebounce, setDeviceHallDebounce] = useState(() => persistedState?.hallDebounce ?? false);
-  const [deviceAutoCalibration, setDeviceAutoCalibration] = useState(() => persistedState?.autoCalibration ?? false);
-  const [deviceSettingsState, setDeviceSettingsState] = useState<'idle' | 'reading' | 'ready' | 'saving' | 'error'>('idle');
-  const [deviceReadState, setDeviceReadState] = useState<'idle' | 'reading' | 'success' | 'error'>('idle');
+  const [deviceHallDebounce, setDeviceHallDebounce] = useState(
+    () => persistedState?.hallDebounce ?? false
+  );
+  const [deviceAutoCalibration, setDeviceAutoCalibration] = useState(
+    () => persistedState?.autoCalibration ?? false
+  );
+  const [deviceSettingsState, setDeviceSettingsState] = useState<
+    'idle' | 'reading' | 'ready' | 'saving' | 'error'
+  >('idle');
+  const [deviceReadState, setDeviceReadState] = useState<'idle' | 'reading' | 'success' | 'error'>(
+    'idle'
+  );
   const [deviceActionError, setDeviceActionError] = useState<string | null>(null);
   async function readCurrentPollingRate(): Promise<PollingRate> {
     if (xsydDeviceManager.connected) {
@@ -109,7 +128,12 @@ export function useDeviceSettings({
       const osMode = await hero68DeviceManager.request(readOsMode(), 0x84, 17, 1000);
       const winLock = await hero68DeviceManager.request(readWinLock(), 0x84, 21, 1000);
       const hallDebounce = await hero68DeviceManager.request(readHallDebounce(), 0x84, 24, 1000);
-      const autoCalibration = await hero68DeviceManager.request(readAutoCalibration(), 0x84, 25, 1000);
+      const autoCalibration = await hero68DeviceManager.request(
+        readAutoCalibration(),
+        0x84,
+        25,
+        1000
+      );
       setDevicePollingRateState(polling);
       setDeviceOsModeMac((osMode.data[0] ?? 0) !== 0);
       setDeviceWinLock((winLock.data[0] ?? 0) !== 0);
@@ -136,12 +160,17 @@ export function useDeviceSettings({
     await hero68DeviceManager.sendReenumerating(writePollingRate(rate), 7000);
     const actual = await readCurrentPollingRate();
     if (actual !== rate) {
-      throw new Error(`Polling-rate verify failed: requested ${rate} Hz, device reports ${actual} Hz`);
+      throw new Error(
+        `Polling-rate verify failed: requested ${rate} Hz, device reports ${actual} Hz`
+      );
     }
     setDevicePollingRateState(actual);
   }
   async function handlePollingRateChange(rate: PollingRate) {
-    if ((!hero68DeviceManager.connected && !xsydDeviceManager.connected) || deviceSettingsState === 'saving') {
+    if (
+      (!hero68DeviceManager.connected && !xsydDeviceManager.connected) ||
+      deviceSettingsState === 'saving'
+    ) {
       return;
     }
     setDeviceActionError(null);
@@ -172,7 +201,14 @@ export function useDeviceSettings({
       setDeviceActionError(error instanceof Error ? error.message : String(error));
     }
   }
-  async function applyBooleanDeviceSetting(label: string, value: boolean, zone: 17 | 21 | 24 | 25, writeReport: Uint8Array, readReport: Uint8Array, setter: (next: boolean) => void) {
+  async function applyBooleanDeviceSetting(
+    label: string,
+    value: boolean,
+    zone: 17 | 21 | 24 | 25,
+    writeReport: Uint8Array,
+    readReport: Uint8Array,
+    setter: (next: boolean) => void
+  ) {
     if (!hero68DeviceManager.connected || deviceSettingsState === 'saving') {
       return;
     }
@@ -183,7 +219,9 @@ export function useDeviceSettings({
       const verify = await hero68DeviceManager.request(readReport, 0x84, zone, 1200);
       const actual = (verify.data[0] ?? 0) !== 0;
       if (actual !== value) {
-        throw new Error(`${label} verify failed: requested ${value ? 'on' : 'off'}, device reports ${actual ? 'on' : 'off'}`);
+        throw new Error(
+          `${label} verify failed: requested ${value ? 'on' : 'off'}, device reports ${actual ? 'on' : 'off'}`
+        );
       }
       setter(actual);
       setDeviceSettingsState('ready');
@@ -243,7 +281,11 @@ export function useDeviceSettings({
       setDeviceActionError(error instanceof Error ? error.message : String(error));
     } finally {
       if (resumeHall && hero68DeviceManager.connected) {
-        await hero68HallStream.start(hallKeys, hallSource).catch(error => setDeviceActionError(error instanceof Error ? error.message : String(error)));
+        await hero68HallStream
+          .start(hallKeys, hallSource)
+          .catch(error =>
+            setDeviceActionError(error instanceof Error ? error.message : String(error))
+          );
       }
       tachyonChanging.current = false;
       setTachyonBusy(false);

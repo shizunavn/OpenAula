@@ -95,13 +95,20 @@ function setOnline(value: boolean) {
 async function request(path: string, value?: unknown): Promise<RgbServiceStatus> {
   let response: Response;
   try {
-    response = await fetchLocalService(endpoint + path, {
-      method: value === undefined ? 'GET' : 'POST',
-      headers: value === undefined ? undefined : {
-        'Content-Type': 'application/json'
+    response = await fetchLocalService(
+      endpoint + path,
+      {
+        method: value === undefined ? 'GET' : 'POST',
+        headers:
+          value === undefined
+            ? undefined
+            : {
+                'Content-Type': 'application/json'
+              },
+        body: value === undefined ? undefined : JSON.stringify(value)
       },
-      body: value === undefined ? undefined : JSON.stringify(value)
-    }, value === undefined ? 1000 : 5000);
+      value === undefined ? 1000 : 5000
+    );
   } catch (error) {
     if (path === '/status') {
       setOnline(health.failure(error instanceof LocalServicePermissionError));
@@ -109,13 +116,19 @@ async function request(path: string, value?: unknown): Promise<RgbServiceStatus>
     if (error instanceof LocalServicePermissionError) {
       throw error;
     }
-    throw Error(error instanceof DOMException && error.name === 'TimeoutError' ? 'RGB service phản hồi quá chậm. Hãy thử lại.' : 'RGB service đã tắt. Hãy chạy lại Hero68RgbService.exe. Các thay đổi chưa lưu vẫn được giữ trên web.');
+    throw Error(
+      error instanceof DOMException && error.name === 'TimeoutError'
+        ? 'RGB service phản hồi quá chậm. Hãy thử lại.'
+        : 'RGB service đã tắt. Hãy chạy lại Hero68RgbService.exe. Các thay đổi chưa lưu vẫn được giữ trên web.'
+    );
   }
   if (response.status === 403) {
     if (path === '/status') {
       setOnline(health.failure(true));
     }
-    throw Error('The background app does not allow this website. Update the app, then check again.');
+    throw Error(
+      'The background app does not allow this website. Update the app, then check again.'
+    );
   }
   const result = await response.json();
   if (!response.ok) {
@@ -132,16 +145,19 @@ async function request(path: string, value?: unknown): Promise<RgbServiceStatus>
   return result;
 }
 export const rgbService = {
-  tachyon: (enabled: boolean) => request('/tachyon', {
-    enabled
-  }),
-  rhythmStart: (configuration: RhythmConfiguration) => request('/rhythm/start', {
-    configuration
-  }),
-  rhythmUpdate: (configuration: RhythmConfiguration, sessionId: string) => request('/rhythm/config', {
-    configuration,
-    sessionId
-  }),
+  tachyon: (enabled: boolean) =>
+    request('/tachyon', {
+      enabled
+    }),
+  rhythmStart: (configuration: RhythmConfiguration) =>
+    request('/rhythm/start', {
+      configuration
+    }),
+  rhythmUpdate: (configuration: RhythmConfiguration, sessionId: string) =>
+    request('/rhythm/config', {
+      configuration,
+      sessionId
+    }),
   async audioDevices(): Promise<AudioEndpoint[]> {
     const response = await fetchLocalService(endpoint + '/audio/devices', {}, 5000);
     const result = await response.json();
@@ -152,20 +168,26 @@ export const rgbService = {
   },
   status: () => request('/status'),
   start: (profile: RgbProfile) => request('/start', profile),
-  update: (profile: RgbProfile, sessionId: string, expectedRevision?: number) => request('/preset', {
-    profile,
-    sessionId,
-    ...(expectedRevision !== undefined ? {
-      expectedRevision
-    } : {})
-  }),
+  update: (profile: RgbProfile, sessionId: string, expectedRevision?: number) =>
+    request('/preset', {
+      profile,
+      sessionId,
+      ...(expectedRevision !== undefined
+        ? {
+            expectedRevision
+          }
+        : {})
+    }),
   stop: () => request('/stop', {}),
-  mode: (mode: 'onboard' | 'custom', profile?: RgbProfile) => request('/mode', {
-    mode,
-    ...(profile ? {
-      profile
-    } : {})
-  }),
+  mode: (mode: 'onboard' | 'custom', profile?: RgbProfile) =>
+    request('/mode', {
+      mode,
+      ...(profile
+        ? {
+            profile
+          }
+        : {})
+    }),
   onAvailability(listener: (online: boolean) => void) {
     availability.add(listener);
     return () => availability.delete(listener);
@@ -174,16 +196,20 @@ export const rgbService = {
     const hex = Array.from(packet, c => c.toString(16).padStart(2, '0')).join('');
     let response: Response;
     try {
-      response = await fetchLocalService(endpoint + '/device/request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
+      response = await fetchLocalService(
+        endpoint + '/device/request',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            hex,
+            reenumerate
+          })
         },
-        body: JSON.stringify({
-          hex,
-          reenumerate
-        })
-      }, reenumerate ? 10000 : 5000);
+        reenumerate ? 10000 : 5000
+      );
     } catch (error) {
       if (error instanceof LocalServicePermissionError) {
         throw error;
@@ -197,7 +223,7 @@ export const rgbService = {
     if (typeof result.hex !== 'string' || !/^[0-9a-f]{128}$/i.test(result.hex)) {
       throw Error('Invalid service configuration reply');
     }
-    const bytes = (result.hex.match(/../g) as string[]);
+    const bytes = result.hex.match(/../g) as string[];
     const reply = decodeReport(Uint8Array.from(bytes, c => parseInt(c, 16)));
     if (!reply.checksumValid) {
       throw Error('Invalid service reply checksum');
@@ -213,15 +239,19 @@ export const rgbService = {
     }));
     let response: Response;
     try {
-      response = await fetchLocalService(endpoint + '/device/batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
+      response = await fetchLocalService(
+        endpoint + '/device/batch',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            requests
+          })
         },
-        body: JSON.stringify({
-          requests
-        })
-      }, Math.max(5000, packets.length * 900));
+        Math.max(5000, packets.length * 900)
+      );
     } catch (error) {
       if (error instanceof LocalServicePermissionError) {
         throw error;
@@ -239,7 +269,7 @@ export const rgbService = {
       if (typeof hex !== 'string' || !/^[0-9a-f]{128}$/i.test(hex)) {
         throw Error('Invalid service batch reply');
       }
-      const bytes = (hex.match(/../g) as string[]);
+      const bytes = hex.match(/../g) as string[];
       const reply = decodeReport(Uint8Array.from(bytes, c => parseInt(c, 16)));
       if (!reply.checksumValid || reply.command !== packets[i][1] || reply.zone !== packets[i][2]) {
         throw Error('Unexpected service batch reply');
@@ -252,22 +282,26 @@ export const rgbService = {
     stream.onmessage = event => {
       try {
         onFrame(JSON.parse(event.data));
-      } catch {
-} /* Ignore malformed frames. */
+      } catch {} /* Ignore malformed frames. */
     };
     stream.onerror = () => onError?.();
     return () => stream.close();
   },
-  hallStream(keys: readonly string[], onRecords: (records: RgbServiceHallRecord[]) => void, onError: () => void) {
-    const stream = new EventSource(endpoint + '/hall/stream?keys=' + encodeURIComponent(keys.join(',')));
+  hallStream(
+    keys: readonly string[],
+    onRecords: (records: RgbServiceHallRecord[]) => void,
+    onError: () => void
+  ) {
+    const stream = new EventSource(
+      endpoint + '/hall/stream?keys=' + encodeURIComponent(keys.join(','))
+    );
     stream.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
         if (Array.isArray(data.records)) {
           onRecords(data.records);
         }
-      } catch {
-} /* Ignore malformed Hall frames. */
+      } catch {} /* Ignore malformed Hall frames. */
     };
     stream.onerror = onError;
     return () => stream.close();

@@ -41,16 +41,18 @@ export class CustomRgbSession {
   private suspended = false;
   private closed = false;
   private joining = false;
-  constructor(private options: {
-    draft: () => RgbProfile;
-    adopt: (profile: RgbProfile) => void;
-    backup: (profile: RgbProfile) => void;
-    write: (profile: RgbProfile, session: string, revision: number) => Promise<RgbServiceStatus>;
-    status: (status: RgbServiceStatus) => void;
-    state: (state: CustomSessionState) => void;
-    refresh: () => void;
-    interval?: number;
-  }) {}
+  constructor(
+    private options: {
+      draft: () => RgbProfile;
+      adopt: (profile: RgbProfile) => void;
+      backup: (profile: RgbProfile) => void;
+      write: (profile: RgbProfile, session: string, revision: number) => Promise<RgbServiceStatus>;
+      status: (status: RgbServiceStatus) => void;
+      state: (state: CustomSessionState) => void;
+      refresh: () => void;
+      interval?: number;
+    }
+  ) {}
   private emit(error: string | null = null) {
     if (!this.closed) {
       this.options.state({
@@ -66,7 +68,13 @@ export class CustomRgbSession {
     if (this.closed || this.suspended) {
       return;
     }
-    if (!status?.enabled || status.mode !== 'custom' || !status.sessionId || !status.customConfiguration || status.customRevision === undefined) {
+    if (
+      !status?.enabled ||
+      status.mode !== 'custom' ||
+      !status.sessionId ||
+      !status.customConfiguration ||
+      status.customRevision === undefined
+    ) {
       if (this.session) {
         this.detach();
       }
@@ -76,7 +84,13 @@ export class CustomRgbSession {
       this.detach();
       this.blocked = false;
       this.adopt(status);
-    } else if (!this.blocked && !this.pending && !this.flight && (status.customRevision > this.revision || this.joining && status.customRevision === this.revision)) {
+    } else if (
+      !this.blocked &&
+      !this.pending &&
+      !this.flight &&
+      (status.customRevision > this.revision ||
+        (this.joining && status.customRevision === this.revision))
+    ) {
       this.adopt(status);
     }
   }
@@ -114,7 +128,15 @@ export class CustomRgbSession {
     this.pump();
   }
   private pump() {
-    if (this.closed || this.suspended || this.blocked || this.flight || this.timer || !this.pending || !this.session) {
+    if (
+      this.closed ||
+      this.suspended ||
+      this.blocked ||
+      this.flight ||
+      this.timer ||
+      !this.pending ||
+      !this.session
+    ) {
       return;
     }
     const wait = (this.options.interval ?? 40) - (performance.now() - this.lastSent);
@@ -131,53 +153,64 @@ export class CustomRgbSession {
     const token = this.generation;
     this.pending = null;
     this.lastSent = performance.now();
-    this.flight = Promise.resolve().then(async () => {
-      try {
-        if (this.closed || token !== this.generation) {
-          return;
-        }
-        const result = await this.options.write({
-          ...draft,
-          custom: {
-            ...restoreCustomRgb(draft.custom, draft),
-            enabled: true
+    this.flight = Promise.resolve()
+      .then(async () => {
+        try {
+          if (this.closed || token !== this.generation) {
+            return;
           }
-        }, session, revision);
+          const result = await this.options.write(
+            {
+              ...draft,
+              custom: {
+                ...restoreCustomRgb(draft.custom, draft),
+                enabled: true
+              }
+            },
+            session,
+            revision
+          );
+          if (this.closed || token !== this.generation) {
+            return;
+          }
+          this.revision = result.customRevision ?? revision;
+          this.acknowledged = customSignature(draft);
+          this.options.status(result);
+        } catch (error) {
+          if (this.closed || token !== this.generation) {
+            return;
+          }
+          this.options.backup(structuredClone(this.options.draft()));
+          this.pending = null;
+          this.blocked = true;
+          this.emit(error instanceof Error ? error.message : String(error));
+          this.options.refresh();
+        }
+      })
+      .finally(() => {
+        this.flight = null;
         if (this.closed || token !== this.generation) {
+          this.pump();
           return;
         }
-        this.revision = result.customRevision ?? revision;
-        this.acknowledged = customSignature(draft);
-        this.options.status(result);
-      } catch (error) {
-        if (this.closed || token !== this.generation) {
-          return;
+        if (!this.blocked) {
+          this.emit();
+          this.pump();
+          if (!this.pending && !this.flight) {
+            this.observe(this.remote);
+          }
         }
-        this.options.backup(structuredClone(this.options.draft()));
-        this.pending = null;
-        this.blocked = true;
-        this.emit(error instanceof Error ? error.message : String(error));
-        this.options.refresh();
-      }
-    }).finally(() => {
-      this.flight = null;
-      if (this.closed || token !== this.generation) {
-        this.pump();
-        return;
-      }
-      if (!this.blocked) {
-        this.emit();
-        this.pump();
-        if (!this.pending && !this.flight) {
-          this.observe(this.remote);
-        }
-      }
-    });
+      });
     this.emit();
   }
   resolve(profile: RgbProfile) {
     const remote = this.remote;
-    if (!remote?.enabled || remote.mode !== 'custom' || remote.sessionId !== this.session || remote.customRevision === undefined) {
+    if (
+      !remote?.enabled ||
+      remote.mode !== 'custom' ||
+      remote.sessionId !== this.session ||
+      remote.customRevision === undefined
+    ) {
       return;
     }
     this.revision = remote.customRevision;

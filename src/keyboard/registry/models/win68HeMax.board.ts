@@ -1,9 +1,9 @@
-const hero68Thumb = '/src/assets/hero68.png'
-import { HERO68_LAYOUT, makeDemoLighting } from '../../hero68Layout'
-import { MAX_HE_IDS, MAX_HE_USAGE, MAX_HE_USAGE_PAGE } from '../../maxHe'
-import { XSYD_KEYS } from '../../../protocol/xsyd/keymap'
-import type { BoardDescriptor, BoardRemapLayers } from '../types'
-import { computeKeyCoordinates, keyIdsOf } from '../shared/bytetechCatalog'
+const hero68Thumb = '/src/assets/hero68.png';
+import { HERO68_LAYOUT, makeDemoLighting } from '../../hero68Layout';
+import { MAX_HE_IDS, MAX_HE_USAGE, MAX_HE_USAGE_PAGE } from '../../maxHe';
+import { XSYD_KEYS } from '../../../protocol/xsyd/keymap';
+import type { BoardDescriptor, BoardRemapLayers } from '../types';
+import { computeKeyCoordinates, keyIdsOf } from '../shared/bytetechCatalog';
 
 /**
  * Hardware keyValue mapping for the AULA WIN 68 HE MAX (XSYD 0x5C protocol).
@@ -12,24 +12,24 @@ import { computeKeyCoordinates, keyIdsOf } from '../shared/bytetechCatalog'
  */
 export const WIN68_HE_MAX_KEY_POSITIONS: Readonly<Record<string, number>> = Object.freeze(
   Object.fromEntries(
-    XSYD_KEYS.map(entry => [entry.code === 'F1' ? 'Fn' : entry.code, entry.usage & 0xff]),
-  ),
-)
+    XSYD_KEYS.map(entry => [entry.code === 'F1' ? 'Fn' : entry.code, entry.usage & 0xff])
+  )
+);
 
 export const WIN68_HE_MAX_POS_TO_KEY_ID: ReadonlyMap<number, string> = new Map(
-  Object.entries(WIN68_HE_MAX_KEY_POSITIONS).map(([keyId, pos]) => [pos, keyId]),
-)
+  Object.entries(WIN68_HE_MAX_KEY_POSITIONS).map(([keyId, pos]) => [pos, keyId])
+);
 
 function buildWin68FactoryRemapLayers(): BoardRemapLayers {
-  const layer0 = { ...WIN68_HE_MAX_KEY_POSITIONS }
+  const layer0 = { ...WIN68_HE_MAX_KEY_POSITIONS };
   return {
     0: { ...layer0 },
     1: { ...layer0 },
-    2: { ...layer0 },
-  }
+    2: { ...layer0 }
+  };
 }
 
-const keyIds = keyIdsOf(HERO68_LAYOUT)
+const keyIds = keyIdsOf(HERO68_LAYOUT);
 
 export const WIN68_HE_MAX_BOARD: BoardDescriptor = {
   id: 'win68HeMax',
@@ -46,7 +46,7 @@ export const WIN68_HE_MAX_BOARD: BoardDescriptor = {
     reportId: 0x00,
     productNames: ['WIN 68 HE MAX', 'AULA WIN 68 HE MAX'],
     deviceUuids: ['11000000005c', '12000000005c'],
-    modelByte: 0x5c,
+    modelByte: 0x5c
   },
   capabilities: {
     keyCount: 68,
@@ -57,7 +57,7 @@ export const WIN68_HE_MAX_BOARD: BoardDescriptor = {
     hasSideRgb: false,
     sideLedCount: 0,
     maxGamepadBindings: 68,
-    maxAdvancedBindings: 40,
+    maxAdvancedBindings: 40
   },
   rows: HERO68_LAYOUT,
   keyIds,
@@ -67,5 +67,5 @@ export const WIN68_HE_MAX_BOARD: BoardDescriptor = {
   posToKeyId: WIN68_HE_MAX_POS_TO_KEY_ID,
   validPositions: new Set(Object.values(WIN68_HE_MAX_KEY_POSITIONS)),
   factoryRemapLayers: buildWin68FactoryRemapLayers(),
-  makeDemoLighting,
-}
+  makeDemoLighting
+};

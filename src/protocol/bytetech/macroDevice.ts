@@ -1,1 +1,1 @@
-export * from '../hero68/macroDevice'
+export * from '../hero68/macroDevice';

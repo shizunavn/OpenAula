@@ -1,7 +1,13 @@
 import { useSyncExternalStore } from 'react';
-import { rgbService, confirmRgbServiceAvailable, isRgbServiceAvailable, type RgbServiceStatus } from './rgbService';
+import {
+  rgbService,
+  confirmRgbServiceAvailable,
+  isRgbServiceAvailable,
+  type RgbServiceStatus
+} from './rgbService';
 import { LEGACY_RGB_EFFECTS, type CustomRgbConfiguration } from '../keyboard/customRgbModel';
-export const RGB_SERVICE_DOWNLOAD = 'https://github.com/shizunavn/OpenAula/releases/latest/download/OpenHero68-Setup-Windows-x64.exe';
+export const RGB_SERVICE_DOWNLOAD =
+  'https://github.com/shizunavn/OpenAula/releases/latest/download/OpenHero68-Setup-Windows-x64.exe';
 type ServiceState = {
   checking: boolean;
   status: RgbServiceStatus | null;
@@ -34,27 +40,31 @@ export function refreshRgbService(): Promise<RgbServiceStatus | null> {
     return pending;
   }
   const current = revision;
-  pending = rgbService.status().then(status => {
-    if (current === revision) {
-      publishRgbServiceStatus(status);
-    }
-    return status;
-  }).catch(() => {
-    if (current === revision) {
-      if (state.status && isRgbServiceAvailable()) {
-        state = {
-          ...state,
-          reconnecting: true
-        };
-        listeners.forEach(listener => listener());
-      } else {
-        publishRgbServiceStatus(null);
+  pending = rgbService
+    .status()
+    .then(status => {
+      if (current === revision) {
+        publishRgbServiceStatus(status);
       }
-    }
-    return null;
-  }).finally(() => {
-    pending = undefined;
-  });
+      return status;
+    })
+    .catch(() => {
+      if (current === revision) {
+        if (state.status && isRgbServiceAvailable()) {
+          state = {
+            ...state,
+            reconnecting: true
+          };
+          listeners.forEach(listener => listener());
+        } else {
+          publishRgbServiceStatus(null);
+        }
+      }
+      return null;
+    })
+    .finally(() => {
+      pending = undefined;
+    });
   return pending;
 }
 export function subscribeRgbService(listener: () => void) {
@@ -76,5 +86,12 @@ export function useRgbServiceState() {
 }
 export function unsupportedRgbEffects(config: CustomRgbConfiguration, status: RgbServiceStatus) {
   const supported = status.supportedEffects ?? LEGACY_RGB_EFFECTS;
-  return [...new Set([...(config.baseEffect && !status.supportedBaseEffects?.includes(config.baseEffect.effect) ? [`${config.baseEffect.effect} (base)`] : []), ...config.layers.filter(layer => !supported.includes(layer.effect)).map(layer => layer.effect)])];
+  return [
+    ...new Set([
+      ...(config.baseEffect && !status.supportedBaseEffects?.includes(config.baseEffect.effect)
+        ? [`${config.baseEffect.effect} (base)`]
+        : []),
+      ...config.layers.filter(layer => !supported.includes(layer.effect)).map(layer => layer.effect)
+    ])
+  ];
 }

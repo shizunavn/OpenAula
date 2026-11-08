@@ -39,11 +39,17 @@ let protocolEncoder: Hero68ProtocolEncoder | null = null;
 let transport: Hero68Transport | null = null;
 let xsydProtocolEncoder: Hero68ProtocolEncoder | null = null;
 let xsydTransport: Hero68Transport | null = null;
-export function registerHero68Protocol(encoder: Hero68ProtocolEncoder, nextTransport: Hero68Transport) {
+export function registerHero68Protocol(
+  encoder: Hero68ProtocolEncoder,
+  nextTransport: Hero68Transport
+) {
   protocolEncoder = encoder;
   transport = nextTransport;
 }
-export function registerXsydProtocol(encoder: Hero68ProtocolEncoder, nextTransport: Hero68Transport) {
+export function registerXsydProtocol(
+  encoder: Hero68ProtocolEncoder,
+  nextTransport: Hero68Transport
+) {
   xsydProtocolEncoder = encoder;
   xsydTransport = nextTransport;
 }
@@ -69,11 +75,15 @@ export async function saveDeviceConfiguration(snapshot: DeviceConfigurationSnaps
     }
   }
   return {
-    mode: ('sent' as const),
+    mode: 'sent' as const,
     packets
   };
 }
-export function makeKeyDeviceSettings(keyId: string, values: Omit<KeyDeviceSettings, 'keyId' | 'matrixKey' | 'matrixHex'>, _model?: HeroDeviceModelId): KeyDeviceSettings {
+export function makeKeyDeviceSettings(
+  keyId: string,
+  values: Omit<KeyDeviceSettings, 'keyId' | 'matrixKey' | 'matrixHex'>,
+  _model?: HeroDeviceModelId
+): KeyDeviceSettings {
   const address = HERO68_PROTOCOL_KEY_MAP[keyId];
   return {
     keyId,

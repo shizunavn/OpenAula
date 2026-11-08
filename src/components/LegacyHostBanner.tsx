@@ -17,9 +17,7 @@ const REDIRECT_DELAY_MS = 8000;
  * visitor returns instead of freezing at whatever number it reached.
  */
 export default function LegacyHostBanner() {
-  const {
-    tr
-  } = useI18n();
+  const { tr } = useI18n();
   const [seconds, setSeconds] = useState(REDIRECT_DELAY_MS / 1000);
   const legacy = isLegacyHost();
   const target = currentPageOnCanonicalHost();
@@ -56,14 +54,20 @@ export default function LegacyHostBanner() {
   if (!legacy) {
     return null;
   }
-  return <div className="legacy-host-banner" role="status">
+  return (
+    <div className="legacy-host-banner" role="status">
       <span className="legacy-host-text">
-        {tr(`${BRAND.displayName} has moved to a new address. This page now lives on the new site.`)}
+        {tr(
+          `${BRAND.displayName} has moved to a new address. This page now lives on the new site.`
+        )}
       </span>
       <a className="legacy-host-link" href={target}>
         {tr('Open the new site')}
         <ArrowRight size={15} />
       </a>
-      <span className="legacy-host-countdown">{tr(`Moving automatically in {seconds}s`).replace('{seconds}', String(seconds))}</span>
-    </div>;
+      <span className="legacy-host-countdown">
+        {tr(`Moving automatically in {seconds}s`).replace('{seconds}', String(seconds))}
+      </span>
+    </div>
+  );
 }

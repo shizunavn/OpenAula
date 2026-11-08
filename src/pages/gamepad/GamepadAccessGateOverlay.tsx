@@ -7,7 +7,7 @@ export function GamepadAccessGateOverlay({
   loading,
   t,
   onSetup,
-  onRefreshConnection,
+  onRefreshConnection
 }: {
   access: GamepadAccess;
   loading: boolean;

@@ -1,1 +1,1 @@
-export * from '../hero68/codec'
+export * from '../hero68/codec';

@@ -16,7 +16,12 @@ export class GamepadAutoApply<R extends Result> {
   private operation: Promise<unknown> = Promise.resolve();
   private disposed = false;
   private failed = false;
-  constructor(private write: (configuration: GamepadConfiguration) => Promise<R>, private result: (value: R) => void, private state: (phase: GamepadSaveState, error?: unknown) => void, private delay = 180) {}
+  constructor(
+    private write: (configuration: GamepadConfiguration) => Promise<R>,
+    private result: (value: R) => void,
+    private state: (phase: GamepadSaveState, error?: unknown) => void,
+    private delay = 180
+  ) {}
   setAvailable(available: boolean) {
     const reconnecting = available && !this.available;
     this.available = available;
@@ -94,16 +99,18 @@ export class GamepadAutoApply<R extends Result> {
     clearTimeout(this.timer);
     this.command = true;
     this.commands++;
-    const next = this.operation.catch(() => {}).then(async () => {
-      await this.flight;
-      const value = await operation();
-      this.applied = JSON.stringify(value.configuration);
-      this.failed = false;
-      if (!this.disposed) {
-        this.result(value);
-      }
-      return value;
-    });
+    const next = this.operation
+      .catch(() => {})
+      .then(async () => {
+        await this.flight;
+        const value = await operation();
+        this.applied = JSON.stringify(value.configuration);
+        this.failed = false;
+        if (!this.disposed) {
+          this.result(value);
+        }
+        return value;
+      });
     this.operation = next.finally(() => {
       this.commands--;
       this.command = this.commands > 0;

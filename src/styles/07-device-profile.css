@@ -24,20 +24,24 @@
   flex: 0 0 7px;
   border-radius: 50%;
   background: #777f85;
-  box-shadow: 0 0 0 3px rgba(119,127,133,.10);
+  box-shadow: 0 0 0 3px rgba(119, 127, 133, 0.1);
 }
 .device-panel.is-connected .device-status-dot {
   background: #6fdb98;
-  box-shadow: 0 0 0 3px rgba(111,219,152,.12), 0 0 12px rgba(111,219,152,.35);
+  box-shadow:
+    0 0 0 3px rgba(111, 219, 152, 0.12),
+    0 0 12px rgba(111, 219, 152, 0.35);
 }
 .device-panel.is-connecting .device-status-dot {
   background: var(--brand);
-  box-shadow: 0 0 0 3px rgba(255,207,91,.12), 0 0 12px rgba(255,207,91,.28);
+  box-shadow:
+    0 0 0 3px rgba(255, 207, 91, 0.12),
+    0 0 12px rgba(255, 207, 91, 0.28);
   animation: device-pulse 1.1s ease-in-out infinite;
 }
 .device-panel.is-error .device-status-dot {
   background: #ff7777;
-  box-shadow: 0 0 0 3px rgba(255,119,119,.11);
+  box-shadow: 0 0 0 3px rgba(255, 119, 119, 0.11);
 }
 .device-state-icon {
   color: #7f898f;
@@ -54,7 +58,7 @@
 .device-read-button {
   width: 100%;
   min-height: 34px;
-  border: 1px solid rgba(255,255,255,.07);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 7px;
   background: #303638;
   color: var(--text-1);
@@ -62,29 +66,33 @@
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
+  transition:
+    background var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease);
 }
 .device-connect-button:hover:not(:disabled),
 .device-read-button:hover:not(:disabled) {
   background: #3a4245;
-  border-color: rgba(255,255,255,.12);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 .device-connect-button:active:not(:disabled),
 .device-read-button:active:not(:disabled) {
-  transform: scale(.985);
+  transform: scale(0.985);
 }
 .device-connect-button.is-connected {
-  background: rgba(111,219,152,.08);
-  border-color: rgba(111,219,152,.18);
+  background: rgba(111, 219, 152, 0.08);
+  border-color: rgba(111, 219, 152, 0.18);
   color: #b9f1cd;
 }
 .device-read-button {
-  background: rgba(255,255,255,.025);
+  background: rgba(255, 255, 255, 0.025);
   color: #c8ced2;
 }
 .device-connect-button:disabled,
 .device-read-button:disabled {
-  opacity: .45;
+  opacity: 0.45;
   cursor: default;
 }
 .profile-slot-row {
@@ -94,9 +102,9 @@
   justify-content: space-between;
   gap: 8px;
   padding: 5px 6px 5px 10px;
-  border: 1px solid rgba(255,255,255,.055);
+  border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 7px;
-  background: rgba(255,255,255,.018);
+  background: rgba(255, 255, 255, 0.018);
   color: #929ba1;
   font-size: 11px;
 }
@@ -121,7 +129,7 @@
 }
 .profile-slot-buttons button:hover {
   color: var(--text-1);
-  background: rgba(255,255,255,.05);
+  background: rgba(255, 255, 255, 0.05);
 }
 .profile-slot-buttons button.is-active {
   color: var(--brand-ink);
@@ -136,20 +144,19 @@
 }
 .device-feedback.is-success {
   color: #aee7c4;
-  background: rgba(93,190,132,.07);
-  border: 1px solid rgba(93,190,132,.11);
+  background: rgba(93, 190, 132, 0.07);
+  border: 1px solid rgba(93, 190, 132, 0.11);
 }
 .device-feedback.is-error {
   color: #ffb5b5;
-  background: rgba(255,104,104,.07);
-  border: 1px solid rgba(255,104,104,.11);
+  background: rgba(255, 104, 104, 0.07);
+  border: 1px solid rgba(255, 104, 104, 0.11);
 }
 .apply-button:disabled {
-  opacity: .48;
+  opacity: 0.48;
   cursor: default;
   background: #776c49;
 }
-
 
 .app-shell.is-sidebar-compact .device-controls,
 .app-shell.is-sidebar-compact .device-feedback {
@@ -164,6 +171,11 @@
 }
 
 @keyframes device-pulse {
-  0%, 100% { opacity: .55; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
 }

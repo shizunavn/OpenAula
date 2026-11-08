@@ -4,15 +4,10 @@ import {
   calibrationDistanceStart,
   calibrationDistanceSync,
   readAutoCalibration,
-  writeAutoCalibration,
+  writeAutoCalibration
 } from './commands';
 import { decodeDistanceCalibrationLive } from './codec';
-import {
-  HERO68_KEY_POSITIONS,
-  HERO84_KEY_POSITIONS,
-  keyIdToPos,
-  posToKeyId,
-} from './keyPositions';
+import { HERO68_KEY_POSITIONS, HERO84_KEY_POSITIONS, keyIdToPos, posToKeyId } from './keyPositions';
 import { hero68DeviceManager } from './webhid';
 import {
   buildXsydHallPressedFrame,
@@ -23,7 +18,7 @@ import {
   xsydDeviceManager,
   xsydMatrixIndexForKeyId,
   xsydTableIdsForKeys,
-  type XsydHallTableId,
+  type XsydHallTableId
 } from '../xsyd/device';
 import { rgbService, type RgbServiceHallRecord } from '../rgbService';
 import { HERO68_DISTANCE_UNIT_MM } from './precision';
@@ -80,7 +75,7 @@ class Hero68HallStream {
     frameCount: 0,
     telemetryHz: null,
     samples: {},
-    keyTelemetryHz: {},
+    keyTelemetryHz: {}
   };
   #listeners = new Set<() => void>();
   #unsubscribeReport: (() => void) | null = null;
@@ -109,7 +104,7 @@ class Hero68HallStream {
   #setState(next: Partial<HallStreamState>) {
     this.#state = {
       ...this.#state,
-      ...next,
+      ...next
     };
     this.#listeners.forEach(listener => listener());
   }
@@ -117,7 +112,7 @@ class Hero68HallStream {
   #publishSamples(next: Partial<HallStreamState>) {
     this.#state = {
       ...this.#state,
-      ...next,
+      ...next
     };
     if (this.#notifyTimer !== null) {
       return;
@@ -182,13 +177,13 @@ class Hero68HallStream {
         visualDistanceMm: 0,
         pressed: false,
         releaseInferred: true,
-        timestampMs: performance.now(),
+        timestampMs: performance.now()
       };
       this.#setState({
         samples: {
           ...this.#state.samples,
-          [event.code]: released,
-        },
+          [event.code]: released
+        }
       });
       this.#scheduleSampleExpiry(event.code, 450);
     };
@@ -253,11 +248,11 @@ class Hero68HallStream {
         return;
       }
       const next = {
-        ...this.#state.samples,
+        ...this.#state.samples
       };
       delete next[keyId];
       this.#setState({
-        samples: next,
+        samples: next
       });
     }, delayMs);
     this.#sampleExpiryTimers.set(keyId, timer);
@@ -282,7 +277,7 @@ class Hero68HallStream {
       distanceUnits: number;
       adc: number;
       pressed: boolean;
-    }[],
+    }[]
   ) {
     if (records.length === 0) {
       return;
@@ -290,10 +285,10 @@ class Hero68HallStream {
     const timestampMs = performance.now();
     const telemetryHz = this.#recordFrameTime(timestampMs);
     const next = {
-      ...this.#state.samples,
+      ...this.#state.samples
     };
     const keyTelemetryHz = {
-      ...this.#state.keyTelemetryHz,
+      ...this.#state.keyTelemetryHz
     };
     let added = 0;
     for (const record of records) {
@@ -321,7 +316,7 @@ class Hero68HallStream {
         rawAdc: record.adc,
         pressed: record.pressed,
         releaseInferred: false,
-        timestampMs: moved ? timestampMs : previous.timestampMs,
+        timestampMs: moved ? timestampMs : previous.timestampMs
       };
       if (record.pressed || !hallAtRest) {
         this.#cancelSampleExpiry(keyId);
@@ -336,7 +331,7 @@ class Hero68HallStream {
         sampleCount: this.#state.sampleCount + added,
         frameCount: this.#state.frameCount + 1,
         telemetryHz,
-        keyTelemetryHz,
+        keyTelemetryHz
       });
     }
   }
@@ -371,14 +366,14 @@ class Hero68HallStream {
         samples: this.#zeroVisualSamples(),
         telemetryHz: null,
         keyTelemetryHz: {},
-        error: disconnectMessage,
+        error: disconnectMessage
       });
     });
   }
 
   #reportMatchesBatch(
     report: import('./types').DecodedReport,
-    positions: readonly number[],
+    positions: readonly number[]
   ): boolean {
     if (report.command !== 0x98 || report.zone !== 1) {
       return false;
@@ -400,7 +395,7 @@ class Hero68HallStream {
     const requestBatch = (batch: readonly number[]) => {
       const packet = calibrationDistanceSync(batch);
       return hero68DeviceManager.request(packet, 0x98, 1, 650, report =>
-        this.#reportMatchesBatch(report, batch),
+        this.#reportMatchesBatch(report, batch)
       );
     };
 
@@ -421,21 +416,21 @@ class Hero68HallStream {
             recovering,
             samples: this.#zeroVisualSamples(),
             telemetryHz: null,
-            keyTelemetryHz: {},
+            keyTelemetryHz: {}
           });
         } else {
           this.#setState({
-            recovering,
+            recovering
           });
         }
-      },
+      }
     });
   }
 
   #selectNextXsydTable(
     tables: readonly XsydHallTableId[],
     stepIndex: number,
-    travelCache: ReadonlyMap<number, number>,
+    travelCache: ReadonlyMap<number, number>
   ): XsydHallTableId {
     if (tables.length === 1) {
       return tables[0]!;
@@ -546,7 +541,7 @@ class Hero68HallStream {
           for (const tableId of pollTables) {
             const travelReply = await xsydDeviceManager.request(
               buildXsydHallTravelFrame(tableId),
-              300,
+              300
             );
             if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
               return;
@@ -574,7 +569,7 @@ class Hero68HallStream {
           const samples = mergeXsydHallSamples({
             travelByMatrixIndex: tables.length === 1 ? tableTravel : travelCache,
             pressedByMatrixIndex,
-            keyIds: keyIdSet,
+            keyIds: keyIdSet
           });
           this.#ingestRecords(
             samples.map(sample => ({
@@ -582,8 +577,8 @@ class Hero68HallStream {
               keyCode: sample.keyId,
               distanceUnits: sample.distanceUnits,
               adc: sample.rawAdc,
-              pressed: sample.pressed || this.#hostPressedKeys.has(sample.keyId),
-            })),
+              pressed: sample.pressed || this.#hostPressedKeys.has(sample.keyId)
+            }))
           );
         } catch (error) {
           if (generation !== this.#pollGeneration || !xsydDeviceManager.connected) {
@@ -616,7 +611,7 @@ class Hero68HallStream {
   async start(
     preferredKeyIds: Iterable<string> = [],
     source: HallStreamSource = 'direct-poll',
-    modelKeyIds?: readonly string[],
+    modelKeyIds?: readonly string[]
   ): Promise<void> {
     if (this.#state.active || this.#state.starting) {
       return;
@@ -688,7 +683,7 @@ class Hero68HallStream {
       sampleCount: 0,
       frameCount: 0,
       telemetryHz: null,
-      keyTelemetryHz: {},
+      keyTelemetryHz: {}
     });
     this.#installHostKeyFallback();
     this.#installDeviceWatcher(useXsyd);
@@ -703,7 +698,7 @@ class Hero68HallStream {
           readAutoCalibration(),
           0x84,
           25,
-          1000,
+          1000
         );
         this.#restoreAutoCalibration = (autoCalibration.data[0] ?? 0) !== 0;
         if (this.#restoreAutoCalibration) {
@@ -718,7 +713,7 @@ class Hero68HallStream {
       this.#setState({
         active: true,
         starting: false,
-        error: null,
+        error: null
       });
 
       if (viaService) {
@@ -730,7 +725,7 @@ class Hero68HallStream {
             keyId: record.pos,
             distanceUnits: record.distanceUnits,
             adc: record.adc,
-            pressed: record.pressed,
+            pressed: record.pressed
           }));
           this.#ingestRecords(normalized);
         };
@@ -743,7 +738,7 @@ class Hero68HallStream {
             samples: this.#zeroVisualSamples(),
             error: 'Service Hall stream disconnected',
             telemetryHz: null,
-            keyTelemetryHz: {},
+            keyTelemetryHz: {}
           });
         });
       } else if (useXsyd) {
@@ -761,7 +756,7 @@ class Hero68HallStream {
             error: `Hall polling stopped: ${message}. Close other keyboard apps or tabs, reconnect WIN 68 HE MAX, then start again.`,
             samples: this.#zeroVisualSamples(),
             telemetryHz: null,
-            keyTelemetryHz: {},
+            keyTelemetryHz: {}
           });
         });
       } else if (source === 'direct-poll' || source === 'mode-poll') {
@@ -780,7 +775,7 @@ class Hero68HallStream {
               error: `Hall polling stopped: ${message}. Close other keyboard apps or tabs, reconnect HERO68, then start again.`,
               samples: this.#zeroVisualSamples(),
               telemetryHz: null,
-              keyTelemetryHz: {},
+              keyTelemetryHz: {}
             });
             if (hero68DeviceManager.connected && source !== 'direct-poll') {
               try {
@@ -795,7 +790,7 @@ class Hero68HallStream {
             } catch {
               /* retry on the next start */
             }
-          },
+          }
         );
       }
     } catch (error) {
@@ -826,7 +821,7 @@ class Hero68HallStream {
         active: false,
         starting: false,
         recovering: false,
-        error: message,
+        error: message
       });
       throw new Error(message);
     }
@@ -854,9 +849,9 @@ class Hero68HallStream {
           rawAdc: 0,
           pressed: false,
           releaseInferred: false,
-          timestampMs: now,
-        },
-      ]),
+          timestampMs: now
+        }
+      ])
     );
   }
 
@@ -867,7 +862,7 @@ class Hero68HallStream {
     this.#setState({
       samples: this.#zeroVisualSamples(),
       keyTelemetryHz: {},
-      telemetryHz: null,
+      telemetryHz: null
     });
     ++this.#pollGeneration;
     const pollPromise = this.#pollPromise;
@@ -900,7 +895,7 @@ class Hero68HallStream {
           recovering: false,
           samples: this.#zeroVisualSamples(),
           keyTelemetryHz: {},
-          telemetryHz: null,
+          telemetryHz: null
         });
         this.#stage = 'idle';
       }
@@ -914,7 +909,7 @@ export function useHero68HallStream(): HallStreamState {
   return useSyncExternalStore(
     hero68HallStream.subscribe,
     hero68HallStream.getSnapshot,
-    hero68HallStream.getSnapshot,
+    hero68HallStream.getSnapshot
   );
 }
 

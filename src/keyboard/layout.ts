@@ -1,6 +1,6 @@
-import { HERO68_KEY_IDS, HERO68_LAYOUT, makeDemoLighting } from './hero68Layout'
-import { HERO84_LAYOUT, makeHero84DemoLighting } from './hero84Layout'
-import { heroDeviceModel, type HeroDeviceModel, type HeroDeviceModelId } from './devices'
+import { HERO68_KEY_IDS, HERO68_LAYOUT, makeDemoLighting } from './hero68Layout';
+import { HERO84_LAYOUT, makeHero84DemoLighting } from './hero84Layout';
+import { heroDeviceModel, type HeroDeviceModel, type HeroDeviceModelId } from './devices';
 import {
   computeKeyCoordinates,
   detectBoardFromProductName,
@@ -11,10 +11,10 @@ import {
   unregisterBoard,
   type BoardDescriptor,
   type HeroKeyDefinition,
-  type HeroKeyRow,
-} from './registry'
+  type HeroKeyRow
+} from './registry';
 
-export type { HeroKeyDefinition, HeroKeyRow }
+export type { HeroKeyDefinition, HeroKeyRow };
 export {
   HERO68_KEY_IDS,
   HERO68_LAYOUT,
@@ -27,27 +27,27 @@ export {
   unregisterBoard,
   detectBoardFromUuid,
   detectBoardFromProductName,
-  computeKeyCoordinates,
-}
+  computeKeyCoordinates
+};
 
 export type HeroKeyboardLayout = {
-  id: HeroDeviceModelId
-  model: HeroDeviceModel
-  rows: HeroKeyRow[]
-  keyIds: readonly string[]
-  keyIdSet: ReadonlySet<string>
-  makeDemoLighting: () => Record<string, string>
-}
+  id: HeroDeviceModelId;
+  model: HeroDeviceModel;
+  rows: HeroKeyRow[];
+  keyIds: readonly string[];
+  keyIdSet: ReadonlySet<string>;
+  makeDemoLighting: () => Record<string, string>;
+};
 
-export type HeroLayout = HeroKeyboardLayout
+export type HeroLayout = HeroKeyboardLayout;
 
-const LAYOUT_CACHE = new WeakMap<BoardDescriptor, HeroKeyboardLayout>()
+const LAYOUT_CACHE = new WeakMap<BoardDescriptor, HeroKeyboardLayout>();
 
 export function heroLayout(model: HeroDeviceModelId): HeroKeyboardLayout {
-  const board = getBoard(model)
-  const cached = LAYOUT_CACHE.get(board)
+  const board = getBoard(model);
+  const cached = LAYOUT_CACHE.get(board);
   if (cached) {
-    return cached
+    return cached;
   }
   const layout: HeroKeyboardLayout = {
     id: board.id,
@@ -55,8 +55,8 @@ export function heroLayout(model: HeroDeviceModelId): HeroKeyboardLayout {
     rows: board.rows,
     keyIds: board.keyIds,
     keyIdSet: board.keyIdSet,
-    makeDemoLighting: board.makeDemoLighting,
-  }
-  LAYOUT_CACHE.set(board, layout)
-  return layout
+    makeDemoLighting: board.makeDemoLighting
+  };
+  LAYOUT_CACHE.set(board, layout);
+  return layout;
 }

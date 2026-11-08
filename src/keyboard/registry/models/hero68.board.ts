@@ -1,6 +1,6 @@
-const hero68Thumb = '/src/assets/hero68.png'
-import { HERO68_LAYOUT, makeDemoLighting } from '../../hero68Layout'
-import type { BoardDescriptor } from '../types'
+const hero68Thumb = '/src/assets/hero68.png';
+import { HERO68_LAYOUT, makeDemoLighting } from '../../hero68Layout';
+import type { BoardDescriptor } from '../types';
 import {
   BYTETECH_REPORT_ID,
   BYTETECH_USAGE,
@@ -8,8 +8,8 @@ import {
   BYTETECH_VENDOR_ID,
   buildFactoryRemapLayersFromCatalog,
   computeKeyCoordinates,
-  keyIdsOf,
-} from '../shared/bytetechCatalog'
+  keyIdsOf
+} from '../shared/bytetechCatalog';
 
 export const HERO68_BOARD_KEY_POSITIONS: Readonly<Record<string, number>> = {
   Escape: 1,
@@ -83,14 +83,14 @@ export const HERO68_BOARD_KEY_POSITIONS: Readonly<Record<string, number>> = {
   ControlRight: 73,
   ArrowLeft: 76,
   ArrowDown: 75,
-  ArrowRight: 77,
-}
+  ArrowRight: 77
+};
 
 export const HERO68_BOARD_POS_TO_KEY_ID: ReadonlyMap<number, string> = new Map(
-  Object.entries(HERO68_BOARD_KEY_POSITIONS).map(([keyId, pos]) => [pos, keyId]),
-)
+  Object.entries(HERO68_BOARD_KEY_POSITIONS).map(([keyId, pos]) => [pos, keyId])
+);
 
-const keyIds = keyIdsOf(HERO68_LAYOUT)
+const keyIds = keyIdsOf(HERO68_LAYOUT);
 
 export const HERO68_BOARD: BoardDescriptor = {
   id: 'hero68',
@@ -107,7 +107,7 @@ export const HERO68_BOARD: BoardDescriptor = {
     reportId: BYTETECH_REPORT_ID,
     productNames: ['HERO 68 HE', 'AULA HERO 68 HE', 'AULA Hero68'],
     deviceUuids: ['110000000003'],
-    modelByte: 0x03,
+    modelByte: 0x03
   },
   capabilities: {
     keyCount: 68,
@@ -118,7 +118,7 @@ export const HERO68_BOARD: BoardDescriptor = {
     hasSideRgb: true,
     sideLedCount: 18,
     maxGamepadBindings: 68,
-    maxAdvancedBindings: 40,
+    maxAdvancedBindings: 40
   },
   rows: HERO68_LAYOUT,
   keyIds,
@@ -128,5 +128,5 @@ export const HERO68_BOARD: BoardDescriptor = {
   posToKeyId: HERO68_BOARD_POS_TO_KEY_ID,
   validPositions: new Set(Object.values(HERO68_BOARD_KEY_POSITIONS)),
   factoryRemapLayers: buildFactoryRemapLayersFromCatalog(HERO68_BOARD_POS_TO_KEY_ID),
-  makeDemoLighting,
-}
+  makeDemoLighting
+};

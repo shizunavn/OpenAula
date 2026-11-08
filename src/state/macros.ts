@@ -37,10 +37,14 @@ const special: Record<string, string> = {
 };
 export const MACRO_ACTIONS = catalog.map(action => ({
   ...action,
-  label: special[action.name] ?? names[action.name] ?? action.name.replace('Key', '').replace('Digit', '').replace('Numpad', 'Num ')
+  label:
+    special[action.name] ??
+    names[action.name] ??
+    action.name.replace('Key', '').replace('Digit', '').replace('Numpad', 'Num ')
 }));
 const keys = new Set(MACRO_ACTIONS.map(action => action.name));
-export const macroKeyLabel = (key: string) => MACRO_ACTIONS.find(action => action.name === key)?.label ?? key;
+export const macroKeyLabel = (key: string) =>
+  MACRO_ACTIONS.find(action => action.name === key)?.label ?? key;
 export function newMacro(): MacroDefinition {
   return {
     id: crypto.randomUUID(),
@@ -50,12 +54,28 @@ export function newMacro(): MacroDefinition {
     repeatCount: 2
   };
 }
-export function validateMacro(value: unknown, requireComplete = true): asserts value is MacroDefinition {
-  const macro = (value as MacroDefinition | null);
-  if (!macro || typeof macro.id !== 'string' || !macro.id || macro.id.length > 128 || typeof macro.name !== 'string' || !macro.name.trim() || macro.name.length > 48) {
+export function validateMacro(
+  value: unknown,
+  requireComplete = true
+): asserts value is MacroDefinition {
+  const macro = value as MacroDefinition | null;
+  if (
+    !macro ||
+    typeof macro.id !== 'string' ||
+    !macro.id ||
+    macro.id.length > 128 ||
+    typeof macro.name !== 'string' ||
+    !macro.name.trim() ||
+    macro.name.length > 48
+  ) {
     throw new Error('Give the macro a name between 1 and 48 characters.');
   }
-  if (!['once', 'repeat', 'hold', 'toggle'].includes(macro.playback) || !Number.isInteger(macro.repeatCount) || macro.repeatCount < 1 || macro.repeatCount > 255) {
+  if (
+    !['once', 'repeat', 'hold', 'toggle'].includes(macro.playback) ||
+    !Number.isInteger(macro.repeatCount) ||
+    macro.repeatCount < 1 ||
+    macro.repeatCount > 255
+  ) {
     throw new Error('Repeat count must be between 1 and 255.');
   }
   if (!Array.isArray(macro.events) || macro.events.length > MACRO_EVENT_LIMIT) {
@@ -66,26 +86,41 @@ export function validateMacro(value: unknown, requireComplete = true): asserts v
   }
   const held = new Set<string>();
   macro.events.forEach((event, index) => {
-    if (!event || !keys.has(event.key) || !['down', 'up'].includes(event.type) || !Number.isInteger(event.delayMs) || event.delayMs < 0 || event.delayMs > 60000) {
-      throw new Error(`Event ${index + 1}: choose a supported key and a delay between 0 and 60000 ms.`);
+    if (
+      !event ||
+      !keys.has(event.key) ||
+      !['down', 'up'].includes(event.type) ||
+      !Number.isInteger(event.delayMs) ||
+      event.delayMs < 0 ||
+      event.delayMs > 60000
+    ) {
+      throw new Error(
+        `Event ${index + 1}: choose a supported key and a delay between 0 and 60000 ms.`
+      );
     }
     if (!requireComplete) {
       return;
     }
     if (event.type === 'down') {
       if (held.has(event.key)) {
-        throw new Error(`Event ${index + 1}: ${macroKeyLabel(event.key)} is already held. Add a release before pressing it again.`);
+        throw new Error(
+          `Event ${index + 1}: ${macroKeyLabel(event.key)} is already held. Add a release before pressing it again.`
+        );
       }
       held.add(event.key);
     } else {
       if (!held.has(event.key)) {
-        throw new Error(`Event ${index + 1}: ${macroKeyLabel(event.key)} needs a press before its release.`);
+        throw new Error(
+          `Event ${index + 1}: ${macroKeyLabel(event.key)} needs a press before its release.`
+        );
       }
       held.delete(event.key);
     }
   });
   if (held.size) {
-    throw new Error(`Release ${[...held].map(macroKeyLabel).join(', ')} before saving. Use “Release held keys” to finish the sequence.`);
+    throw new Error(
+      `Release ${[...held].map(macroKeyLabel).join(', ')} before saving. Use “Release held keys” to finish the sequence.`
+    );
   }
 }
 export function heldMacroKeys(events: MacroEvent[]) {
@@ -101,7 +136,13 @@ export function heldMacroKeys(events: MacroEvent[]) {
 }
 export function parseMacroImport(text: string): MacroDefinition[] {
   const data = JSON.parse(text);
-  if (!data || data.schema !== `${BRAND.exportSchemaPrefix}-macros` || data.version !== 1 || !Array.isArray(data.macros) || data.macros.length > MACRO_LIBRARY_LIMIT) {
+  if (
+    !data ||
+    data.schema !== `${BRAND.exportSchemaPrefix}-macros` ||
+    data.version !== 1 ||
+    !Array.isArray(data.macros) ||
+    data.macros.length > MACRO_LIBRARY_LIMIT
+  ) {
     throw new Error(`Choose an ${BRAND.displayName} macro export (.json).`);
   }
   data.macros.forEach((macro: unknown) => validateMacro(macro));
@@ -111,11 +152,15 @@ export function parseMacroImport(text: string): MacroDefinition[] {
   return data.macros;
 }
 export function macroExport(macros: MacroDefinition[]) {
-  return JSON.stringify({
-    schema: `${BRAND.exportSchemaPrefix}-macros`,
-    version: 1,
-    macros
-  }, null, 2);
+  return JSON.stringify(
+    {
+      schema: `${BRAND.exportSchemaPrefix}-macros`,
+      version: 1,
+      macros
+    },
+    null,
+    2
+  );
 }
 export function loadMacroLibrary(): MacroDefinition[] {
   const stored = localStorage.getItem(MACRO_STORAGE_KEY);
@@ -127,10 +172,12 @@ export function saveMacroLibrary(macros: MacroDefinition[]) {
   }
   localStorage.setItem(MACRO_STORAGE_KEY, macroExport(macros));
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(MACRO_LIBRARY_EVENT, {
-      detail: {
-        count: macros.length
-      }
-    }));
+    window.dispatchEvent(
+      new CustomEvent(MACRO_LIBRARY_EVENT, {
+        detail: {
+          count: macros.length
+        }
+      })
+    );
   }
 }

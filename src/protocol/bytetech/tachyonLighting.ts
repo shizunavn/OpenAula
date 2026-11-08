@@ -1,1 +1,1 @@
-export * from '../hero68/tachyonLighting'
+export * from '../hero68/tachyonLighting';

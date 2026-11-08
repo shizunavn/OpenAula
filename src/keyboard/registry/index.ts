@@ -8,7 +8,11 @@ export * from './types';
 export { assertBoardDescriptorValid, computeKeyCoordinates } from './shared/bytetechCatalog';
 export { HERO68_BOARD } from './models/hero68.board';
 export { HERO84_BOARD } from './models/hero84.board';
-export { WIN68_HE_MAX_BOARD, WIN68_HE_MAX_KEY_POSITIONS, WIN68_HE_MAX_POS_TO_KEY_ID } from './models/win68HeMax.board';
+export {
+  WIN68_HE_MAX_BOARD,
+  WIN68_HE_MAX_KEY_POSITIONS,
+  WIN68_HE_MAX_POS_TO_KEY_ID
+} from './models/win68HeMax.board';
 
 assertBoardDescriptorValid(WIN68_HE_MAX_BOARD);
 
@@ -84,9 +88,15 @@ export function detectBoardFromUuid(data?: ArrayLike<number> | null): HeroDevice
   if (!data || data.length < 6) {
     return null;
   }
-  const hex = Array.from({
-    length: 6
-  }, (_, index) => Number(data[index] ?? 0).toString(16).padStart(2, '0')).join('');
+  const hex = Array.from(
+    {
+      length: 6
+    },
+    (_, index) =>
+      Number(data[index] ?? 0)
+        .toString(16)
+        .padStart(2, '0')
+  ).join('');
   if (WIN68_HE_MAX_BOARD.usb.deviceUuids.includes(hex)) {
     return 'win68HeMax';
   }
@@ -133,7 +143,10 @@ export function detectBoardFromProductName(productName?: string | null): HeroDev
     return 'hero68';
   }
   for (const board of REGISTRY.values()) {
-    if (normalized.includes(board.name.toLowerCase()) || normalized.includes(board.id.toLowerCase())) {
+    if (
+      normalized.includes(board.name.toLowerCase()) ||
+      normalized.includes(board.id.toLowerCase())
+    ) {
       return board.id;
     }
   }

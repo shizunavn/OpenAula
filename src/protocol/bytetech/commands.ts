@@ -1,1 +1,1 @@
-export * from '../hero68/commands'
+export * from '../hero68/commands';

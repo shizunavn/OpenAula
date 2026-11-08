@@ -9,7 +9,7 @@ export class RgbArm {
   z = false;
   c = false;
   v = false;
-  private code = new Map(asset.instructions.map(i => [(i[0] as number), i]));
+  private code = new Map(asset.instructions.map(i => [i[0] as number, i]));
   private rom = Uint8Array.from(atob(asset.rom), c => c.charCodeAt(0));
   read(p: number, size = 1): number {
     const memory = p >= 0x20000000 && p + size <= 0x20010000 ? this.ram : this.rom;
@@ -29,7 +29,7 @@ export class RgbArm {
       throw Error(`RGB write ${p.toString(16)}`);
     }
     for (let i = 0; i < size; i++) {
-      this.ram[offset + i] = value >>> 8 * i;
+      this.ram[offset + i] = value >>> (8 * i);
     }
   }
   private nz(value: number) {
@@ -54,9 +54,9 @@ export class RgbArm {
       if (!entry) {
         throw Error(`RGB instruction ${pc.toString(16)}`);
       }
-      const [, size, opcode,, flags, writeback, raw] = entry;
-      const ops = (raw as number[][]);
-      const op = (opcode as string);
+      const [, size, opcode, , flags, writeback, raw] = entry;
+      const ops = raw as number[][];
+      const op = opcode as string;
       const next = pc + (size as number);
       this.regs[15] = pc + 4;
       const shift = (x: number, type: number, amount: number) => {
@@ -80,13 +80,18 @@ export class RgbArm {
           return amount >= 32 ? x >> 31 : x >> amount;
         }
         if (type === 4) {
-          return x >>> (amount & 31) | x << (32 - amount & 31);
+          return (x >>> (amount & 31)) | (x << ((32 - amount) & 31));
         }
         throw Error(`RGB shift ${type}`);
       };
-      const value = (o: number[]) => o[0] === 0 ? shift(this.regs[o[1]], o[2], o[3]) >>> 0 : o[1] >>> 0;
+      const value = (o: number[]) =>
+        o[0] === 0 ? shift(this.regs[o[1]], o[2], o[3]) >>> 0 : o[1] >>> 0;
       // Literal LDR aligns PC; TBB uses the unaligned architectural PC.
-      const mem = (o: number[]) => (o[1] === 15 && op.startsWith('ldr') ? this.regs[15] & ~3 : this.regs[o[1]]) + (o[2] < 0 ? 0 : this.regs[o[2]] * o[3] * 2 ** o[5]) + o[4] >>> 0;
+      const mem = (o: number[]) =>
+        ((o[1] === 15 && op.startsWith('ldr') ? this.regs[15] & ~3 : this.regs[o[1]]) +
+          (o[2] < 0 ? 0 : this.regs[o[2]] * o[3] * 2 ** o[5]) +
+          o[4]) >>>
+        0;
       const a = ops[1] ? value(ops[1]) : 0;
       const b = ops[2] ? value(ops[2]) : 0;
       let result = 0;
@@ -113,7 +118,7 @@ export class RgbArm {
       } else if (op === 'tbb') {
         branch = pc + 4 + 2 * this.read(mem(ops[0]));
       } else if (op === 'cbz' || op === 'cbnz') {
-        if (value(ops[0]) === 0 === (op === 'cbz')) {
+        if ((value(ops[0]) === 0) === (op === 'cbz')) {
           branch = value(ops[1]);
         }
       } else if (op.startsWith('b') && !op.startsWith('bic')) {
@@ -174,7 +179,7 @@ export class RgbArm {
         } else if (op.startsWith('sub') || op === 'cmp' || op === 'rsb') {
           const x = op === 'rsb' ? right : left;
           const y = op === 'rsb' ? left : right;
-          result = x - y >>> 0;
+          result = (x - y) >>> 0;
           if (flags || op === 'cmp') {
             this.c = x >= y;
             this.v = !!((x ^ y) & (x ^ result) & 0x80000000);
@@ -188,7 +193,7 @@ export class RgbArm {
         } else if (op === 'muls') {
           result = Math.imul(left, right);
         } else if (op === 'smulbb') {
-          result = Math.imul(a << 16 >> 16, b << 16 >> 16);
+          result = Math.imul((a << 16) >> 16, (b << 16) >> 16);
         } else if (op === 'mls') {
           result = value(ops[3]) - Math.imul(a, b);
         } else if (op === 'udiv') {
@@ -197,7 +202,9 @@ export class RgbArm {
           const count = right & 255;
           result = shift(left, op.startsWith('lsl') ? 2 : 3, count);
           if (flags && count) {
-            this.c = count <= 32 && !!(left & (op.startsWith('lsl') ? 2 ** (32 - count) : 2 ** (count - 1)));
+            this.c =
+              count <= 32 &&
+              !!(left & (op.startsWith('lsl') ? 2 ** (32 - count) : 2 ** (count - 1)));
           }
         } else {
           throw Error(`RGB opcode ${op}`);

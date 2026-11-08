@@ -1,17 +1,43 @@
-import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import {
+  useEffect,
+  useRef,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction
+} from 'react';
 import type { RgbTab } from '../../components/RgbSettingsPage';
 import type { LanguagePreference } from '../../i18n';
 import { heroLayout } from '../../keyboard/layout';
 import { isWin68HeMaxModel, type HeroDeviceModelId } from '../../keyboard/devices';
 import { makeKeyDeviceSettings, saveDeviceConfiguration } from '../../protocol/deviceBridge';
 import { gamepadService } from '../../protocol/gamepadService';
-import { mergeAdvanced, readAdvancedBindings, saveAdvancedBindings, type AdvancedBinding } from '../../protocol/hero68/advanced';
+import {
+  mergeAdvanced,
+  readAdvancedBindings,
+  saveAdvancedBindings,
+  type AdvancedBinding
+} from '../../protocol/hero68/advanced';
 import { liveIdle, readActiveProfile, selectProfile } from '../../protocol/hero68/commands';
 import { hero68HallStream, type Hero68HallStreamState } from '../../protocol/hero68/hallStream';
 import { hydrateFromDevice, type HydratedKeySettings } from '../../protocol/hero68/hero68Encoder';
 import { syncHero68MacroLibrary } from '../../protocol/hero68/macroDevice';
-import { isMacroRemapValue, readOnboardProfileName, readRemapLayers, REMAP_LAYERS, saveOnboardProfileName, saveRemapChanges, type RemapLayer, type RemapLayers } from '../../protocol/hero68/remap';
-import { mergeRgb, readRgbProfile, saveRgbProfile, type RgbChanges, type RgbProfile } from '../../protocol/hero68/rgb';
+import {
+  isMacroRemapValue,
+  readOnboardProfileName,
+  readRemapLayers,
+  REMAP_LAYERS,
+  saveOnboardProfileName,
+  saveRemapChanges,
+  type RemapLayer,
+  type RemapLayers
+} from '../../protocol/hero68/remap';
+import {
+  mergeRgb,
+  readRgbProfile,
+  saveRgbProfile,
+  type RgbChanges,
+  type RgbProfile
+} from '../../protocol/hero68/rgb';
 import type { PollingRate, ProfileSlot } from '../../protocol/hero68/types';
 import { hero68DeviceManager, type Hero68ConnectionState } from '../../protocol/hero68/webhid';
 import {
@@ -24,13 +50,17 @@ import {
   saveXsydAdvancedBindings,
   saveXsydRemapChanges,
   saveXsydRgbProfile,
-  xsydDeviceManager,
+  xsydDeviceManager
 } from '../../protocol/xsyd/device';
 import { rgbService } from '../../protocol/rgbService';
 import { publishRgbServiceStatus } from '../../protocol/rgbServiceState';
 import { BRAND } from '../../brand';
 import { loadMacroLibrary } from '../../state/macros';
-import { saveOpenHeroState, type PersistedOpenHeroState, type ProfileDraft } from '../../state/persistence';
+import {
+  saveOpenHeroState,
+  type PersistedOpenHeroState,
+  type ProfileDraft
+} from '../../state/persistence';
 import type { SwitchTone } from '../switchAssets';
 /**
  * Coordinates two-way synchronization between the React UI state, browser LocalStorage drafts,
@@ -66,8 +96,14 @@ export type UseDeviceSyncControllerOptions = {
   bottomDeadzoneByKey: Record<string, number>;
   dirtyKeys: Set<string>;
   setDirtyKeys: Dispatch<SetStateAction<Set<string>>>;
-  restorePerformanceFromDraft: (draft: ProfileDraft | undefined, keyIds?: readonly string[]) => void;
-  applyHydratedPerformance: (hydrated: Map<string, HydratedKeySettings>, draft?: ProfileDraft) => void;
+  restorePerformanceFromDraft: (
+    draft: ProfileDraft | undefined,
+    keyIds?: readonly string[]
+  ) => void;
+  applyHydratedPerformance: (
+    hydrated: Map<string, HydratedKeySettings>,
+    draft?: ProfileDraft
+  ) => void;
   tachyon: boolean;
   tachyonPreviousPollingRate: PollingRate | null;
   compactSidebar: boolean;
@@ -118,7 +154,9 @@ export type UseDeviceSyncControllerOptions = {
   setAdvancedReadError: Dispatch<SetStateAction<string | null>>;
   advancedPending: boolean;
   restoreWorkspaceDraft: (draft?: ProfileDraft, keyIds?: readonly string[]) => void;
-  setDeviceSettingsState: Dispatch<SetStateAction<'idle' | 'reading' | 'ready' | 'saving' | 'error'>>;
+  setDeviceSettingsState: Dispatch<
+    SetStateAction<'idle' | 'reading' | 'ready' | 'saving' | 'error'>
+  >;
   setDeviceReadState: Dispatch<SetStateAction<'idle' | 'reading' | 'success' | 'error'>>;
   setDeviceActionError: Dispatch<SetStateAction<string | null>>;
   readDeviceGeneralSettings: () => Promise<void>;
@@ -280,7 +318,49 @@ export function useDeviceSyncController({
   }
   useEffect(() => {
     saveOpenHeroState(buildPersistedSnapshot());
-  }, [activeRail, activePage, activeSettingsPage, deviceModel, selectedKeys, selectedSwitchId, assignedSwitchesByKey, actuationByKey, rapidTriggerByKey, splitSensitivityByKey, rapidSensitivityByKey, pressSensitivityByKey, releaseSensitivityByKey, deadzoneEnabledByKey, topDeadzoneByKey, bottomDeadzoneByKey, tachyon, tachyonPreviousPollingRate, compactSidebar, showAdvancedPages, rememberSelection, languagePreference, languageManuallySet, languageRegionDetected, devicePollingRate, deviceOsModeMac, deviceWinLock, deviceHallDebounce, deviceAutoCalibration, switchSearch, switchBrandFilter, profileSlot, profileNames, remapLayers, profileDrafts, dirtyKeys, dirtyRemaps, rgb, rgbBaseline, advancedBindings, advancedBaseline]);
+  }, [
+    activeRail,
+    activePage,
+    activeSettingsPage,
+    deviceModel,
+    selectedKeys,
+    selectedSwitchId,
+    assignedSwitchesByKey,
+    actuationByKey,
+    rapidTriggerByKey,
+    splitSensitivityByKey,
+    rapidSensitivityByKey,
+    pressSensitivityByKey,
+    releaseSensitivityByKey,
+    deadzoneEnabledByKey,
+    topDeadzoneByKey,
+    bottomDeadzoneByKey,
+    tachyon,
+    tachyonPreviousPollingRate,
+    compactSidebar,
+    showAdvancedPages,
+    rememberSelection,
+    languagePreference,
+    languageManuallySet,
+    languageRegionDetected,
+    devicePollingRate,
+    deviceOsModeMac,
+    deviceWinLock,
+    deviceHallDebounce,
+    deviceAutoCalibration,
+    switchSearch,
+    switchBrandFilter,
+    profileSlot,
+    profileNames,
+    remapLayers,
+    profileDrafts,
+    dirtyKeys,
+    dirtyRemaps,
+    rgb,
+    rgbBaseline,
+    advancedBindings,
+    advancedBaseline
+  ]);
   useEffect(() => {
     if (autoConnectStartedRef.current) {
       return;
@@ -331,7 +411,11 @@ export function useDeviceSyncController({
       ? await xsydDeviceManager.detectConnectedModel().catch(() => null)
       : await hero68DeviceManager.detectConnectedModel().catch(() => null);
     const targetModel: HeroDeviceModelId = detectedModel ?? deviceModel;
-    setDeviceActionError(detectedModel ? null : 'Could not verify whether this keyboard is a HERO68 or HERO84. Writes are blocked until it reconnects.');
+    setDeviceActionError(
+      detectedModel
+        ? null
+        : 'Could not verify whether this keyboard is a HERO68 or HERO84. Writes are blocked until it reconnects.'
+    );
     if (targetModel !== deviceModel) {
       selectDeviceModel(targetModel);
     }
@@ -340,11 +424,14 @@ export function useDeviceSyncController({
       ...previous,
       [profileSlot]: currentProfileDraft()
     }));
-    const savedDraft = activeSlot === profileSlot ? currentProfileDraft() : profileDrafts[activeSlot];
-    const draft = savedDraft ? {
-      ...savedDraft,
-      dirtyKeys: []
-    } : undefined;
+    const savedDraft =
+      activeSlot === profileSlot ? currentProfileDraft() : profileDrafts[activeSlot];
+    const draft = savedDraft
+      ? {
+          ...savedDraft,
+          dirtyKeys: []
+        }
+      : undefined;
     restoreProfileDraft(draft, heroLayout(targetModel).keyIds);
     setProfileSlot(activeSlot);
     await handleReadFromDevice(activeSlot, draft, targetModel);
@@ -373,7 +460,7 @@ export function useDeviceSyncController({
         setLoadedProfileSlot(null);
         setDeviceSettingsState('idle');
       } else {
-        if (isWin68HeMaxModel(deviceModel) || await xsydDeviceManager.hasAuthorizedDevice()) {
+        if (isWin68HeMaxModel(deviceModel) || (await xsydDeviceManager.hasAuthorizedDevice())) {
           await xsydDeviceManager.connect(true);
         } else {
           try {
@@ -392,20 +479,32 @@ export function useDeviceSyncController({
       setDeviceActionError(error instanceof Error ? error.message : String(error));
     }
   }
-  async function handleReadFromDevice(slot: ProfileSlot = profileSlot, draft?: ProfileDraft, targetModel: HeroDeviceModelId = deviceModel) {
+  async function handleReadFromDevice(
+    slot: ProfileSlot = profileSlot,
+    draft?: ProfileDraft,
+    targetModel: HeroDeviceModelId = deviceModel
+  ) {
     if (!isAnyDeviceConnected() || profileBusyRef.current) {
       return;
     }
     profileBusyRef.current = true;
     setProfileBusy(true);
     try {
-      await readAndApplyProfile(slot, draft ?? (slot === profileSlot ? currentProfileDraft() : profileDrafts[slot]), targetModel);
+      await readAndApplyProfile(
+        slot,
+        draft ?? (slot === profileSlot ? currentProfileDraft() : profileDrafts[slot]),
+        targetModel
+      );
     } finally {
       profileBusyRef.current = false;
       setProfileBusy(false);
     }
   }
-  async function readAndApplyProfile(slot: ProfileSlot, draft?: ProfileDraft, targetModel: HeroDeviceModelId = deviceModel) {
+  async function readAndApplyProfile(
+    slot: ProfileSlot,
+    draft?: ProfileDraft,
+    targetModel: HeroDeviceModelId = deviceModel
+  ) {
     setDeviceActionError(null);
     setDeviceReadState('reading');
     setLoadedProfileSlot(null);
@@ -414,7 +513,9 @@ export function useDeviceSyncController({
       : await hero68DeviceManager.detectConnectedModel().catch(() => null);
     if (!detectedModel) {
       setDeviceReadState('error');
-      setDeviceActionError('Could not verify whether this keyboard is a HERO68 or HERO84. Reconnect it and try again.');
+      setDeviceActionError(
+        'Could not verify whether this keyboard is a HERO68 or HERO84. Reconnect it and try again.'
+      );
       return false;
     }
     targetModel = detectedModel;
@@ -441,9 +542,9 @@ export function useDeviceSyncController({
                 keys: savedSlotRgb.keys ?? rawFreshRgb.keys,
                 colors: {
                   ...rawFreshRgb.colors,
-                  ...(savedSlotRgb.colors ?? {}),
+                  ...(savedSlotRgb.colors ?? {})
                 },
-                ...(savedSlotRgb.custom ? { custom: savedSlotRgb.custom } : {}),
+                ...(savedSlotRgb.custom ? { custom: savedSlotRgb.custom } : {})
               }
             : rawFreshRgb;
           setAdvancedHydratedSlot(slot);
@@ -458,34 +559,56 @@ export function useDeviceSyncController({
           applyHydratedPerformance(hydrated, draft);
           for (const layer of REMAP_LAYERS) {
             for (const keyId of activeKeyIds) {
-              if (draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) && draft.remapLayers?.[layer][keyId] !== undefined) {
+              if (
+                draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) &&
+                draft.remapLayers?.[layer][keyId] !== undefined
+              ) {
                 mappings[layer][keyId] = draft.remapLayers[layer][keyId];
               }
             }
           }
           setRemapLayers(mappings);
-          setDirtyRemaps(new Set((draft?.dirtyRemaps ?? []).filter(change => {
-            const [layer, keyId] = change.split(':');
-            return mappings[(Number(layer) as RemapLayer)]?.[keyId] !== remapBaselineRef.current[(Number(layer) as RemapLayer)]?.[keyId];
-          })));
+          setDirtyRemaps(
+            new Set(
+              (draft?.dirtyRemaps ?? []).filter(change => {
+                const [layer, keyId] = change.split(':');
+                return (
+                  mappings[Number(layer) as RemapLayer]?.[keyId] !==
+                  remapBaselineRef.current[Number(layer) as RemapLayer]?.[keyId]
+                );
+              })
+            )
+          );
           setLoadedProfileSlot(slot);
           setSaveState('idle');
           setDeviceReadState('success');
-          window.setTimeout(() => setDeviceReadState(current => current === 'success' ? 'idle' : current), 1800);
+          window.setTimeout(
+            () => setDeviceReadState(current => (current === 'success' ? 'idle' : current)),
+            1800
+          );
           return true;
         } finally {
           if (shouldResumeHall && xsydDeviceManager.connected) {
-            await hero68HallStream.start(requestedHallKeys, hallSource, activeKeyIds).catch(() => {});
+            await hero68HallStream
+              .start(requestedHallKeys, hallSource, activeKeyIds)
+              .catch(() => {});
           }
         }
       }
-      const hydrated = await hydrateFromDevice(hero68DeviceManager, slot, activeKeyIds, targetModel);
+      const hydrated = await hydrateFromDevice(
+        hero68DeviceManager,
+        slot,
+        activeKeyIds,
+        targetModel
+      );
       const mappings = await readRemapLayers(hero68DeviceManager, activeKeyIds, targetModel);
       const freshRgb = await readRgbProfile(hero68DeviceManager, activeKeyIds, targetModel);
       setAdvancedHydratedSlot(null);
       try {
         const freshAdvanced = await readAdvancedBindings(hero68DeviceManager, targetModel);
-        setAdvancedBindings(mergeAdvanced(freshAdvanced, draft?.advancedBindings, draft?.advancedBaseline));
+        setAdvancedBindings(
+          mergeAdvanced(freshAdvanced, draft?.advancedBindings, draft?.advancedBaseline)
+        );
         setAdvancedBaseline(freshAdvanced);
         setAdvancedHydratedSlot(slot);
         setAdvancedReadError(null);
@@ -499,9 +622,10 @@ export function useDeviceSyncController({
       const names: Partial<Record<ProfileSlot, string>> = {};
       for (const nameSlot of REMAP_LAYERS) {
         try {
-          names[nameSlot] = (await readOnboardProfileName(hero68DeviceManager, nameSlot)) ?? `Onboard Profile ${nameSlot}`;
-        } catch {
-} /* performance/remap reads remain authoritative */
+          names[nameSlot] =
+            (await readOnboardProfileName(hero68DeviceManager, nameSlot)) ??
+            `Onboard Profile ${nameSlot}`;
+        } catch {} /* performance/remap reads remain authoritative */
       }
 
       setProfileNames(previous => ({
@@ -511,20 +635,33 @@ export function useDeviceSyncController({
       applyHydratedPerformance(hydrated, draft);
       for (const layer of REMAP_LAYERS) {
         for (const keyId of activeKeyIds) {
-          if (draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) && draft.remapLayers?.[layer][keyId] !== undefined) {
+          if (
+            draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) &&
+            draft.remapLayers?.[layer][keyId] !== undefined
+          ) {
             mappings[layer][keyId] = draft.remapLayers[layer][keyId];
           }
         }
       }
       setRemapLayers(mappings);
-      setDirtyRemaps(new Set((draft?.dirtyRemaps ?? []).filter(change => {
-        const [layer, keyId] = change.split(':');
-        return mappings[(Number(layer) as RemapLayer)]?.[keyId] !== remapBaselineRef.current[(Number(layer) as RemapLayer)]?.[keyId];
-      })));
+      setDirtyRemaps(
+        new Set(
+          (draft?.dirtyRemaps ?? []).filter(change => {
+            const [layer, keyId] = change.split(':');
+            return (
+              mappings[Number(layer) as RemapLayer]?.[keyId] !==
+              remapBaselineRef.current[Number(layer) as RemapLayer]?.[keyId]
+            );
+          })
+        )
+      );
       setLoadedProfileSlot(slot);
       setSaveState('idle');
       setDeviceReadState('success');
-      window.setTimeout(() => setDeviceReadState(current => current === 'success' ? 'idle' : current), 1800);
+      window.setTimeout(
+        () => setDeviceReadState(current => (current === 'success' ? 'idle' : current)),
+        1800
+      );
       return true;
     } catch (error) {
       setLoadedProfileSlot(null);
@@ -560,7 +697,11 @@ export function useDeviceSyncController({
     }
   }
   async function renameProfile(name: string) {
-    if (profileBusyRef.current || !hero68DeviceManager.connected || loadedProfileSlot !== profileSlot) {
+    if (
+      profileBusyRef.current ||
+      !hero68DeviceManager.connected ||
+      loadedProfileSlot !== profileSlot
+    ) {
       return false;
     }
     profileBusyRef.current = true;
@@ -589,9 +730,11 @@ export function useDeviceSyncController({
       profileSlot,
       settings: currentProfileDraft()
     };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {
-      type: 'application/json'
-    }));
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json'
+      })
+    );
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = `hero68-profile-${profileSlot}.json`;
@@ -607,7 +750,9 @@ export function useDeviceSyncController({
       return;
     }
     if (loadedProfileSlot !== profileSlot) {
-      setDeviceActionError(`Profile ${profileSlot} has not been read from the keyboard yet. Read it before saving to avoid overwriting unknown per-key values.`);
+      setDeviceActionError(
+        `Profile ${profileSlot} has not been read from the keyboard yet. Read it before saving to avoid overwriting unknown per-key values.`
+      );
     }
     if (loadedProfileSlot !== profileSlot) {
       return;
@@ -615,11 +760,19 @@ export function useDeviceSyncController({
     const customRgbChanged =
       isWin68HeMaxModel(deviceModel) &&
       JSON.stringify(rgb.custom ?? null) !== JSON.stringify(rgbBaseline.custom ?? null);
-    if (dirtyKeys.size === 0 && dirtyRemaps.size === 0 && rgbPending === 0 && !customRgbChanged && !advancedPending) {
+    if (
+      dirtyKeys.size === 0 &&
+      dirtyRemaps.size === 0 &&
+      rgbPending === 0 &&
+      !customRgbChanged &&
+      !advancedPending
+    ) {
       return;
     }
     if (advancedPending && advancedHydratedSlot !== profileSlot) {
-      setDeviceActionError('Read Advanced Keys from this profile before saving. ' + (advancedReadError ?? ''));
+      setDeviceActionError(
+        'Read Advanced Keys from this profile before saving. ' + (advancedReadError ?? '')
+      );
       return;
     }
     if (rgbHydratedSlot !== profileSlot && !isWin68HeMaxModel(deviceModel)) {
@@ -628,18 +781,24 @@ export function useDeviceSyncController({
     }
     saveOpenHeroState(buildPersistedSnapshot());
     const snapshot = {
-      keys: Array.from(dirtyKeys).map(keyId => makeKeyDeviceSettings(keyId, {
-        actuationMm: actuationByKey[keyId] ?? 1.6,
-        rapidTriggerEnabled: rapidTriggerByKey[keyId] ?? false,
-        splitSensitivity: splitSensitivityByKey[keyId] ?? false,
-        rapidSensitivityMm: rapidSensitivityByKey[keyId] ?? 0.65,
-        pressSensitivityMm: pressSensitivityByKey[keyId] ?? 0.5,
-        releaseSensitivityMm: releaseSensitivityByKey[keyId] ?? 0.55,
-        deadzoneEnabled: deadzoneEnabledByKey[keyId] ?? true,
-        topDeadzoneMm: topDeadzoneByKey[keyId] ?? 0,
-        bottomDeadzoneMm: bottomDeadzoneByKey[keyId] ?? 0,
-        switchProfile: assignedSwitchesByKey[keyId] ?? 'white'
-      }, deviceModel)),
+      keys: Array.from(dirtyKeys).map(keyId =>
+        makeKeyDeviceSettings(
+          keyId,
+          {
+            actuationMm: actuationByKey[keyId] ?? 1.6,
+            rapidTriggerEnabled: rapidTriggerByKey[keyId] ?? false,
+            splitSensitivity: splitSensitivityByKey[keyId] ?? false,
+            rapidSensitivityMm: rapidSensitivityByKey[keyId] ?? 0.65,
+            pressSensitivityMm: pressSensitivityByKey[keyId] ?? 0.5,
+            releaseSensitivityMm: releaseSensitivityByKey[keyId] ?? 0.55,
+            deadzoneEnabled: deadzoneEnabledByKey[keyId] ?? true,
+            topDeadzoneMm: topDeadzoneByKey[keyId] ?? 0,
+            bottomDeadzoneMm: bottomDeadzoneByKey[keyId] ?? 0,
+            switchProfile: assignedSwitchesByKey[keyId] ?? 'white'
+          },
+          deviceModel
+        )
+      ),
       tachyon,
       profileSlot,
       model: deviceModel
@@ -659,14 +818,21 @@ export function useDeviceSyncController({
         try {
           if (dirtyKeys.size) {
             await saveDeviceConfiguration(snapshot);
-            const readback = await hydrateFromXsydDevice(xsydDeviceManager, profileSlot, [...dirtyKeys]);
+            const readback = await hydrateFromXsydDevice(xsydDeviceManager, profileSlot, [
+              ...dirtyKeys
+            ]);
             applyHydratedPerformance(readback);
           }
           if (dirtyRemaps.size) {
             await saveXsydRemapChanges(xsydDeviceManager, profileSlot, remapLayers, dirtyRemaps);
           }
           if (advancedPending) {
-            const verified = await saveXsydAdvancedBindings(xsydDeviceManager, profileSlot, advancedBindings, advancedBaseline);
+            const verified = await saveXsydAdvancedBindings(
+              xsydDeviceManager,
+              profileSlot,
+              advancedBindings,
+              advancedBaseline
+            );
             setAdvancedBaseline(verified);
           }
           if ((rgbPending || customRgbChanged) && !tachyon) {
@@ -692,21 +858,38 @@ export function useDeviceSyncController({
           return;
         } finally {
           if (shouldResumeHall && xsydDeviceManager.connected) {
-            await hero68HallStream.start(requestedHallKeys, hallSource, modelKeyIds).catch(() => {});
+            await hero68HallStream
+              .start(requestedHallKeys, hallSource, modelKeyIds)
+              .catch(() => {});
           }
         }
       }
       if (dirtyKeys.size) {
         await saveDeviceConfiguration(snapshot);
-        const readback = await hydrateFromDevice(hero68DeviceManager, profileSlot, [...dirtyKeys], deviceModel);
-        const near = (actual: number | undefined, wanted: number) => actual !== undefined && Math.abs(actual - wanted) <= 0.025;
+        const readback = await hydrateFromDevice(
+          hero68DeviceManager,
+          profileSlot,
+          [...dirtyKeys],
+          deviceModel
+        );
+        const near = (actual: number | undefined, wanted: number) =>
+          actual !== undefined && Math.abs(actual - wanted) <= 0.025;
         for (const expected of snapshot.keys) {
           const actual = readback.get(expected.keyId);
-          const expectedRelease = expected.rapidTriggerEnabled ? expected.splitSensitivity ? expected.releaseSensitivityMm : expected.rapidSensitivityMm : 0;
-          const expectedPress = expected.rapidTriggerEnabled ? expected.splitSensitivity ? expected.pressSensitivityMm : expected.rapidSensitivityMm : 0;
+          const expectedRelease = expected.rapidTriggerEnabled
+            ? expected.splitSensitivity
+              ? expected.releaseSensitivityMm
+              : expected.rapidSensitivityMm
+            : 0;
+          const expectedPress = expected.rapidTriggerEnabled
+            ? expected.splitSensitivity
+              ? expected.pressSensitivityMm
+              : expected.rapidSensitivityMm
+            : 0;
           const rtMismatch =
             expected.rapidTriggerEnabled &&
-            (!near(actual?.pressSensitivityMm, expectedPress) || !near(actual?.releaseSensitivityMm, expectedRelease));
+            (!near(actual?.pressSensitivityMm, expectedPress) ||
+              !near(actual?.releaseSensitivityMm, expectedRelease));
           if (
             !actual ||
             !near(actual.actuationMm, expected.actuationMm) ||
@@ -718,11 +901,13 @@ export function useDeviceSyncController({
         }
         applyHydratedPerformance(readback);
       }
-      if ([...dirtyRemaps].some(change => {
-        const [layerText, keyId] = change.split(':');
-        const remapLayer = (Number(layerText) as RemapLayer);
-        return isMacroRemapValue(remapLayers[remapLayer]?.[keyId]);
-      })) {
+      if (
+        [...dirtyRemaps].some(change => {
+          const [layerText, keyId] = change.split(':');
+          const remapLayer = Number(layerText) as RemapLayer;
+          return isMacroRemapValue(remapLayers[remapLayer]?.[keyId]);
+        })
+      ) {
         const macroLibrary = loadMacroLibrary();
         if (!macroLibrary.length) {
           throw new Error('This mapping references a macro, but the local macro library is empty.');
@@ -730,9 +915,22 @@ export function useDeviceSyncController({
         await hero68DeviceManager.request(selectProfile(profileSlot), 0x10, 0);
         await syncHero68MacroLibrary(hero68DeviceManager, macroLibrary);
       }
-      await saveRemapChanges(hero68DeviceManager, profileSlot, remapLayers, dirtyRemaps, modelKeyIds, deviceModel);
+      await saveRemapChanges(
+        hero68DeviceManager,
+        profileSlot,
+        remapLayers,
+        dirtyRemaps,
+        modelKeyIds,
+        deviceModel
+      );
       if (advancedPending) {
-        const verified = await saveAdvancedBindings(hero68DeviceManager, profileSlot, advancedBindings, advancedBaseline, deviceModel);
+        const verified = await saveAdvancedBindings(
+          hero68DeviceManager,
+          profileSlot,
+          advancedBindings,
+          advancedBaseline,
+          deviceModel
+        );
         setAdvancedBaseline(verified);
       }
       if ((rgbPending || customRgbChanged) && !tachyon) {
@@ -740,7 +938,14 @@ export function useDeviceSyncController({
           const result = await rgbService.mode('onboard');
           publishRgbServiceStatus(result);
         }
-        await saveRgbProfile(hero68DeviceManager, rgb, rgbBaseline, setRgbBaseline, modelKeyIds, deviceModel);
+        await saveRgbProfile(
+          hero68DeviceManager,
+          rgb,
+          rgbBaseline,
+          setRgbBaseline,
+          modelKeyIds,
+          deviceModel
+        );
       }
       if (dirtyKeys.size) {
         setDirtyKeys(new Set());

@@ -11,7 +11,7 @@ import {
   XSYD_MAX_BRIGHTNESS,
   XSYD_PER_KEY_RGB_MODE,
   XsydCustomRgbStreamer,
-  xsydDeviceManager,
+  xsydDeviceManager
 } from './xsyd/device';
 
 let frame: LightingFrame | null = null;
@@ -66,7 +66,9 @@ function startUnthrottledInterval(callback: () => void, intervalMs: number): () 
   ) {
     try {
       const workerCode = `let t=setInterval(()=>postMessage(0),${ms});onmessage=e=>{if(e.data==='stop'){clearInterval(t);close();}};`;
-      const blobUrl = URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' }));
+      const blobUrl = URL.createObjectURL(
+        new Blob([workerCode], { type: 'application/javascript' })
+      );
       const worker = new Worker(blobUrl);
       worker.onmessage = () => callback();
       return () => {
@@ -86,9 +88,14 @@ function startUnthrottledInterval(callback: () => void, intervalMs: number): () 
       // Fall back to standard setInterval if CSP blocks blob workers
     }
   }
-  const setTimer = typeof window !== 'undefined' && window.setInterval ? window.setInterval.bind(window) : setInterval;
+  const setTimer =
+    typeof window !== 'undefined' && window.setInterval
+      ? window.setInterval.bind(window)
+      : setInterval;
   const clearTimer =
-    typeof window !== 'undefined' && window.clearInterval ? window.clearInterval.bind(window) : clearInterval;
+    typeof window !== 'undefined' && window.clearInterval
+      ? window.clearInterval.bind(window)
+      : clearInterval;
   const handle = setTimer(callback, ms);
   return () => clearTimer(handle);
 }
@@ -117,7 +124,7 @@ let xsydRhythmStatsSnapshot: XsydRhythmStats = {
   side: xsydRhythmSideFrame,
   audioSource: 'system',
   sampleRate: 48000,
-  configuration: null,
+  configuration: null
 };
 
 function updateXsydRhythmStatsSnapshot() {
@@ -128,7 +135,7 @@ function updateXsydRhythmStatsSnapshot() {
     side: xsydRhythmSideFrame,
     audioSource: xsydRhythmAudioSource,
     sampleRate: xsydRhythmSampleRate,
-    configuration: xsydRhythmConfig,
+    configuration: xsydRhythmConfig
   };
 }
 
@@ -182,7 +189,11 @@ function cleanupXsydAudioCapture() {
 
 async function setupXsydAudioCapture(endpoint: string): Promise<'synth' | 'system' | 'mic'> {
   cleanupXsydAudioCapture();
-  if (typeof window === 'undefined' || typeof navigator === 'undefined' || !navigator.mediaDevices) {
+  if (
+    typeof window === 'undefined' ||
+    typeof navigator === 'undefined' ||
+    !navigator.mediaDevices
+  ) {
     xsydRhythmAudioSource = 'system';
     return 'system';
   }
@@ -195,7 +206,7 @@ async function setupXsydAudioCapture(endpoint: string): Promise<'synth' | 'syste
     if (endpoint === 'web-system' && navigator.mediaDevices.getDisplayMedia) {
       stream = await navigator.mediaDevices.getDisplayMedia({
         audio: true,
-        video: true,
+        video: true
       });
       for (const vTrack of stream.getVideoTracks()) {
         vTrack.stop();
@@ -208,12 +219,14 @@ async function setupXsydAudioCapture(endpoint: string): Promise<'synth' | 'syste
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
-          autoGainControl: false,
+          autoGainControl: false
         },
-        video: false,
+        video: false
       });
     }
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) {
       throw new Error('Web Audio API is not supported in this browser.');
     }
@@ -316,9 +329,7 @@ function xsydTick() {
   // let the native service own the USB pipe.
   const serviceStatus = getRgbServiceState().status;
   const nativeOwnsUsb = Boolean(
-    serviceStatus?.enabled &&
-    serviceStatus.connected &&
-    !serviceStatus.lastError
+    serviceStatus?.enabled && serviceStatus.connected && !serviceStatus.lastError
   );
 
   if (xsydRhythmActive && xsydRhythmConfig) {
@@ -374,11 +385,7 @@ export function getXsydRhythmStats(): XsydRhythmStats {
 }
 
 export function useXsydRhythmStats(): XsydRhythmStats {
-  return useSyncExternalStore(
-    subscribeXsydCustomRgb,
-    getXsydRhythmStats,
-    getXsydRhythmStats
-  );
+  return useSyncExternalStore(subscribeXsydCustomRgb, getXsydRhythmStats, getXsydRhythmStats);
 }
 
 export function getXsydCustomRgbFrame(): LightingFrame | null {
@@ -411,7 +418,10 @@ export function updateXsydRhythmConfig(config: RhythmConfiguration): void {
   const prevEndpoint = xsydRhythmConfig?.endpoint;
   xsydRhythmConfig = config;
   if (xsydRhythmActive) {
-    if (prevEndpoint !== config.endpoint && (config.endpoint.startsWith('web-') || prevEndpoint?.startsWith('web-'))) {
+    if (
+      prevEndpoint !== config.endpoint &&
+      (config.endpoint.startsWith('web-') || prevEndpoint?.startsWith('web-'))
+    ) {
       void setupXsydAudioCapture(config.endpoint).then(() => notifyXsydState());
     }
     notifyXsydState();
@@ -428,9 +438,7 @@ export async function startXsydCustomRgb(profile: RgbProfile): Promise<void> {
   }
   const serviceStatus = getRgbServiceState().status;
   const nativeOwnsUsb = Boolean(
-    serviceStatus?.enabled &&
-    serviceStatus.connected &&
-    !serviceStatus.lastError
+    serviceStatus?.enabled && serviceStatus.connected && !serviceStatus.lastError
   );
   if (xsydDeviceManager.connected && !nativeOwnsUsb) {
     await xsydDeviceManager.request(
@@ -441,7 +449,7 @@ export async function startXsydCustomRgb(profile: RgbProfile): Promise<void> {
         brightness: XSYD_MAX_BRIGHTNESS,
         speed: 3,
         reverse: false,
-        colorIndex: 0,
+        colorIndex: 0
       })
     );
   }
@@ -450,8 +458,8 @@ export async function startXsydCustomRgb(profile: RgbProfile): Promise<void> {
     ...profile,
     custom: {
       ...restoreCustomRgb(profile.custom, profile),
-      enabled: true,
-    },
+      enabled: true
+    }
   };
   xsydCustomProfile = normalizedProfile;
   if (!xsydCustomEngine) {
@@ -481,9 +489,7 @@ export async function startXsydRhythm(config: RhythmConfiguration): Promise<void
   }
   const serviceStatus = getRgbServiceState().status;
   const nativeOwnsUsb = Boolean(
-    serviceStatus?.enabled &&
-    serviceStatus.connected &&
-    !serviceStatus.lastError
+    serviceStatus?.enabled && serviceStatus.connected && !serviceStatus.lastError
   );
   if (xsydDeviceManager.connected && !nativeOwnsUsb) {
     await xsydStreamer.start(xsydDeviceManager, XSYD_MAX_BRIGHTNESS);
@@ -551,10 +557,22 @@ function subscribe(listener: () => void) {
       if (status) {
         const prevMode = lastServiceObservedMode;
         lastServiceObservedMode = status.enabled ? status.mode : 'onboard';
-        const needsWebHidFallback = !status.connected || Boolean(status.lastError?.includes('RGB write failed'));
-        if (status.enabled && status.mode === 'custom' && status.customConfiguration && needsWebHidFallback && !xsydCustomActive) {
+        const needsWebHidFallback =
+          !status.connected || Boolean(status.lastError?.includes('RGB write failed'));
+        if (
+          status.enabled &&
+          status.mode === 'custom' &&
+          status.customConfiguration &&
+          needsWebHidFallback &&
+          !xsydCustomActive
+        ) {
           void startXsydCustomRgb(status.customConfiguration).catch(() => {});
-        } else if (status.enabled && status.mode === 'rhythm' && xsydRhythmActive && !xsydAudioAnalyser) {
+        } else if (
+          status.enabled &&
+          status.mode === 'rhythm' &&
+          xsydRhythmActive &&
+          !xsydAudioAnalyser
+        ) {
           // If the native Windows service is handling Rhythm Sync and no browser Web Audio
           // stream is active, shut down any stray browser rhythm runner so it never overwrites
           // real service frames.
@@ -564,14 +582,22 @@ function subscribe(listener: () => void) {
             clearXsydTimer();
           }
           notifyXsydState();
-        } else if (!status.enabled && prevMode && prevMode !== 'onboard' && (xsydCustomActive || xsydRhythmActive)) {
+        } else if (
+          !status.enabled &&
+          prevMode &&
+          prevMode !== 'onboard' &&
+          (xsydCustomActive || xsydRhythmActive)
+        ) {
           void stopXsydCustomRgb(status.customConfiguration).catch(() => {});
         }
       }
       if (status?.enabled && (status.apiVersion ?? 0) >= 2) {
         if (!closeFrames) {
           closeFrames = rgbService.frames(next => {
-            if (current !== generation || next.sessionId !== getRgbServiceState().status?.sessionId) {
+            if (
+              current !== generation ||
+              next.sessionId !== getRgbServiceState().status?.sessionId
+            ) {
               return;
             }
             if (next.sessionId) {
@@ -629,5 +655,9 @@ function subscribe(listener: () => void) {
 /** Share actual service output across RGB, AP, RT and other keyboard previews. */
 const noSubscription = () => () => {};
 export function useServiceLighting(enabled = true) {
-  return useSyncExternalStore(enabled ? subscribe : noSubscription, () => enabled ? frame : null, () => null);
+  return useSyncExternalStore(
+    enabled ? subscribe : noSubscription,
+    () => (enabled ? frame : null),
+    () => null
+  );
 }

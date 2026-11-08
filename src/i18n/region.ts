@@ -24,8 +24,11 @@ export async function detectRegion(): Promise<DetectedRegion> {
     if (!response.ok) {
       throw new Error(`Region lookup failed (${response.status})`);
     }
-    const data = (await response.json() as Partial<DetectedRegion>);
-    if ((data.region === 'VN' || data.region === 'OTHER') && (data.suggestedLanguage === 'vi' || data.suggestedLanguage === 'en')) {
+    const data = (await response.json()) as Partial<DetectedRegion>;
+    if (
+      (data.region === 'VN' || data.region === 'OTHER') &&
+      (data.suggestedLanguage === 'vi' || data.suggestedLanguage === 'en')
+    ) {
       return {
         region: data.region,
         country: typeof data.country === 'string' ? data.country : null,

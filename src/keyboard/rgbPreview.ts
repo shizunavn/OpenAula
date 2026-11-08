@@ -6,14 +6,19 @@ import { XsydFirmwareRgbPreview } from './xsydRgbPreview';
 export const RGB_TICK_MS = 0.5;
 // Visible lanes serialize rows 1..5, with 15/15/14/14/10 nodes.
 // Firmware event/table indices are NOT configuration protocol POS values.
-export const RGB_LED_COORDINATES = (Object.fromEntries(HERO68_LAYOUT.flatMap((row, y) => row.map((key, x) => [key.id, [x, y + 1]]))) as Record<string, [number, number]>);
+export const RGB_LED_COORDINATES = Object.fromEntries(
+  HERO68_LAYOUT.flatMap((row, y) => row.map((key, x) => [key.id, [x, y + 1]]))
+) as Record<string, [number, number]>;
 export class FirmwareRgbPreview {
   cpu = new RgbArm();
   ticks = 0;
   /** Keys whose stored colour is loaded; the emulated HERO68 engine only renders these. */
   panels: readonly string[] = Object.keys(RGB_LED_COORDINATES);
   private xsydDelegate: XsydFirmwareRgbPreview | null = null;
-  constructor(public config: RgbProfile, seed = 1) {
+  constructor(
+    public config: RgbProfile,
+    seed = 1
+  ) {
     this.cpu.write(0x20000444, seed, 4);
     this.configure(config, true);
   }
@@ -23,19 +28,32 @@ export class FirmwareRgbPreview {
   private toXsydDelegateProfile(config: RgbProfile): RgbProfile {
     const k = config.keys;
     const win68Mode = Math.max(0, Math.min(26, k.mode - 200));
-    const normBright = k.brightness <= 0 ? 0 : k.brightness > 4 ? Math.max(1, Math.min(4, Math.round(k.brightness / 5))) : k.brightness;
+    const normBright =
+      k.brightness <= 0
+        ? 0
+        : k.brightness > 4
+          ? Math.max(1, Math.min(4, Math.round(k.brightness / 5)))
+          : k.brightness;
     return {
       ...config,
       keys: {
         ...k,
         mode: win68Mode,
-        brightness: normBright,
-      },
+        brightness: normBright
+      }
     };
   }
-  configure(config: RgbProfile, initial = false, panels: readonly string[] = Object.keys(RGB_LED_COORDINATES)) {
-    const normalizedMode = config.keys.mode >= 100 && config.keys.mode < 200 ? config.keys.mode - 100 : config.keys.mode;
-    const keysChanged = initial || JSON.stringify(config.keys) !== JSON.stringify(this.config.keys) || JSON.stringify(config.colors) !== JSON.stringify(this.config.colors);
+  configure(
+    config: RgbProfile,
+    initial = false,
+    panels: readonly string[] = Object.keys(RGB_LED_COORDINATES)
+  ) {
+    const normalizedMode =
+      config.keys.mode >= 100 && config.keys.mode < 200 ? config.keys.mode - 100 : config.keys.mode;
+    const keysChanged =
+      initial ||
+      JSON.stringify(config.keys) !== JSON.stringify(this.config.keys) ||
+      JSON.stringify(config.colors) !== JSON.stringify(this.config.colors);
     const sideChanged = initial || JSON.stringify(config.side) !== JSON.stringify(this.config.side);
     this.config = config;
     this.panels = panels;
@@ -98,7 +116,10 @@ export class FirmwareRgbPreview {
       this.xsydDelegate?.advance(milliseconds);
     }
     const target = Math.floor(milliseconds / RGB_TICK_MS);
-    const normalizedMode = this.config.keys.mode >= 100 && this.config.keys.mode < 200 ? this.config.keys.mode - 100 : this.config.keys.mode;
+    const normalizedMode =
+      this.config.keys.mode >= 100 && this.config.keys.mode < 200
+        ? this.config.keys.mode - 100
+        : this.config.keys.mode;
     for (; this.ticks < target; this.ticks++) {
       for (const addr of [0x20000080, 0x20000086, 0x20000088]) {
         this.cpu.write(addr, this.cpu.read(addr, 2) + 1, 2);
@@ -129,25 +150,43 @@ export class FirmwareRgbPreview {
       const srgb = Math.max(0, Math.min(1, value / 255));
       const linear = srgb <= 0.04045 ? srgb / 12.92 : Math.pow((srgb + 0.055) / 1.055, 2.4);
       const scaled = linear * Math.max(0, Math.min(1, brightness / 20));
-      const encoded = scaled <= 0.0031308 ? scaled * 12.92 : 1.055 * Math.pow(scaled, 1 / 2.4) - 0.055;
+      const encoded =
+        scaled <= 0.0031308 ? scaled * 12.92 : 1.055 * Math.pow(scaled, 1 / 2.4) - 0.055;
       return Math.max(0, Math.min(255, Math.round(encoded * 255)));
     };
-    const hex = (values: number[], brightness: number) => '#' + values.map(x => applyBrightness(x, brightness).toString(16).padStart(2, '0')).join('');
+    const hex = (values: number[], brightness: number) =>
+      '#' + values.map(x => applyBrightness(x, brightness).toString(16).padStart(2, '0')).join('');
     const sideBrightness = Math.min(20, this.cpu.read(0x08029b98 + this.config.side.brightness));
-    const side = Array.from({
-      length: 18
-    }, (_, i) => hex([0, 1, 2].map(j => this.cpu.read(0x20000f36 + i * 3 + j)), sideBrightness));
+    const side = Array.from(
+      {
+        length: 18
+      },
+      (_, i) =>
+        hex(
+          [0, 1, 2].map(j => this.cpu.read(0x20000f36 + i * 3 + j)),
+          sideBrightness
+        )
+    );
     if (this.isCrossWin68Mode(this.config.keys.mode) && this.xsydDelegate) {
       return {
         keys: this.xsydDelegate.frame().keys,
         side
       };
     }
-    const normalizedMode = this.config.keys.mode >= 100 && this.config.keys.mode < 200 ? this.config.keys.mode - 100 : this.config.keys.mode;
+    const normalizedMode =
+      this.config.keys.mode >= 100 && this.config.keys.mode < 200
+        ? this.config.keys.mode - 100
+        : this.config.keys.mode;
     const keys: LightingFrame = {};
     for (const [id, [col, row]] of Object.entries(RGB_LED_COORDINATES)) {
       const p = 0x20000dbc + col * 18 + row * 3;
-      keys[id] = normalizedMode >= 20 ? '#35393b' : hex([0, 1, 2].map(i => this.cpu.read(p + i)), this.config.keys.brightness);
+      keys[id] =
+        normalizedMode >= 20
+          ? '#35393b'
+          : hex(
+              [0, 1, 2].map(i => this.cpu.read(p + i)),
+              this.config.keys.brightness
+            );
     }
     return {
       keys,

@@ -2,8 +2,23 @@ import type { DeviceConfigurationSnapshot, Hero68ProtocolEncoder } from '../devi
 import { HERO68_KEY_IDS } from '../../keyboard/hero68Layout';
 import type { HeroDeviceModelId } from '../../keyboard/devices';
 import { bytesToHex } from '../hex';
-import { readActuation, readDeadZone, readRapidTrigger, readSwitchType, selectProfile, writeActuationBatch, writeDeadZoneBatch, writeRapidTriggerBatch, writeSwitchTypeBatch } from './commands';
-import { decodeActuationRecords, decodeDeadZoneRecords, decodeRapidTriggerRecords, decodeSwitchTypeRecords } from './codec';
+import {
+  readActuation,
+  readDeadZone,
+  readRapidTrigger,
+  readSwitchType,
+  selectProfile,
+  writeActuationBatch,
+  writeDeadZoneBatch,
+  writeRapidTriggerBatch,
+  writeSwitchTypeBatch
+} from './commands';
+import {
+  decodeActuationRecords,
+  decodeDeadZoneRecords,
+  decodeRapidTriggerRecords,
+  decodeSwitchTypeRecords
+} from './codec';
 import { keyIdToPos, posToKeyId } from './keyPositions';
 import type { DecodedReport, ProfileSlot } from './types';
 import { HERO68_DISTANCE_UNIT_MM } from './precision';
@@ -21,7 +36,12 @@ export type HydratedKeySettings = {
   switchProfile?: string;
 };
 export interface Hero68Requester {
-  request(report: Uint8Array, expectedCommand: number, expectedZone?: number, timeoutMs?: number): Promise<DecodedReport>;
+  request(
+    report: Uint8Array,
+    expectedCommand: number,
+    expectedZone?: number,
+    timeoutMs?: number
+  ): Promise<DecodedReport>;
 }
 function chunk<T>(values: readonly T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -42,11 +62,13 @@ export const hero68ProtocolEncoder: Hero68ProtocolEncoder = {
     // transaction per key. Keep the exact batch ordering:
     // 0x15 -> 0x13 -> 0x19 -> 0x16. Writing 0x15 last can cause the firmware
     // to reload switch-dependent state after sensitivity values were applied.
-    const switchRecords = snapshot.keys.map(key => ([keyIdToPos(key.keyId, model), switchFirmwareId(key.switchProfile)] as const));
+    const switchRecords = snapshot.keys.map(
+      key => [keyIdToPos(key.keyId, model), switchFirmwareId(key.switchProfile)] as const
+    );
     packets.push(...writeSwitchTypeBatch(switchRecords));
     const actuationConfigs = snapshot.keys.map(key => ({
       profile: snapshot.profileSlot,
-      layer: (0 as const),
+      layer: 0 as const,
       keyId: keyIdToPos(key.keyId, model),
       distanceMm: key.actuationMm,
       precisionMm: HERO68_DISTANCE_UNIT_MM,
@@ -54,11 +76,19 @@ export const hero68ProtocolEncoder: Hero68ProtocolEncoder = {
     }));
     packets.push(...writeActuationBatch(actuationConfigs));
     const rapidTriggerConfigs = snapshot.keys.map(key => {
-      const releaseMm = key.rapidTriggerEnabled ? key.splitSensitivity ? key.releaseSensitivityMm : key.rapidSensitivityMm : 0;
-      const pressMm = key.rapidTriggerEnabled ? key.splitSensitivity ? key.pressSensitivityMm : key.rapidSensitivityMm : 0;
+      const releaseMm = key.rapidTriggerEnabled
+        ? key.splitSensitivity
+          ? key.releaseSensitivityMm
+          : key.rapidSensitivityMm
+        : 0;
+      const pressMm = key.rapidTriggerEnabled
+        ? key.splitSensitivity
+          ? key.pressSensitivityMm
+          : key.rapidSensitivityMm
+        : 0;
       return {
         profile: snapshot.profileSlot,
-        layer: (0 as const),
+        layer: 0 as const,
         keyId: keyIdToPos(key.keyId, model),
         enabled: key.rapidTriggerEnabled,
         releaseMm,
@@ -68,19 +98,28 @@ export const hero68ProtocolEncoder: Hero68ProtocolEncoder = {
       };
     });
     packets.push(...writeRapidTriggerBatch(rapidTriggerConfigs));
-    packets.push(...writeDeadZoneBatch(snapshot.keys.map(key => ({
-      layer: (0 as const),
-      keyId: keyIdToPos(key.keyId, model),
-      topMm: key.topDeadzoneMm,
-      bottomMm: key.bottomDeadzoneMm,
-      precisionMm: HERO68_DISTANCE_UNIT_MM,
-      global: true,
-      enabled: key.deadzoneEnabled
-    }))));
+    packets.push(
+      ...writeDeadZoneBatch(
+        snapshot.keys.map(key => ({
+          layer: 0 as const,
+          keyId: keyIdToPos(key.keyId, model),
+          topMm: key.topDeadzoneMm,
+          bottomMm: key.bottomDeadzoneMm,
+          precisionMm: HERO68_DISTANCE_UNIT_MM,
+          global: true,
+          enabled: key.deadzoneEnabled
+        }))
+      )
+    );
     return packets.map(reportHex);
   }
 };
-export async function hydrateFromDevice(requester: Hero68Requester, profileSlot: ProfileSlot, keyIds: readonly string[] = HERO68_KEY_IDS, model?: HeroDeviceModelId): Promise<Map<string, HydratedKeySettings>> {
+export async function hydrateFromDevice(
+  requester: Hero68Requester,
+  profileSlot: ProfileSlot,
+  keyIds: readonly string[] = HERO68_KEY_IDS,
+  model?: HeroDeviceModelId
+): Promise<Map<string, HydratedKeySettings>> {
   // Profile is session state: select it first, then read layer 0.
   await requester.request(selectProfile(profileSlot), 0x10, 0);
   const positions = keyIds.map(keyId => keyIdToPos(keyId, model));

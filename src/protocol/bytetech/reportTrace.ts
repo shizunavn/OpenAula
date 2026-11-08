@@ -1,1 +1,1 @@
-export * from '../hero68/reportTrace'
+export * from '../hero68/reportTrace';

@@ -16,7 +16,7 @@ export function serviceHealth(now: () => number = () => performance.now()) {
       if (!failures++) {
         firstFailure = now();
       }
-      if (immediate || !online || failures >= 2 && now() - firstFailure >= 2000) {
+      if (immediate || !online || (failures >= 2 && now() - firstFailure >= 2000)) {
         online = false;
       }
       return online;

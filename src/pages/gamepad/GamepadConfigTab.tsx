@@ -14,7 +14,7 @@ export function GamepadConfigTab({
   onStartCurveDrag,
   onMoveCurveDrag,
   onFinishCurve,
-  onChangeCurve,
+  onChangeCurve
 }: {
   config: GamepadConfiguration;
   status: GamepadStatus | null;
@@ -42,12 +42,12 @@ export function GamepadConfigTab({
           ref={curveSvgRef}
           className="gp-curve"
           viewBox="0 0 320 250"
-          onPointerMove={(event) => onMoveCurveDrag(event.clientX, event.clientY)}
+          onPointerMove={event => onMoveCurveDrag(event.clientX, event.clientY)}
           onPointerUp={() => onFinishCurve()}
           onPointerCancel={() => onFinishCurve(true)}
           onLostPointerCapture={() => onFinishCurve(true)}
         >
-          {[0, 0.25, 0.5, 0.75, 1].map((n) => (
+          {[0, 0.25, 0.5, 0.75, 1].map(n => (
             <g key={n}>
               <line x1={30 + 270 * n} x2={30 + 270 * n} y1="20" y2="220" />
               <line x1="30" x2="300" y1={220 - 200 * n} y2={220 - 200 * n} />
@@ -75,7 +75,7 @@ export function GamepadConfigTab({
               cx={30 + x * 270}
               cy={220 - y * 200}
               r="6"
-              onPointerDown={(event) => {
+              onPointerDown={event => {
                 onSetPoint(index);
                 if (
                   disabled ||
@@ -88,7 +88,7 @@ export function GamepadConfigTab({
                 }
                 onStartCurveDrag(index, event.pointerId, event.currentTarget);
               }}
-              onKeyDown={(event) => {
+              onKeyDown={event => {
                 if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
                   event.preventDefault();
                   const deltaX =
@@ -109,7 +109,7 @@ export function GamepadConfigTab({
         </svg>
         <p className="gp-field-title">{t('Choose a preset')}</p>
         <div className="gp-presets">
-          {Object.keys(CURVE_PRESETS).map((name) => (
+          {Object.keys(CURVE_PRESETS).map(name => (
             <button
               key={name}
               className={
@@ -118,7 +118,7 @@ export function GamepadConfigTab({
               disabled={disabled}
               onClick={() => {
                 onPatch({
-                  curve: CURVE_PRESETS[name].map((p) => [...p] as CurvePoint),
+                  curve: CURVE_PRESETS[name].map(p => [...p] as CurvePoint)
                 });
                 onSetPoint(1);
               }}
@@ -152,7 +152,7 @@ export function GamepadConfigTab({
               const curve = [...config.curve];
               curve.splice(index, 0, [
                 (prevPoint[0] + nextPoint[0]) / 2,
-                (prevPoint[1] + nextPoint[1]) / 2,
+                (prevPoint[1] + nextPoint[1]) / 2
               ]);
               onPatch({ curve });
               onSetPoint(index);
@@ -164,7 +164,7 @@ export function GamepadConfigTab({
             disabled={disabled || point <= 0 || point >= config.curve.length - 1}
             onClick={() => {
               onPatch({
-                curve: config.curve.filter((_, index) => index !== point),
+                curve: config.curve.filter((_, index) => index !== point)
               });
               onSetPoint(1);
             }}
@@ -183,9 +183,9 @@ export function GamepadConfigTab({
               role="switch"
               checked={config.keyboardSuppressionMode === 'hook'}
               disabled={disabled || !status?.capabilities.keyboardHook}
-              onChange={(event) =>
+              onChange={event =>
                 onPatch({
-                  keyboardSuppressionMode: event.target.checked ? 'hook' : 'firmware',
+                  keyboardSuppressionMode: event.target.checked ? 'hook' : 'firmware'
                 })
               }
             />
@@ -212,7 +212,7 @@ export function GamepadConfigTab({
           [
             ['angleEnabled', 'Angle adjustment'],
             ['square', 'Square joystick output'],
-            ['snappy', 'Snappy Joystick'],
+            ['snappy', 'Snappy Joystick']
           ] as const
         ).map(([key, label]) => (
           <div className="gp-response-setting" key={key}>
@@ -223,7 +223,7 @@ export function GamepadConfigTab({
                 role="switch"
                 checked={config[key]}
                 disabled={disabled}
-                onChange={(event) => onPatch({ [key]: event.target.checked })}
+                onChange={event => onPatch({ [key]: event.target.checked })}
               />
             </label>
             <p>
@@ -245,7 +245,7 @@ export function GamepadConfigTab({
                   max="60"
                   disabled={disabled}
                   value={config.angle}
-                  onChange={(event) => onPatch({ angle: event.target.valueAsNumber })}
+                  onChange={event => onPatch({ angle: event.target.valueAsNumber })}
                 />
               </label>
             )}
