@@ -29,6 +29,10 @@ constexpr std::array<uint8_t, 68> positions = {
 struct Key {
   double x;
   double y;
+  // Row-relative horizontal position (0..1), independent of the row's key count. `x` is a
+  // width-weighted position on a variable-width row, so `x / 16` puts the number row's gap
+  // above its keys and made Spectrum Bars skip the top row.
+  double nx;
 };
 
 inline std::array<Key, 68> geometry() {
@@ -44,7 +48,7 @@ inline std::array<Key, 68> geometry() {
   for (size_t row = 0; row < widths.size(); ++row) {
     double x = 0;
     for (double w : widths[row]) {
-      keys[k++] = {x + w * .5, double(row)};
+      keys[k++] = {x + w * .5, double(row), (x + w * .5) / 16};
       x += w;
     }
   }
@@ -60,6 +64,7 @@ struct Config {
   double brightness = 80;
   double sensitivity = 4;
   double releaseMs = 80;
+  double speed = 1300;
   double db = 35;
   Color color{246, 17, 165};
   std::string endpoint = "default";
@@ -77,6 +82,7 @@ inline bool valid(const Config& c) {
          std::isfinite(c.brightness) && c.brightness >= 0 && c.brightness <= 100 &&
          std::isfinite(c.sensitivity) && c.sensitivity >= .1 && c.sensitivity <= 10 &&
          std::isfinite(c.releaseMs) && c.releaseMs >= 0 && c.releaseMs <= 200 &&
+         std::isfinite(c.speed) && c.speed >= 250 && c.speed <= 4000 &&
          std::isfinite(c.db) && c.db >= 0 && c.db <= 100 &&
          !c.endpoint.empty() && c.endpoint.size() <= 512;
 }
@@ -397,7 +403,11 @@ public:
     double target = active ? std::clamp(a.envelope * config_.sensitivity, 0., 1.) : 0;
     // Side 503 only needs to know whether the level is rising, so a literal copy is enough.
     const double previous = level_;
-    level_ = target >= level_ ? target : level_ + (target - level_) * std::exp(-dt / std::max(1., config_.releaseMs));
+    // Audio Marquee and Radial Chase are position-driven; release only lengthens the band and the
+    // browser smooths `level` separately, so neither should reach the engine's shared envelope.
+    const bool fixedRelease = config_.keyMode == 432 || config_.keyMode == 434;
+    level_ = fixedRelease ? target : target >= level_ ? target : level_ + (target - level_) * std::exp(-dt / std::max(1., config_.releaseMs));
+
     if (level_ < .001) {
       level_ = 0;
     }
@@ -496,6 +506,9 @@ public:
       for (size_t i = 0; i < keys_.size(); ++i) {
         const auto k = keys_[i];
         double nx = k.x / 16;
+        // Spectrum Bars and Audio Marquee pick a column with `nx`; use the row-normalised
+        // position so every row spans all 16 bands and the marquee spans the full width.
+        const double column = k.nx;
         double value = 0;
         auto color = palette(nx, elapsed);
         if (config_.keyMode == 169) {
@@ -548,7 +561,7 @@ public:
           out.keys[i] = fields_[fieldIndex_][y * 256 + x];
           continue;
         } else if (config_.keyMode == 429) {
-          const int band = std::clamp(int(nx * 16), 0, 15);
+          const int band = std::clamp(int(column * 16), 0, 15);
           const double ny = k.y / 4;
           // The bottom row owns the baseline, so a band with any energy always reaches it.
           if (bands_[band] > .001 && ny >= (1 - bands_[band]) * (1 - 1e-9)) {
@@ -557,15 +570,16 @@ public:
           }
         } else if (config_.keyMode == 432) {
           const double ny = k.y / 4;
-          const double cell = std::fmod(ny + elapsed / 130, 1.);
+          // `speed` is the full scroll cycle in ms; the phase must advance in ms, not seconds.
+          const double cell = std::fmod(ny + elapsed / config_.speed, 1.);
           // level_ == 0 must stay dark (the bottom row is exactly 0 at phase 0).
           if (level_ > 0 && cell < level_) {
             value = 1 - std::max(0., level_ - cell) * 3;
           }
         } else if (config_.keyMode == 434) {
           // OpenRGB Audio Sync radial roll: distance from centre, advanced by time, cut at the level.
-          const double distance = std::hypot((nx - .5) * 16, (k.y - 2) * 2);
-          const double travel = std::fmod(elapsed / 45, 16.);
+          const double distance = std::hypot((column - .5) * 16, (k.y - 2) * 2);
+          const double travel = std::fmod(elapsed / config_.speed * 16, 16.);
           double phase = distance - travel;
           const double front = level_ * 16;
           if (phase < 0) {

@@ -9,5 +9,5 @@ export function nativeRhythmCommand(input: RhythmConfiguration) {
   if (!RHYTHM_SIDE_VERIFIED && RHYTHM_SIDE_UNVERIFIED.includes(c.sideMode)) {
     throw Error('Side rhythm has not been verified on HERO68 hardware. Select Leave onboard for live playback.');
   }
-  return 'rhythm:' + [c.keyMode, c.sideMode, c.brightness, c.sensitivity, c.releaseMs, ...[1, 3, 5].map(i => parseInt(c.color.slice(i, i + 2), 16)), ['fixed', 'rainbow', 'aurora', 'fire'].indexOf(c.palette), c.spectrum.db, ['hann', 'hamming', 'blackman'].indexOf(c.spectrum.window), c.spectrum.spatialRadius, 1, Buffer.from(c.endpoint, 'utf8').toString('hex')].join(';');
+  return 'rhythm:' + [c.keyMode, c.sideMode, c.brightness, c.sensitivity, c.releaseMs, c.speed, ...[1, 3, 5].map(i => parseInt(c.color.slice(i, i + 2), 16)), ['fixed', 'rainbow', 'aurora', 'fire'].indexOf(c.palette), c.spectrum.db, ['hann', 'hamming', 'blackman'].indexOf(c.spectrum.window), c.spectrum.spatialRadius, 1, Buffer.from(c.endpoint, 'utf8').toString('hex')].join(';');
 }

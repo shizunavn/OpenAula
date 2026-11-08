@@ -1010,7 +1010,7 @@ struct BridgeSession {
       while (std::getline(parts, part, ';')) {
         fields.push_back(part);
       }
-      if (fields.size() != 14) {
+      if (fields.size() != 15) {
         throw std::runtime_error("Invalid rhythm command");
       }
       c.keyMode = std::stoi(fields[0]);
@@ -1018,27 +1018,28 @@ struct BridgeSession {
       c.brightness = std::stod(fields[2]);
       c.sensitivity = std::stod(fields[3]);
       c.releaseMs = std::stod(fields[4]);
+      c.speed = std::stod(fields[5]);
       for (int i = 0; i < 3; ++i) {
-        int n = std::stoi(fields[5 + i]);
+        int n = std::stoi(fields[6 + i]);
         if (n < 0 || n > 255) {
           throw std::runtime_error("Invalid color");
         }
         c.color[i] = uint8_t(n);
       }
-      c.palette = std::stoi(fields[8]);
-      c.db = std::stod(fields[9]);
-      c.window = std::stoi(fields[10]);
-      c.spatialRadius = std::stoi(fields[11]);
+      c.palette = std::stoi(fields[9]);
+      c.db = std::stod(fields[10]);
+      c.window = std::stoi(fields[11]);
+      c.spatialRadius = std::stoi(fields[12]);
       // Side protocol is not yet verified on the target board; reject activation honestly.
-      if (fields[12] != "1" || c.sideMode != 500) {
+      if (fields[13] != "1" || c.sideMode != 500) {
         throw std::runtime_error("Side rhythm is not hardware-verified");
       }
       c.endpoint.clear();
-      if (fields[13].size() % 2) {
+      if (fields[14].size() % 2) {
         throw std::runtime_error("Invalid endpoint");
       }
-      for (size_t i = 0; i < fields[13].size(); i += 2) {
-        c.endpoint += char(std::stoi(fields[13].substr(i, 2), nullptr, 16));
+      for (size_t i = 0; i < fields[14].size(); i += 2) {
+        c.endpoint += char(std::stoi(fields[14].substr(i, 2), nullptr, 16));
       }
       engine.configure(c);
       capture.start(c.endpoint);

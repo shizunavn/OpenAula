@@ -94,13 +94,14 @@ export const RHYTHM_SIDE_MODES = [
 export type RhythmMode = (typeof RHYTHM_MODES)[number]['id'];
 export type RhythmSideMode = (typeof RHYTHM_SIDE_MODES)[number]['id'];
 export type RhythmConfiguration = {
-  version: 1;
+  version: 2;
   keyMode: RhythmMode;
   sideMode: RhythmSideMode;
   endpoint: string;
   brightness: number;
   sensitivity: number;
   releaseMs: number;
+  speed: number;
   color: string;
   palette: 'fixed' | 'rainbow' | 'aurora' | 'fire';
   spectrum: {
@@ -111,13 +112,14 @@ export type RhythmConfiguration = {
 };
 export function defaultRhythm(): RhythmConfiguration {
   return {
-    version: 1,
+    version: 2,
     keyMode: 428,
     sideMode: 500,
     endpoint: 'default',
     brightness: 80,
     sensitivity: 4,
     releaseMs: 80,
+    speed: 1300,
     color: '#f611a5',
     palette: 'rainbow',
     spectrum: {
@@ -135,7 +137,7 @@ export function validateRhythm(input: unknown): RhythmConfiguration {
   const range = (n: number, low: number, high: number) =>
     Number.isFinite(n) && n >= low && n <= high;
   if (
-    v.version !== 1 ||
+    v.version !== 2 ||
     !RHYTHM_MODES.some(m => m.id === v.keyMode) ||
     !RHYTHM_SIDE_MODES.some(m => m.id === v.sideMode) ||
     typeof v.endpoint !== 'string' ||
@@ -145,6 +147,7 @@ export function validateRhythm(input: unknown): RhythmConfiguration {
     !range(v.brightness, 0, 100) ||
     !range(v.sensitivity, 0.1, 10) ||
     !range(v.releaseMs, 0, 200) ||
+    !range(v.speed, 250, 4000) ||
     !/^#[0-9a-f]{6}$/i.test(v.color) ||
     !['fixed', 'rainbow', 'aurora', 'fire'].includes(v.palette) ||
     !v.spectrum ||
@@ -156,13 +159,14 @@ export function validateRhythm(input: unknown): RhythmConfiguration {
     throw Error('Invalid rhythm configuration');
   }
   return {
-    version: 1,
+    version: 2,
     keyMode: v.keyMode,
     sideMode: v.sideMode,
     endpoint: v.endpoint,
     brightness: v.brightness,
     sensitivity: v.sensitivity,
     releaseMs: v.releaseMs,
+    speed: v.speed,
     color: v.color.toLowerCase(),
     palette: v.palette,
     spectrum: {
@@ -175,12 +179,18 @@ export function validateRhythm(input: unknown): RhythmConfiguration {
 export function restoreRhythm(input: unknown): RhythmConfiguration {
   if (input && typeof input === 'object') {
     const raw = input as {
+      version?: unknown;
       keyMode?: unknown;
       endpoint?: unknown;
     };
     const patched: Record<string, unknown> = {
       ...(input as Record<string, unknown>)
     };
+    // v1 drafts predate `speed`; they used the fixed 130 ms scroll, which v2 expresses as 1300.
+    if (raw.version === 1) {
+      patched.version = 2;
+      patched.speed ??= defaultRhythm().speed;
+    }
     if (raw.keyMode === 430) {
       patched.keyMode = 428;
     }
@@ -413,6 +423,8 @@ export function renderRhythmAudioFrame(
               : 0;
           break;
         case 429: {
+          // `MAX_ROW` only: key `x` is an index into a variable-width row, so the gap above the
+          // number row would otherwise leave a band with no key to light.
           const band = Math.max(0, Math.min(15, Math.floor(nx * 16)));
           const energy = bands[band] ?? 0;
           value = allowSynthFallback
@@ -425,16 +437,16 @@ export function renderRhythmAudioFrame(
           break;
         }
         case 432: {
-          // Audio Marquee: a wrapping band of height `level` fills down each row.
-          const cell = (ny + t / 0.13) % 1;
-          value = cell <= level ? Math.max(0, 1 - (level - cell) * 3) : 0;
+          // Audio Marquee: a band of height `level` scrolls down and wraps every `speed` ms.
+          const cell = (((ny + (t * 1000) / config.speed) % 1) + 1) % 1;
+          value = level > 0 && cell < level ? Math.max(0, 1 - (level - cell) * 3) : 0;
           break;
         }
         case 434: {
           // Audio Sync radial roll: a front travels outward and stops at `level * 16` keys.
           const distance = Math.hypot((nx - 0.5) * 16, (y - 2) * 2);
           const front = level * 16;
-          let travel = distance - t / 0.045;
+          let travel = distance - ((t * 1000) / config.speed) * 16;
           if (travel < 0) {
             travel = (travel % 16) + 16;
           }

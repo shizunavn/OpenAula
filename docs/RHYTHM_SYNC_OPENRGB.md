@@ -80,17 +80,29 @@ thêm bảng ánh xạ mới.
 
 ### 432 — Audio Marquee
 
-- `cell = fmod(ny + elapsed/130, 1)`, cột sáng khi `cell < level_`.
+- `cell = fmod(ny + elapsed/speed, 1)`, sáng khi `level_ > 0` và `cell < level_`.
+- `speed` là độ dài **một vòng cuộn đầy đủ (ms)**, mặc định 1300; engine và trình duyệt
+  cùng đơn vị ms (`elapsed` từ engine, `timeMs` từ Web Audio).
 - Điều kiện `level_ > 0` là bắt buộc: ở pha 0 hàng dưới có `cell == 0`, nếu thiếu
   điều kiện thì im lặng vẫn sáng một hàng.
+- Marquee là hiệu ứng **theo vị trí**, không dùng release: thanh release bị ẩn trong UI
+  và cả hai renderer bỏ qua `releaseMs` cho chế độ này.
 
 ### 434 — Radial Chase
 
-- `distance = hypot((nx-0.5)·16, (k.y-2)·2)` — trường khoảng cách lấy tâm giữa
-  bàn phím.
-- `travel = fmod(elapsed/45, 16)`; `phase = distance - travel` (cộng 16 nếu âm).
+- `distance = hypot((column-0.5)·16, (k.y-2)·2)` — trường khoảng cách lấy tâm giữa
+  bàn phím; `column` là vị trí chuẩn hoá trong từng hàng.
+- `travel = fmod(elapsed/speed·16, 16)`; `phase = distance - travel` (cộng 16 nếu âm).
 - Mặt sáng có bề rộng `level_·16`; trong mặt sáng giá trị bão hoà 1, mép giảm
   dần trong 2 đơn vị cuối.
+- Cùng `speed` (mặc định 1300 ms cho một vòng từ tâm ra), không dùng release.
+
+### Cột phổ và hình học phím
+
+Engine tính cột bằng `Key.nx` — vị trí chuẩn hoá trong **từng hàng**, không phải
+`k.x/16`. `k.x` là vị trí theo bề rộng phím trong hàng có độ rộng phím khác nhau,
+nên hàng phím số (hàng trên cùng) bị dồn lệch phải và các cột phổ không rơi vào
+phím nào. `nx` cho mỗi hàng trải đủ 16 dải (Spectrum Bars) và đủ bề ngang (Marquee).
 
 ### Side LED (chưa xác minh phần cứng)
 
@@ -122,13 +134,21 @@ thứ tự và kênh chưa được kiểm trên thiết bị thật:
 | OpenRGB Effects Plugin | GPL-2.0-or-later | **Không copy mã nguồn**; chỉ tái hiện công thức toán (cửa sổ, đường cong log, gộp dải, decay) và cấu trúc hiệu ứng |
 | OpenAula | Xem `LICENSE` của repo | Công thức toán không mang bản quyền; nếu dự án OpenAula không tương thích GPL thì không được dán nguyên văn mã plugin |
 
-## 6. Kiểm chứng
+## 6. Cấu hình
+
+`RhythmConfiguration` đã lên **version 2**: thêm `speed` (ms cho một vòng cuộn,
+250–4000, mặc định 1300). Bản lưu version 1 được `restoreRhythm()` điền `speed`
+mặc định khi đọc; lệnh native `rhythm:...` giờ có **15** trường (`speed` ở vị trí 5,
+các trường sau dồn một bậc).
+
+## 7. Kiểm chứng
 
 - `tests/native-rhythm.test.cpp`: chế độ 429/432/434 phát packet hợp lệ,
   checksum khớp, tắt hoàn toàn khi im lặng, đổi `generation` xoá sạch; `logBands`
-  đặt đúng dải cho tần số 3/17/40, im lặng cho toàn 0; side 504/505/506 có hành
-  vi đúng và encode thành report `14/1`.
+  đặt đúng dải cho tần số 3/17/40, im lặng cho toàn 0; Marquee quay lại đúng chu
+  kỳ sau `speed` ms và lệch ở giữa chu kỳ; Spectrum Bars vẽ được cột ở tần số giữa;
+  side 504/505/506 có hành vi đúng và encode thành report `14/1`.
 - `tests/rhythm.test.mjs`: catalogue 10 chế độ, side 504–506 được chặn ở service,
-  `validateRhythm` từ chối `sideMode: 507`.
+  `validateRhythm` từ chối `version: 1` và `speed` ngoài khoảng, migrate v1 → v2.
 - Chạy: `g++ -std=c++17 -O2 -static tests/native-rhythm.test.cpp` (bắt buộc
   `-static` với MinGW 15.1.0 trên Windows), `npm test`, `npm run typecheck:service`.

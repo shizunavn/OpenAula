@@ -110,10 +110,25 @@ int main() {
       Audio quiet;quiet.generation=1;auto f=idle.render(quiet,1000);assert(f.level==0);
       for(auto c:f.keys)assert(c==Color{});
     }
-    // Marquee must stay black at level 0 even while its scroll phase advances.
-    Engine marquee;Config m;m.keyMode=432;m.palette=0;marquee.configure(m);
+    // Marquee must stay black at level 0 even while its scroll phase advances, and `speed` is
+    // the full cycle in ms: 6300 → 7600 ms is exactly one 1300 ms cycle, 325 ms is not.
+    Engine marquee;Config m;m.keyMode=432;m.palette=0;m.sensitivity=.1;marquee.configure(m);
     Audio idle;idle.generation=1;auto idleFrame=marquee.render(idle,5000);
     assert(idleFrame.level==0);for(auto k:idleFrame.keys)assert(k==Color{});
+    Audio loud;loud.generation=1;loud.sequence=1;loud.receivedMs=5000;loud.envelope=1;
+    auto litAt=[&](double at){Audio a=loud;a.sequence++;a.receivedMs=at;auto f=marquee.render(a,at);size_t lit=0;for(auto k:f.keys)if(k!=Color{})++lit;return lit;};
+    const size_t start=litAt(6300);assert(start>0&&start<68);
+    assert(litAt(6625)!=start);assert(litAt(7600)==start); // 1300 ms = exactly one cycle
+    // Spectrum Bars must draw a column per band: a weak mid tone used to light a single key,
+    // because `band < 1` turned the whole bar into a bottom-row-only segment.
+    for(int frequency:{24,32,48}) {
+      std::array<float,256> t{};for(int i=0;i<256;++i)t[i]=float(.001*std::sin(2*pi*frequency*i/256));
+      Engine bars;Config b;b.keyMode=429;b.palette=0;b.sensitivity=1;b.releaseMs=80;bars.configure(b);
+      Audio a;a.generation=1;a.sequence=1;a.receivedMs=8000;a.samples=t;
+      auto spectrum=bars.render(a,8000);
+      size_t lit=0;for(auto key:spectrum.keys)if(key!=Color{})++lit;
+      assert(lit>=2);
+    }
     // Peak-hold side meter: rises to the attack level, decays when the level falls, and
     // side 506 is the far-end mirror of 501.
     Engine side;Config c;c.keyMode=171;c.sideMode=501;c.palette=0;c.releaseMs=80;c.sensitivity=2;side.configure(c);
