@@ -457,8 +457,8 @@ export default function RhythmSyncEditor({
     queue.current?.close();
     setSession(null);
     try {
-      const useBrowserWebAudio =
-        isWin68 && (!compatible || current.current.endpoint.startsWith('web-'));
+      // prettier-ignore
+      const useBrowserWebAudio = isWin68 && (!compatible || current.current.endpoint.startsWith('web-'));
       if (useBrowserWebAudio) {
         await startXsydRhythm(current.current);
       } else if (xsydLive) {
