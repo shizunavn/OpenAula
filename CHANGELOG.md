@@ -3,6 +3,45 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.6.0 — Dynamic Wave 9-Direction, Trigger Response, Log-Spaced Rhythm Equalizer & Smooth Multi-Color Wraparound
+
+- Dynamic Wave (`wave`):
+  - Multi-directional color waves across all 9 directions (`top-left`, `top`, `top-right`, `left`, `center`, `right`, `bottom-left`, `bottom`, `bottom-right`) plus legacy horizontal/vertical directions.
+  - Supports true radial outward wave (`center`) centered on the keyboard layout.
+  - Seamless circular linear interpolation across palette stops, completely eliminating seam color jumps and angular quantization snaps.
+  - Usable both as base effect and composable effect layer, with speed, wave width, direction grid, and palette controls.
+- Trigger Response (`trigger`):
+  - Cross-shaped row and column light wave emitted upon each key press.
+  - Per-press cyclic progression across the 5-color trigger palette stops (`RGB_GRADIENT_PALETTES.trigger`).
+  - Origin key stays illuminated while physically held, and cross arms blend additively (`addPixel`) when multiple keys overlap.
+- Rhythm Sync Log-Spaced Equalizer & Modes (`service/native/rhythm_core.h`, `rhythm.ts`):
+  - 16 log-spaced frequency equalizer bands across 64 FFT bins (~187.5 Hz to ~11.8 kHz), spreading speech and musical energy across the full 68-key width rather than bunching in the first column.
+  - Added new Rhythm key modes: Mode 429 (Spectrum Bars), Mode 432 (Audio Marquee), and Mode 434 (Radial Chase).
+  - Added new Rhythm side modes: Mode 504 (Loop 18 slots), Mode 505 (Peak-hold meter), and Mode 506 (Far-end meter).
+  - Added technical architecture documentation in `docs/RHYTHM_SYNC_OPENRGB.md`.
+- WIN 68 HE MAX Preview & Multi-Color Smoothing:
+  - Eliminated 30-degree quantization jumps and seam snaps in `AulaWin68ExactRgbEngine` across ported modes `201..212`.
+  - Added `pendingPress` buffer in `AulaWin68ExactRgbEngine` to latch fast preview key presses between animation frames.
+  - Added additive pixel blending (`addPixel`) to prevent overlapping reactive slots from wiping colors.
+  - Added WebHID write guard in Custom RGB and Rhythm modes to prevent conflicting live background writes.
+  - Preserved color group prior in `service/frame.ts` during palette member merging.
+- Code quality & ESLint:
+  - Configured ESLint with `@babel/eslint-parser`, `eslint-plugin-react-hooks`, and `eslint-plugin-react-refresh`.
+  - Added `npm run lint` script to `package.json`.
+
+## 1.5.2 — Custom Effects Multicolor Restoration, Dedicated Gaming Preset Separation & Profile Save Fixes
+
+- Custom Effects Color Controls:
+  - Restored Multicolor toggle and 8-color swatch grid (including Slot 0 Multicolor with rainbow indicator) for non-gradient effects.
+  - Automatically hidden Single Color controls for gradient effects (Aurora, Comet, Ember, Starlight, Afterglow, Pulse), directly exposing gradient palettes.
+- Dedicated Gaming Preset Colors:
+  - Independent `presetColors` caching across Custom Effects and Onboard Effects for Mode 22 (WASD), Mode 23 (MOBA), Mode 24 (RTS), Mode 25 (MMO), and Mode 26 (User Custom).
+  - Editing User Custom preset colors no longer mirrors into MOBA or other presets.
+  - Built-in recommended default lighting templates for gaming presets.
+- Profile Save Fixes:
+  - Synchronized `value.keys.mode` with `config.base.mode` when selecting presets in Custom Effects.
+  - Removed model restriction gating `customRgbPending`, allowing HERO68 to save Custom Effects to hardware profiles.
+
 ## 1.5.1 — WIN 68 HE MAX DKS 7-Node Visual Track & Official Keycap Palette
 
 - DKS 7-Node Visual Track Editor (`AdvancedKeysPage.tsx` & `AdvancedKeysPage.css`):

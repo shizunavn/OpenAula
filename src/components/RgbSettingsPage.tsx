@@ -229,7 +229,7 @@ function ActiveRgbSettingsPage({
   }, [activeHex]);
 
   function pushWin68LiveZone(nextZone: RgbZone) {
-    if (!isWin68 || !xsydDeviceManager.connected) {
+    if (!isWin68 || !xsydDeviceManager.connected || customMode || playback.applied || xsydRhythmStats.active) {
       return;
     }
     void xsydDeviceManager.request(buildXsydRgbWriteFrame(nextZone)).catch(() => {});

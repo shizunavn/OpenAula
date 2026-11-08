@@ -256,6 +256,22 @@ function onXsydWindowKeyUp(event: KeyboardEvent) {
   }
 }
 
+function onXsydPreviewPress(event: Event) {
+  if (!xsydCustomActive || !xsydCustomEngine) {
+    return;
+  }
+  const id = (event as CustomEvent<string>).detail;
+  if (!id) {
+    return;
+  }
+  xsydCustomEngine.event(id, true);
+  setTimeout(() => {
+    if (xsydCustomActive && xsydCustomEngine && !xsydHeldKeys.has(id)) {
+      xsydCustomEngine.event(id, false);
+    }
+  }, 180);
+}
+
 function onXsydWindowBlur() {
   if (!xsydCustomEngine || xsydHeldKeys.size === 0) {
     return;
@@ -276,6 +292,7 @@ function attachXsydKeyListeners() {
   window.addEventListener('keydown', onXsydWindowKeyDown);
   window.addEventListener('keyup', onXsydWindowKeyUp);
   window.addEventListener('blur', onXsydWindowBlur);
+  window.addEventListener('custom-rgb-preview-press', onXsydPreviewPress);
 }
 
 function detachXsydKeyListeners() {
@@ -286,6 +303,7 @@ function detachXsydKeyListeners() {
   window.removeEventListener('keydown', onXsydWindowKeyDown);
   window.removeEventListener('keyup', onXsydWindowKeyUp);
   window.removeEventListener('blur', onXsydWindowBlur);
+  window.removeEventListener('custom-rgb-preview-press', onXsydPreviewPress);
 }
 
 function xsydTick() {

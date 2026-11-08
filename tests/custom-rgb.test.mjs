@@ -526,3 +526,73 @@ test('new palettes restore and old services are told to update for the new effec
   for(const id of ['ember','starlight','afterglow','pulse'])assert.ok(!custom.LEGACY_RGB_EFFECTS.includes(id))
   for(const id of ['ember','starlight','afterglow','pulse']){const layer=custom.createRgbLayer(id,'x');assert.equal(layer.multicolor,true);assert.ok(layer.palette)}
 })
+
+test('Dynamic Wave supports all 9 directions (including radial Center) and seamless circular palette transitions without seam jumps',()=>{
+  const p=profile('wave'),layer=p.custom.layers[0]
+  assert.equal(layer.multicolor,true);assert.equal(layer.palette,'wave');assert.equal(layer.direction,'left')
+  const framesByDir=new Map()
+  for(const dir of custom.CUSTOM_RGB_DIRECTIONS.map(d=>d.id)){
+    layer.direction=dir
+    const restored=custom.restoreCustomRgb(JSON.parse(JSON.stringify(p.custom)),p)
+    assert.equal(restored.layers[0].direction,dir)
+    const e=new custom.CustomRgbEngine(p);e.advance(600)
+    const keys=e.frame().keys
+    assert.ok(Object.values(keys).some(c=>energy(c)>200),`${dir}: must illuminate keys`)
+    framesByDir.set(dir,JSON.stringify(keys))
+  }
+  assert.notEqual(framesByDir.get('left'),framesByDir.get('right'))
+  assert.notEqual(framesByDir.get('top'),framesByDir.get('bottom'))
+  assert.notEqual(framesByDir.get('top-left'),framesByDir.get('bottom-right'))
+  assert.notEqual(framesByDir.get('center'),framesByDir.get('left'))
+
+  // Verify frame-to-frame continuity across a full wave cycle (no color jump at wrap seam)
+  layer.direction='top-left';layer.speed=1.5
+  const e=new custom.CustomRgbEngine(p);e.advance(100)
+  let prev=e.frame().keys
+  for(let t=116;t<=3000;t+=16){
+    e.advance(t);const cur=e.frame().keys
+    assert.ok(frameDelta(prev,cur)<=28,`Dynamic Wave must not jump colors at ${t}ms (delta=${frameDelta(prev,cur)})`)
+    prev=cur
+  }
+})
+
+test('Trigger Response illuminates cross row and column, cycles 5-color palette per press, holds origin, and blends additively',()=>{
+  const p=profile('trigger'),layer=p.custom.layers[0]
+  assert.equal(layer.multicolor,true);assert.equal(layer.palette,'trigger')
+  const e=new custom.CustomRgbEngine(p);e.advance(110)
+  e.event('KeyG',true);e.advance(150)
+  const firstFrame=e.frame().keys
+  // KeyG is on row y=2; KeyF and KeyH are on the same row, KeyT and KeyB are in the column
+  assert.ok(energy(firstFrame.KeyG)>200,'pressed key lights up')
+  assert.ok(energy(firstFrame.KeyF)>100,'same row neighbor lights up in cross')
+  assert.ok(energy(firstFrame.KeyH)>100,'same row neighbor lights up in cross')
+  assert.ok(energy(firstFrame.KeyT)>80,'same column neighbor above lights up in cross')
+  assert.ok(energy(firstFrame.KeyB)>80,'same column neighbor below lights up in cross')
+  assert.equal(firstFrame.Escape,'#000000','distant off-axis key stays dark')
+
+  const firstColorG=firstFrame.KeyG
+  // Pressing another key cycles to the next palette stop without changing KeyG's red cross color
+  e.event('KeyK',true);e.advance(240)
+  const secondFrame=e.frame().keys
+  assert.notEqual(secondFrame.KeyK,firstColorG,'second press uses next color in trigger palette')
+  // KeyH lies on the shared row between KeyG (red) and KeyK (green) and blends additively
+  const hChannels=channels(secondFrame.KeyH)
+  assert.ok(hChannels[0]>100&&hChannels[1]>100,'intersecting/overlapping cross arms blend additively')
+
+  e.event('KeyG',false);e.event('KeyK',false)
+  e.advance(2500)
+  assert.ok(Object.values(e.frame().keys).every(c=>c==='#000000'),'Trigger Response fades cleanly to black after release')
+})
+
+test('Win68 Max ported effects in CustomRgbEngine have smooth multi-color progression without frame snaps',()=>{
+  for(const modeId of [201,202,203,204,205,206,207,208,209,210,211,212]){
+    const p=profile();p.custom.layers=[];p.custom.base={...p.custom.base,mode:modeId,mix:true,brightness:20,speed:2}
+    const e=new custom.CustomRgbEngine(p);e.advance(110)
+    let prev=e.frame().keys
+    for(let t=126;t<=1600;t+=16){
+      e.advance(t);const cur=e.frame().keys
+      assert.ok(frameDelta(prev,cur)<=65,`Ported Win68 mode ${modeId} must not snap colors abruptly at ${t}ms (delta=${frameDelta(prev,cur)})`)
+      prev=cur
+    }
+  }
+})

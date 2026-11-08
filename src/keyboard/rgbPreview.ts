@@ -43,7 +43,8 @@ export class FirmwareRgbPreview {
       const delegateProfile = this.toXsydDelegateProfile(config);
       if (!this.xsydDelegate) {
         this.xsydDelegate = new XsydFirmwareRgbPreview(delegateProfile);
-      } else {
+        this.xsydDelegate.ticks = this.ticks;
+      } else if (keysChanged) {
         this.xsydDelegate.configure(delegateProfile);
       }
     }

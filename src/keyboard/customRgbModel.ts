@@ -1,10 +1,44 @@
 import { HERO68_KEY_IDS } from './hero68Layout';
 import { allRegisteredKeyIds, getBoard, isBoardModelId, type HeroDeviceModelId } from './registry';
 import type { RgbColor, RgbProfile, RgbZone } from '../protocol/hero68/rgb';
+
+export const CUSTOM_RGB_DIRECTIONS = ([
+  { id: 'top-left', label: 'Top Left', dx: -1, dy: -1 },
+  { id: 'top', label: 'Top', dx: 0, dy: -1 },
+  { id: 'top-right', label: 'Top Right', dx: 1, dy: -1 },
+  { id: 'left', label: 'Left', dx: -1, dy: 0 },
+  { id: 'center', label: 'Center', dx: 0, dy: 0 },
+  { id: 'right', label: 'Right', dx: 1, dy: 0 },
+  { id: 'bottom-left', label: 'Bottom Left', dx: -1, dy: 1 },
+  { id: 'bottom', label: 'Bottom', dx: 0, dy: 1 },
+  { id: 'bottom-right', label: 'Bottom Right', dx: 1, dy: 1 }
+] as const);
+
+export type CustomRgbDirection9 = typeof CUSTOM_RGB_DIRECTIONS[number]['id'];
+export type CustomRgbDirection = 'horizontal' | 'vertical' | CustomRgbDirection9;
+
+const VALID_CUSTOM_RGB_DIRECTIONS = new Set<string>([
+  'horizontal',
+  'vertical',
+  ...CUSTOM_RGB_DIRECTIONS.map(d => d.id)
+]);
+
+export function isValidCustomRgbDirection(value: unknown): value is CustomRgbDirection {
+  return typeof value === 'string' && VALID_CUSTOM_RGB_DIRECTIONS.has(value);
+}
+
 export const CUSTOM_RGB_EFFECTS = ([{
   id: 'aurora',
   name: 'Aurora',
   detail: 'Soft ribbons of light drift across the keyboard.'
+}, {
+  id: 'wave',
+  name: 'Dynamic Wave',
+  detail: 'Multi-directional color waves across 9 directions (including radial Center) with seamless circular palette transitions.'
+}, {
+  id: 'trigger',
+  name: 'Trigger Response',
+  detail: 'Each key press launches a smooth cross-shaped row and column wave that cycles through the palette and blends additively.'
 }, {
   id: 'comet',
   name: 'Comet',
@@ -76,6 +110,14 @@ export const RGB_GRADIENT_PALETTES = ({
     name: 'Aurora',
     colors: ['#22d3ee', '#8b5cf6', '#ec4899']
   },
+  wave: {
+    name: 'Dynamic Wave',
+    colors: ['#ff0000', '#ffa500', '#ffff00', '#00ff00', '#00ffff', '#0000ff']
+  },
+  trigger: {
+    name: 'Trigger RGB',
+    colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff']
+  },
   sunset: {
     name: 'Sunset',
     colors: ['#ff6b35', '#f43f5e', '#8b5cf6']
@@ -105,7 +147,7 @@ export const RGB_GRADIENT_PALETTES = ({
 export type RgbGradientPalette = keyof typeof RGB_GRADIENT_PALETTES;
 // Effects an app that predates `supportedEffects` can render. Newer effects must be listed
 // in NEWER_RGB_EFFECTS so that an old background app is asked to update instead of failing.
-const NEWER_RGB_EFFECTS: readonly string[] = ['aurora', 'comet', 'pressure-wave', 'ember', 'starlight', 'afterglow', 'pulse'];
+const NEWER_RGB_EFFECTS: readonly string[] = ['aurora', 'wave', 'trigger', 'comet', 'pressure-wave', 'ember', 'starlight', 'afterglow', 'pulse'];
 export const LEGACY_RGB_EFFECTS = CUSTOM_RGB_EFFECTS.filter(e => !NEWER_RGB_EFFECTS.includes(e.id)).map(e => e.id);
 type EffectMetadata = {
   width?: string;
@@ -117,6 +159,7 @@ type EffectMetadata = {
   duration?: string;
   scanPause?: string;
   direction?: boolean;
+  multiDirection?: boolean;
   hall?: boolean;
   gradient?: boolean;
   semanticColor?: boolean;
@@ -134,6 +177,41 @@ export const RGB_EFFECT_METADATA: Record<CustomRgbEffect, EffectMetadata> = {
       opacity: 75,
       width: 2.5,
       speed: .5
+    }
+  },
+  wave: {
+    width: 'Wave width',
+    widthRange: [.5, 8, .25],
+    speed: '×',
+    speedRange: [.25, 6, .25],
+    direction: true,
+    multiDirection: true,
+    gradient: true,
+    defaults: {
+      color: [255, 0, 0],
+      multicolor: true,
+      palette: 'wave',
+      opacity: 100,
+      width: 2.5,
+      speed: 1.5,
+      direction: 'left'
+    }
+  },
+  trigger: {
+    width: 'Cross width',
+    widthRange: [.5, 4, .25],
+    speed: '×',
+    speedRange: [.25, 5, .25],
+    duration: 'Fade duration',
+    gradient: true,
+    defaults: {
+      color: [0, 255, 255],
+      multicolor: true,
+      palette: 'trigger',
+      opacity: 100,
+      width: 1,
+      speed: 1.5,
+      duration: 900
     }
   },
   comet: {
@@ -296,16 +374,17 @@ export type CustomRgbLayer = {
   width: number;
   speed: number;
   duration: number;
-  direction: 'horizontal' | 'vertical';
+  direction: CustomRgbDirection;
   keys: string[];
   palette?: RgbGradientPalette;
   scanPauseMs?: number;
 };
 export type CustomRgbBaseEffect = {
-  effect: 'aurora';
+  effect: 'aurora' | 'wave';
   palette: RgbGradientPalette;
   width: number;
   speed: number;
+  direction?: CustomRgbDirection;
 };
 export type CustomRgbConfiguration = {
   version: 1;
@@ -397,6 +476,14 @@ export function restoreCustomRgb(value: unknown, profile: RgbProfile, validKeyId
         width: finite(v.baseEffect.width, 2.5, .25, 12),
         speed: finite(v.baseEffect.speed, .5, .5, 30)
       }
+    } : v.baseEffect?.effect === 'wave' ? {
+      baseEffect: {
+        effect: ('wave' as const),
+        palette: Object.hasOwn(RGB_GRADIENT_PALETTES, v.baseEffect.palette) ? v.baseEffect.palette : ('wave' as const),
+        width: finite(v.baseEffect.width, 2.5, .5, 8),
+        speed: finite(v.baseEffect.speed, 1.5, .25, 6),
+        direction: isValidCustomRgbDirection(v.baseEffect.direction) ? v.baseEffect.direction : 'left'
+      }
     } : {}),
     ...(v.presetColors && typeof v.presetColors === 'object' ? {
       presetColors: Object.fromEntries(
@@ -434,7 +521,7 @@ export function restoreCustomRgb(value: unknown, profile: RgbProfile, validKeyId
         width: finite(layer.width, defaults.width, RGB_EFFECT_METADATA[layer.effect].widthRange?.[0] ?? .25, RGB_EFFECT_METADATA[layer.effect].widthRange?.[1] ?? 12),
         speed: finite(layer.speed, defaults.speed, RGB_EFFECT_METADATA[layer.effect].speedRange?.[0] ?? .5, RGB_EFFECT_METADATA[layer.effect].speedRange?.[1] ?? 30),
         duration: finite(layer.duration, defaults.duration, 100, 4000),
-        direction: layer.direction === 'vertical' ? 'vertical' : 'horizontal',
+        direction: isValidCustomRgbDirection(layer.direction) ? layer.direction : defaults.direction,
         ...(layer.effect === 'scan' ? {
           scanPauseMs: finite(layer.scanPauseMs, 0, 0, 5000)
         } : {}),

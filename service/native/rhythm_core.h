@@ -69,8 +69,8 @@ inline bool valid(const Config& c) {
   const auto has = [](int n, std::initializer_list<int> list) {
     return std::find(list.begin(), list.end(), n) != list.end();
   };
-  return has(c.keyMode, {169, 170, 171, 172, 173, 180, 428}) &&
-         has(c.sideMode, {500, 501, 502, 503}) &&
+  return has(c.keyMode, {169, 170, 171, 172, 173, 180, 428, 429, 432, 434}) &&
+         has(c.sideMode, {500, 501, 502, 503, 504, 505, 506}) &&
          c.palette >= 0 && c.palette <= 3 &&
          c.window >= 0 && c.window <= 2 &&
          c.spatialRadius >= 0 && c.spatialRadius <= 16 &&
@@ -172,18 +172,21 @@ inline double envelope(const float* samples, size_t count) {
   return peak == 0 ? 0 : std::max(0., peak - sum / count);
 }
 
+// Shared so FFT and log band mapping use one window definition (0 Hann, 1 Hamming, 2 Blackman).
+inline double windowFunction(int window, int i, int count) {
+  const double angle = 2 * pi * i / double(count);
+  return window == 1 ? .54 - .46 * std::cos(angle)
+         : window == 2 ? .42 - .5 * std::cos(angle) + .08 * std::cos(2 * angle)
+                       : .5 - .5 * std::cos(angle);
+}
+
 inline std::array<double, 64> fft(
     const std::array<float, 256>& input,
     int window,
     double gain) {
   std::array<std::complex<double>, 256> a{};
   for (int i = 0; i < 256; ++i) {
-    double angle = 2 * pi * i / 256;
-    double w =
-        window == 1 ? .54 - .46 * std::cos(angle)
-        : window == 2 ? .42 - .5 * std::cos(angle) + .08 * std::cos(2 * angle)
-                      : .5 - .5 * std::cos(angle);
-    a[i] = {std::isfinite(input[i]) ? input[i] * w * gain : 0, 0};
+    a[i] = {std::isfinite(input[i]) ? input[i] * windowFunction(window, i, 256) * gain : 0, 0};
   }
   for (unsigned i = 1, j = 0; i < 256; ++i) {
     unsigned bit = 128;
@@ -216,6 +219,93 @@ inline std::array<double, 64> fft(
   return result;
 }
 
+// Log-spaced bands over the 64 FFT bins at 48 kHz / FFT256 (~187.5 Hz per bin, to
+// ~11.8 kHz). OpenRGB's Audio Visualizer spreads the whole spectrum linearly, which
+// puts speech and most music entirely in the first columns on a 68-key row.
+inline std::array<double, 16> logBands(const std::array<float, 256>& input, int window, double gain) {
+  // Iterative radix-2 FFT over a 256-real window. With the imaginary part zero the result
+  // splits into two 128-point half-length transforms; only the 64 bins the bands use are
+  // combined here, which keeps the engine cost at the existing FFT's order.
+  constexpr size_t half = 128;
+  std::array<double, half * 2> even{};
+  std::array<double, half * 2> odd{};
+  // Normalise by the window's mean weight so Hann/Hamming/Blackman cost the same level as
+  // OpenRGB's raw buffer, where the window is applied after the gain.
+  double windowSum = 0;
+  for (size_t n = 0; n < 256; ++n) {
+    windowSum += windowFunction(window, int(n), 256);
+  }
+  const double level = gain * 256. / std::max(1e-9, windowSum);
+  for (size_t n = 0; n < half; ++n) {
+    const double a = std::isfinite(input[2 * n]) ? double(input[2 * n]) * windowFunction(window, int(2 * n), 256) * level : 0;
+    const double b = std::isfinite(input[2 * n + 1]) ? double(input[2 * n + 1]) * windowFunction(window, int(2 * n + 1), 256) * level : 0;
+    even[2 * n] = a;
+    odd[2 * n] = b;
+  }
+  auto transform = [](std::array<double, half * 2>& a) {
+    for (size_t i = 1, j = 0; i < half; ++i) {
+      size_t bit = half / 2;
+      while (bit && (j & bit)) {
+        j ^= bit;
+        bit >>= 1;
+      }
+      j |= bit;
+      // `bit` is 0 only when every lower bit was set, i.e. j reached its final value.
+      if (i < j && j < half) {
+        std::swap(a[2 * i], a[2 * j]);
+        std::swap(a[2 * i + 1], a[2 * j + 1]);
+      }
+    }
+    for (int len = 2; len <= int(half); len *= 2) {
+      const auto root = std::polar(1., -2 * pi / len);
+      for (int i = 0; i < int(half); i += len) {
+        std::complex<double> w{1, 0};
+        for (int j = 0; j < len / 2; ++j) {
+          const size_t x = size_t(i + j) * 2;
+          const size_t y = size_t(i + j + len / 2) * 2;
+          const std::complex<double> u{a[x], a[x + 1]};
+          const std::complex<double> v{a[y], a[y + 1]};
+          const auto t = v * w;
+          a[x] = u.real() + t.real();
+          a[x + 1] = u.imag() + t.imag();
+          a[y] = u.real() - t.real();
+          a[y + 1] = u.imag() - t.imag();
+          w *= root;
+        }
+      }
+    }
+  };
+  transform(even);
+  transform(odd);
+  std::array<double, 64> spectrum{};
+  for (size_t k = 0; k < spectrum.size(); ++k) {
+    const std::complex<double> x{even[2 * k], even[2 * k + 1]};
+    const std::complex<double> y{odd[2 * k], odd[2 * k + 1]};
+    // X[k] = (x + y) / 2 - j/2 * (x - y) * W^k, W = e^(-2πj/256).
+    const auto rotated = y * std::polar(1., -2 * pi * double(k) / 256);
+    spectrum[k] = std::abs((x + rotated) * .5) / 128;
+  }
+  std::array<int, 17> edges{};
+  for (int band = 0; band <= 16; ++band) {
+    edges[band] = std::clamp(int(std::lround(std::pow(64, band / 16.))), 0, 64);
+  }
+  std::array<double, 16> result{};
+  for (int band = 0; band < 16; ++band) {
+    const int low = std::min(63, edges[band]);
+    const int high = std::min(64, std::max(low + 1, edges[band + 1]));
+    double mag = 0;
+    for (int j = low; j < high; ++j) {
+      mag += spectrum[size_t(j)] * spectrum[size_t(j)];
+    }
+    mag = std::sqrt(mag);
+    // OpenRGB / KeyboardVisualizer magnitude curve. Unlike its scalar path this keeps sub-1
+    // magnitudes instead of saturating them, so neighbouring bands stay readable at 1.0.
+    const double m = std::min(1., mag);
+    result[band] = m > 0 ? std::clamp(.9 * m + .5 * std::log10(1.1 * m), 0., 1.) : 0;
+  }
+  return result;
+}
+
 class Engine {
   Config config_{};
   const std::array<Key, 68> keys_ = geometry();
@@ -230,6 +320,9 @@ class Engine {
   uint64_t sequence_ = 0;
   std::array<double, 22> history_{};
   std::array<double, 64> peaks_{};
+  std::array<double, 16> bands_{};
+  uint64_t spectrumSequence_ = 0;
+  double meter_{};
   std::array<double, 256> display_{};
   std::array<std::array<Color, 256 * 64>, 2> fields_{};
   size_t fieldIndex_ = 0;
@@ -262,7 +355,15 @@ public:
     effectOrigin_ = 0;
     history_.fill(0);
     peaks_.fill(0);
+    bands_.fill(0);
+    meter_ = 0;
+    spectrumSequence_ = 0;
     display_.fill(0);
+    // Stale spectrum/2A fields would otherwise resurface on the first frame after a stream
+    // restart, when a spectrum mode has not re-filled them yet.
+    for (auto& field : fields_) {
+      field.fill(Color{});
+    }
     generation_ = 0;
     sequence_ = 0;
   }
@@ -293,10 +394,9 @@ public:
 
     bool active = a.sequence && now - a.receivedMs < 100;
     double target = active ? std::clamp(a.envelope * config_.sensitivity, 0., 1.) : 0;
-    double previous = level_;
-    level_ = target >= level_ || config_.releaseMs == 0
-                 ? target
-                 : std::max(target, level_ * std::exp(-dt / config_.releaseMs));
+    // Side 503 only needs to know whether the level is rising, so a literal copy is enough.
+    const double previous = level_;
+    level_ = target >= level_ ? target : level_ + (target - level_) * std::exp(-dt / std::max(1., config_.releaseMs));
     if (level_ < .001) {
       level_ = 0;
     }
@@ -304,6 +404,38 @@ public:
       std::move_backward(history_.begin(), history_.end() - 1, history_.end());
       history_[0] = level_;
       historyAt_ = now;
+    }
+
+    // OpenRGB Audio VU Meter peak-hold: jump straight up, decay at 0.1/speed per frame.
+    meter_ = level_ >= meter_ ? level_ : std::max(level_, meter_ - .1 * dt * 60 / 1000);
+
+    if (config_.keyMode == 429) {
+      // Keyed on its own sequence: sharing `sequence_` with the 428 field meant a packet
+      // consumed by 428 never refreshed these bands, leaving them frozen while live.
+      // Gate on freshness, not on the shared envelope: with `envelope = 0` but fresh samples
+      // the bands must still decay from the per-packet computation below.
+      if (a.sequence && now - a.receivedMs < 100 && a.sequence != spectrumSequence_) {
+        auto bands = logBands(a.samples, config_.window, config_.db * 30);
+        // Digital silence still yields tiny non-zero FFT bins which the magnitude curve lifts
+        // into visible bars. OpenRGB has the same non-linearity, so gate quiet windows to zero.
+        double rms = 0;
+        for (float x : a.samples) {
+          rms += std::isfinite(x) ? double(x) * x : 0;
+        }
+        if (std::sqrt(rms / a.samples.size()) < 1. / 32768) {
+          bands.fill(0);
+        }
+        double decay = config_.releaseMs == 0 ? 0 : std::exp(-std::max(0., now - spectrumAt_) / config_.releaseMs);
+        for (int i = 0; i < 16; ++i) {
+          bands_[i] = std::max(bands[i], bands_[i] * decay);
+        }
+        spectrumAt_ = now;
+        spectrumSequence_ = a.sequence;
+      } else if (!active) {
+        for (auto& b : bands_) {
+          b *= config_.releaseMs == 0 ? 0 : std::exp(-dt / config_.releaseMs);
+        }
+      }
     }
 
     if (config_.keyMode == 428) {
@@ -414,18 +546,53 @@ public:
           int y = 17 + 10 * int(k.y);
           out.keys[i] = fields_[fieldIndex_][y * 256 + x];
           continue;
+        } else if (config_.keyMode == 429) {
+          const int band = std::clamp(int(nx * 16), 0, 15);
+          const double ny = k.y / 4;
+          // The bottom row owns the baseline, so a band with any energy always reaches it.
+          if (bands_[band] > .001 && ny >= (1 - bands_[band]) * (1 - 1e-9)) {
+            const double edge = std::clamp((bands_[band] - (1 - ny)) * 16., 0., 1.);
+            value = .35 + .65 * edge;
+          }
+        } else if (config_.keyMode == 432) {
+          const double ny = k.y / 4;
+          const double cell = std::fmod(ny + elapsed / 130, 1.);
+          // level_ == 0 must stay dark (the bottom row is exactly 0 at phase 0).
+          if (level_ > 0 && cell < level_) {
+            value = 1 - std::max(0., level_ - cell) * 3;
+          }
+        } else if (config_.keyMode == 434) {
+          // OpenRGB Audio Sync radial roll: distance from centre, advanced by time, cut at the level.
+          const double distance = std::hypot((nx - .5) * 16, (k.y - 2) * 2);
+          const double travel = std::fmod(elapsed / 45, 16.);
+          double phase = distance - travel;
+          const double front = level_ * 16;
+          if (phase < 0) {
+            phase += 16;
+          }
+          if (phase < front) {
+            value = std::clamp(1 - std::max(0., phase - front + 2) / 2, 0., 1.);
+            if (phase < front - 2) {
+              value = 1;
+            }
+          }
         }
         out.keys[i] = scale(color, value * brightness);
       }
     }
 
     for (int i = 0; i < 18; ++i) {
-      bool lit =
+      const bool lit =
           config_.sideMode == 501 ? i < int(level_ * 18)
+          : config_.sideMode == 505 ? i < int(meter_ * 18)
           : config_.sideMode == 502 ? std::abs(i - 8) < int(level_ * 9)
-                                    : false;
+          : config_.sideMode == 506 ? i >= 18 - int(level_ * 18)
+                                    : config_.sideMode == 504;
       if (lit) {
-        out.side[i] = scale(palette(double(i) / 18, elapsed), brightness);
+        // 504 is the palette loop: it shows the rotating palette at full brightness, so silence
+        // must not blank it (it is a background effect, not a meter).
+        double value = config_.sideMode == 504 ? 1 : std::min(1., level_);
+        out.side[i] = scale(palette(double(i) / 18, elapsed), value * brightness);
       }
     }
     if (config_.sideMode == 503) {

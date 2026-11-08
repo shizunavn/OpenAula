@@ -140,6 +140,11 @@
 .custom-rgb-direction>div {display:inline-flex;gap:4px;padding:3px;border:1px solid var(--rgb-border);border-radius:6px;background:#181d1f}
 .custom-rgb-direction button {background:transparent;border:0;border-radius:4px;color:#b7c3ca;padding:6px 12px;font-size:12px;font-weight:650;cursor:pointer}
 .custom-rgb-direction button[aria-pressed=true] {background:#ffd95a;color:#141819}
+.custom-rgb-direction.is-grid {flex-direction:column;align-items:stretch;gap:8px}
+.custom-rgb-direction>div.custom-rgb-direction-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:6px;width:100%}
+.custom-rgb-direction>div.custom-rgb-direction-grid button {text-align:center;padding:8px 10px;border:1px solid #2d363b;background:#202629}
+.custom-rgb-direction>div.custom-rgb-direction-grid button:hover {background:#2a3236;border-color:#434f56}
+.custom-rgb-direction>div.custom-rgb-direction-grid button[aria-pressed=true] {background:#ffd95a;color:#141819;border-color:#ffd95a}
 .custom-palette-options {display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 .custom-palette-options button {display:flex;align-items:center;gap:8px;border:1px solid #3b454a;background:#22282b;color:#c5d0d6;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer}
 .custom-palette-options button span {width:28px;height:14px;border-radius:3px}

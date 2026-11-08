@@ -88,7 +88,7 @@ export function prepareFrame(frame: Record<string, string>, previous?: PaletteSt
     const total = a.members.length + b.members.length;
     a.color = a.color.map((v, i) => (v * a.members.length + b.color[i] * b.members.length) / total);
     if (a.prior !== b.prior) {
-      a.prior = -1;
+      a.prior = a.members.length >= b.members.length ? a.prior : b.prior;
     }
     a.members.push(...b.members);
     active[right] = false;

@@ -15,7 +15,7 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 >
 > No coding needed. Share your exact model, firmware version, USB IDs and a layout photo; write **Unknown** if you need help. Protocol captures are optional. Owners who can test on real hardware are especially welcome.
 >
-> **Currently verified: AULA HERO68/HERO84(ONLY VERIFIED LIGHTING,RT,AP)/WIN68 MAX.** Other models still need protocol and hardware validation. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings and advanced keys are checked byte for byte against USB captures, but DKS and non-default SOCD modes stay disabled until a capture proves their layout.
+> **Currently verified: AULA HERO68/HERO84(ONLY VERIFIED LIGHTING,RT,AP)/WIN68 MAX.** Other models still need protocol and hardware validation. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings, Rapid Trigger, 4-mode SOCD, 7-node visual DKS, Custom Effects, and Rhythm Sync are fully supported.
 
 
 
@@ -45,17 +45,17 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 | Actuation Point | Per-key or multi-key actuation from 0.10 to 3.40 mm, with a live Hall test overlay on the keyboard |
 | Rapid Trigger | Rapid Trigger and deadzone settings |
 | Key Remap | Remap keys across layers, with a searchable icon catalog |
-| Advanced Keys | SOCD, DKS, Mod Tap, Toggle, MPT and END bindings (Main Layer). DKS and non-default SOCD are disabled on WIN 68 HE MAX until a USB capture proves their frame layout |
+| Advanced Keys | SOCD (4 priority modes), DKS (7-node visual track & official keycap palette), Mod Tap, Toggle, MPT and END bindings (Main Layer) |
 | Macros | Macro editor with a local library synced to the keyboard |
-| RGB Settings | On-board effects for keys and side light, plus **Custom Effects** and **Rhythm Sync**; per-key painting tools sit directly below the keyboard preview |
+| RGB Settings | On-board effects for keys and side light, plus **Custom Effects** (Dynamic Wave across 9 directions, Trigger Response, Aurora, and 16 FX layers) and **Rhythm Sync** (with 16 log-spaced equalizer bands, Spectrum Bars, Audio Marquee, Radial Chase & Peak-hold side meters); per-key painting tools sit directly below the keyboard preview |
 | Gamepad | Setup & Remap with automatic saves, analog response curves/travel, digital AP/RT, Snappy, circle/square, angle adjustment, live tester with XInput verification, and **custom toggle keybinding** to start/stop emulation in-game |
 | Device settings | Polling rate (125 Hz – 8000 Hz), Tachyon Mode, OS mode, Windows key lock, Hall debounce, auto calibration, switch selector |
 | Interface | English and Vietnamese UI, optional advanced pages (Hall Stream), compact sidebar |
 
 **RGB tray service** (Windows x64, installed)
 
-- **Custom Effects:** an Aurora base with composable effects (Comet, Pressure Wave, Ripple, Reaction, Touch, Jelly, AOE, Scan, Breath, Mixing, Trail, RT Display, plus the ambient Ember, Starlight, Afterglow and Tempo Pulse (BPM)) and a layer editor. Start/Stop controls with automatic live updates, session recovery and preserved drafts.
-- **Rhythm Sync:** seven key modes driven by native system-audio capture, with live preview and a 60 FPS USB scheduler shared with Custom Effects.
+- **Custom Effects:** an Aurora or Dynamic Wave base with composable effects (Dynamic Wave, Trigger Response, Comet, Pressure Wave, Ripple, Reaction, Touch, Jelly, AOE, Scan, Breath, Mixing, Trail, RT Display, plus the ambient Ember, Starlight, Afterglow and Tempo Pulse (BPM)) and a layer editor with 9-direction control and smooth circular palette transitions. Start/Stop controls with automatic live updates, session recovery and preserved drafts.
+- **Rhythm Sync:** 10 key modes driven by native system-audio capture with 16 log-spaced FFT bands, 7 side meter modes (including Peak-hold & Far-end), live preview and a 60 FPS USB scheduler shared with Custom Effects.
 - **Gamepad:** one virtual Xbox controller through ViGEmBus 1.22.0, up to 200 Hz analog output, automatically saved configurations for three profile slots, tray Start/Stop, and keybind toggle (`POST /gamepad/toggle`) with `expectedEnabled` state guard and automatic Xbox attach retry. Curve edits save on release; digital buttons follow keyboard AP/RT. The tester has a separate fast input stream; assigned keyboard keys can use firmware empty action with automatic remap recovery.
 - **Shared Hall:** one native scheduler polls active source keys only, sharing common samples between Gamepad, RGB, Hall Stream and visual feedback. RGB Hall demand stays 100 Hz; LED output retains its 60 FPS target.
 - **Keeps playing** when the browser is closed; AP, Rapid Trigger and deadzone stay editable while RGB runs.

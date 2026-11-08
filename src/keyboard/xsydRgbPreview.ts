@@ -8,7 +8,8 @@
  * - 64-bit Knuth MMIX LCG PRNG (`VA 0x1B1F6` / `0x1B24C`)
  * - 16-iteration bitwise integer square root `isqrt32` (`VA 0x113E6`) & `hypot256` (`VA 0x11412`)
  * - Exact integer `rgbToHsv` (`VA 0x1142C`) & `hsvToRgb` (`VA 0x114C6`, divisor 15360)
- * - All 28 Internal Modes (`0..27`) & 27 External Modes (`0..26`)
+ * - All 28 Internal Modes (`0..27`) & 27 External Modes (`0..26`) with smooth continuous
+ *   multi-color phase wrapping (eliminating seam snaps & 30-degree quantization jumps)
  * - `XsydFirmwareRgbPreview` adapter compatible with `FirmwareRgbPreview`
  */
 
@@ -178,6 +179,7 @@ export class AulaWin68ExactRgbEngine {
   public readonly userRgb = new Uint32Array(127) // 0x20001EF8
   public readonly keyTrigger = new Uint8Array(126) // 0x20006AC6 (live Hall trigger state)
   public readonly prevKeyTrig = new Uint8Array(126) // 0x20001D00 (state + 64)
+  public readonly pendingPress = new Uint8Array(126) // latches brief presses between ticks
 
   // NVRAM Config Registers (0x20003198)
   public internalMode = 8 // 0..27 (0x200031C2)
@@ -210,8 +212,8 @@ export class AulaWin68ExactRgbEngine {
   private meteors: Array<{ yFp8: number; color: number; col: number; speedFp8: number }> = []
   private orb = { vx: 60, vy: 80, ax: 0, ay: 90, rIn: 2, rOut: 10, hue: 0 }
   private ribbon = { dirFlag: 1, amp: 256, freq: 1024, cA: 0xff0000, cB: 0x00ffff }
-  private wipe = { cA: 0xff0000, cB: 0x00ff00, lastParity: 0 }
-  private iris = { c1: 0xff0000, c2: 0x00ff00, t1: 0x0000ff, t2: 0xffff00, progress: 0.0, subMode: 1 }
+  private wipe = { cA: 0xff0000, cB: 0x00ff00, lastParity: 0, hue: 0 }
+  private iris = { c1: 0xff0000, c2: 0x00ff00, t1: 0x0000ff, t2: 0xffff00, progress: 0.0, subMode: 1, hue1: 0, hue2: 120 }
   private zoneHues: [number, number] = [0, 180]
   private reactiveColorRot = 0
   private reactiveSingleV = new Uint8Array(126)
@@ -248,7 +250,7 @@ export class AulaWin68ExactRgbEngine {
 
   // VA 0x112B4 / 0x11316: Quarter-wave Sine Lookup in 0..720 half-degrees -> [-255..255]
   public sin720(halfDeg: number): number {
-    let a = (halfDeg | 0) % 720
+    let a = Math.trunc(halfDeg) % 720
     if (a < 0) a += 720
     if (a <= 180) return SIN_ROM_181[a]
     if (a <= 360) return SIN_ROM_181[360 - a]
@@ -258,8 +260,7 @@ export class AulaWin68ExactRgbEngine {
 
   // VA 0x0EEC8: Cosine in 0..720 half-degrees -> [-255..255]
   public cos720(halfDeg: number): number {
-    const shifted = ((halfDeg + 180) << 16) >> 16
-    return this.sin720(shifted)
+    return this.sin720(Math.trunc(halfDeg) + 180)
   }
 
   // VA 0x11368: Exact ROM Table atan2(dy, dx) in 0..720 half-degrees
@@ -330,7 +331,7 @@ export class AulaWin68ExactRgbEngine {
     s &= 0xff
     v &= 0xff
     if (s === 0) return (0xff000000 | (v << 16) | (v << 8) | v) >>> 0
-    const hMod = ((h % 360) + 360) % 360
+    const hMod = ((Math.trunc(h) % 360) + 360) % 360
     const region = Math.trunc(hMod / 60)
     const p = (((v << 8) - s * v) >> 8) & 0xff
     const prod = hMod * s * v
@@ -421,6 +422,17 @@ export class AulaWin68ExactRgbEngine {
     }
   }
 
+  // Additive Pixel Blend at (col, row) to avoid harsh color overwrites in overlapping reactive slots
+  public addPixel(col: number, row: number, rgb: number): void {
+    if (col < 0 || col >= 21 || row < 0 || row >= 6) return
+    const idx = row * 21 + col
+    const prev = this.rgbFb[idx] >>> 0
+    const r = Math.min(255, ((prev >>> 16) & 0xff) + ((rgb >>> 16) & 0xff))
+    const g = Math.min(255, ((prev >>> 8) & 0xff) + ((rgb >>> 8) & 0xff))
+    const b = Math.min(255, (prev & 0xff) + (rgb & 0xff))
+    this.rgbFb[idx] = (0xff000000 | (r << 16) | (g << 8) | b) >>> 0
+  }
+
   // VA 0x0F880: Bresenham Line Rasterizer
   public drawLine(x0: number, y0: number, x1: number, y1: number, rgb: number): void {
     x0 |= 0
@@ -491,7 +503,7 @@ export class AulaWin68ExactRgbEngine {
     this.baseStep = 50
     this.paramStep = 20
     this.phase = 0
-    this.subPhase = 1000
+    this.subPhase = 0
     this.floatTheta = 0.0
     this.fillFb(0)
     this.blendFb.fill(0)
@@ -514,18 +526,25 @@ export class AulaWin68ExactRgbEngine {
         this.baseStep = 50
         this.paramStep = 50
         break
-      case 14: // VA 0x0DE10: Breathing & Radial Iris
+      case 14: { // VA 0x0DE10: Breathing & Radial Iris
         this.baseStep = 120
         this.paramStep = 30
+        const h1 = this.rand16() % 360
+        const h2 = (h1 + 120) % 360
+        const nextH1 = (h1 + 75) % 360
+        const nextH2 = (h2 + 75) % 360
         this.iris = {
-          c1: this.hsvToRgb(this.rand16() % 360, 255, 255),
-          c2: this.hsvToRgb((this.rand16() + 120) % 360, 255, 255),
-          t1: this.hsvToRgb((this.rand16() + 60) % 360, 255, 255),
-          t2: this.hsvToRgb((this.rand16() + 240) % 360, 255, 255),
+          c1: this.hsvToRgb(h1, 255, 255),
+          c2: this.hsvToRgb(h2, 255, 255),
+          t1: this.hsvToRgb(nextH1, 255, 255),
+          t2: this.hsvToRgb(nextH2, 255, 255),
           progress: 0.0,
           subMode: 1,
+          hue1: nextH1,
+          hue2: nextH2,
         }
         break
+      }
       case 15: // VA 0x0DBFE: 3-Zone Interleaved Sine
         this.baseStep = 30
         this.paramStep = 3
@@ -534,20 +553,26 @@ export class AulaWin68ExactRgbEngine {
       case 16: { // VA 0x0DE62: Dual-Color Sine Ribbon
         this.baseStep = 20
         this.paramStep = 30
-        const cA = this.hsvToRgb(this.rand16() % 360, 255, 255) & 0xffffff
-        const cB = (~cA) & 0xffffff
+        const h = this.rand16() % 360
+        this.subPhase = h
+        const cA = this.hsvToRgb(h, 255, 255) & 0xffffff
+        const cB = this.hsvToRgb((h + 150) % 360, 255, 255) & 0xffffff
         this.ribbon = { dirFlag: 1, amp: 256, freq: 1024, cA, cB }
         break
       }
-      case 17: // VA 0x0F482: Color Wipe Curtain
+      case 17: { // VA 0x0F482: Color Wipe Curtain
         this.baseStep = 10
         this.paramStep = 30
+        const hue = this.rand16() % 360
+        const nextHue = (hue + 105) % 360
         this.wipe = {
-          cA: this.hsvToRgb(this.rand16() % 360, 255, 255),
-          cB: this.hsvToRgb((this.rand16() + 140) % 360, 255, 255),
+          cA: this.hsvToRgb(hue, 255, 255),
+          cB: this.hsvToRgb(nextHue, 255, 255),
           lastParity: 0,
+          hue: nextHue,
         }
         break
+      }
       case 18:
       case 19: // VA 0x0DBE0: Dancing Sine Snake / Symmetric Dual Sine
         this.baseStep = 100
@@ -619,8 +644,10 @@ export class AulaWin68ExactRgbEngine {
     for (let idx = 0; idx < 126; idx++) {
       const cur = this.keyTrigger[idx]
       const prev = this.prevKeyTrig[idx]
+      const pending = this.pendingPress[idx]
       this.prevKeyTrig[idx] = cur
-      if (cur !== 0 && prev === 0) {
+      this.pendingPress[idx] = 0
+      if ((cur !== 0 && prev === 0) || pending !== 0) {
         pressed.push({ idx, col: idx % 21, row: Math.trunc(idx / 21) })
       }
     }
@@ -670,7 +697,8 @@ export class AulaWin68ExactRgbEngine {
         break
 
       case 8: { // VA 0x0FE3E (Ext 1): Aurora Horizontal Sine Wave
-        this.phase = (this.phase + spd + 10) % 1440
+        const step = Math.max(4, Math.trunc((spd + 20) / 4))
+        this.phase = (this.phase + step) % 1440
         const baseDeg = this.phase * 0.25
         const colStep = 360.0 / 21.0
         for (let x = 0; x < 21; x++) {
@@ -681,18 +709,18 @@ export class AulaWin68ExactRgbEngine {
           if (rad < -Math.PI) rad += 2 * Math.PI
           const s2 = rad * rad
           const val = Math.min(255, Math.trunc(((1.0 - s2 * 0.5 + (s2 * s2) / 24.0) * 0.5 + 0.5) * 180.0 + 40.0))
+          const multiVal = Math.min(255, Math.trunc(val * 0.35 + 165))
           const rgb = single.isSingle
             ? this.modulateSingleColor(single.rgb, single.hsv, val, 40)
-            : this.hsvToRgb(Math.trunc(deg) % 360, 255, val)
+            : this.hsvToRgb(deg, 255, multiVal)
           for (let y = 0; y < 6; y++) this.setPixel(x, y, rgb)
         }
         break
       }
 
       case 9: { // VA 0x1005A (Ext 2): Vertical Row Cascade Wave (Tide Flux)
-        let nextPhase = (this.phase + spd) % 720
-        if (nextPhase < spd) nextPhase = (nextPhase + 1) % 720
-        this.phase = nextPhase
+        const step = Math.max(2, Math.trunc((spd + 18) / 8))
+        this.phase = (this.phase + step) % 720
         let h = this.phase >> 1
         for (let y = 0; y < 6; y++) {
           const vMod = (this.sin720(h << 1) + 255) >> 1
@@ -706,10 +734,8 @@ export class AulaWin68ExactRgbEngine {
       }
 
       case 10: { // VA 0x10128 (Ext 3): Center Diamond Ripple (Soft Ripple)
-        const step = (spd + 3) & 0xff
-        let nextPhase = (this.phase + step) % 1440
-        if (nextPhase < step) nextPhase = (nextPhase + 1) % 1440
-        this.phase = nextPhase
+        const step = Math.max(4, Math.trunc((spd + 20) / 4))
+        this.phase = (this.phase + step) % 1440
         let h = this.phase >> 2
         for (let r = 0; r < 32; r++) {
           const vMod = (this.sin720(h << 1) + 255) >> 1
@@ -723,41 +749,46 @@ export class AulaWin68ExactRgbEngine {
       }
 
       case 11: { // VA 0x0E332 (Ext 4): Polar Pinwheel Vortex (Snipping Storm)
+        const subPeriod = 360 << 7
+        const phaseDeg = this.subPhase >> 7
         for (let x = 0; x < 21; x++) {
           const dx = 21 - (x << 1)
           for (let y = 0; y < 6; y++) {
             const dy = 6 - (y << 1)
             let ang = this.atan2_720(dx, dy)
-            if (!dir) ang = -ang
+            if (!dir) ang = 720 - ang
             const dist = (this.hypot256(dx, dy) * this.paramStep) >> 7
-            const rawH = Math.abs((ang >> 1) + dist - (this.subPhase >> 7)) % 360
-            const qHue = Math.trunc(rawH / 30) * 30
+            const rawH = (((ang >> 1) + dist - phaseDeg) % 360 + 360) % 360
             const tri =
-              qHue <= 179
-                ? 10 + Math.trunc((245 * qHue) / 180)
-                : 255 - Math.trunc((245 * (qHue - 180)) / 180)
+              rawH <= 179
+                ? 10 + Math.trunc((245 * rawH) / 180)
+                : 255 - Math.trunc((245 * (rawH - 180)) / 180)
+            const multiV = 185 + Math.trunc((tri * 70) / 255)
             const rgb = single.isSingle
               ? this.modulateSingleColor(single.rgb, single.hsv, tri, 15)
-              : this.hsvToRgb(qHue, 255, tri)
+              : this.hsvToRgb(rawH, 255, multiV)
             this.setPixel(x, y, rgb)
           }
         }
-        this.subPhase = (this.subPhase + Math.trunc(((spd * 20 + this.baseStep) << 8) / this.periodDiv)) & 0xffffff
+        const deltaSub = Math.max(32, Math.trunc(((spd * 6 + this.baseStep) << 7) / this.periodDiv))
+        this.subPhase = (this.subPhase + deltaSub) % subPeriod
         break
       }
 
       case 12: { // VA 0x0EEF6 (Ext 5): Rotating Compass 360
-        this.floatTheta = (this.floatTheta + (spd * 5 + this.baseStep) / (this.periodDiv * 10)) % 360.0
-        let radHalf = Math.trunc((this.floatTheta / 180.0) * Math.PI * 255.0)
-        if (!dir) radHalf = -radHalf
-        const c = this.cos720(radHalf)
-        const s = this.sin720(radHalf)
+        const degStep = Math.max(0.8, (spd + this.baseStep) / 32.0)
+        this.floatTheta = (this.floatTheta + degStep) % 360.0
+        let halfDeg = Math.round(this.floatTheta * 2.0)
+        if (!dir) halfDeg = 720 - halfDeg
+        const c = this.cos720(halfDeg)
+        const s = this.sin720(halfDeg)
         for (let x = 0; x < 21; x++) {
           const dx = x - 10
           for (let y = 0; y < 6; y++) {
-            const dy = y - 2
-            const proj = Math.trunc(((dx * s + dy * c) * 720) / (255 * 64))
-            const hue = ((Math.trunc(this.floatTheta) + 360 + proj) % 360 + 360) % 360
+            const dy = (y - 2.5) * 2
+            const proj = Math.round(((dx * s + dy * c) * 16) / 255)
+            const baseHue = dir ? this.floatTheta : 360.0 - this.floatTheta
+            const hue = ((Math.round(baseHue) + proj) % 360 + 360) % 360
             const vMod = (this.sin720(hue << 1) + 255) >> 1
             const rgb = single.isSingle
               ? this.modulateSingleColor(single.rgb, single.hsv, vMod, 40)
@@ -769,16 +800,17 @@ export class AulaWin68ExactRgbEngine {
       }
 
       case 13: { // VA 0x0F09C (Ext 6): Symmetric Butterfly Wave
-        const step = Math.trunc(((spd * 10 + this.baseStep) << 6) / this.periodDiv)
-        this.phase = (this.phase + (dir ? step : -step)) & 0xffffff
-        this.subPhase = (this.subPhase + Math.max(1, spd >> 3)) % 360
+        const period = 720 << 6
+        const step = Math.max(16, Math.trunc(((spd * 5 + this.baseStep) << 6) / this.periodDiv))
+        this.phase = ((this.phase + (dir ? step : -step)) % period + period) % period
+        this.subPhase = (this.subPhase + Math.max(1, Math.trunc((spd + 16) / 18))) % 360
         const ang = (this.phase >> 6) % 720
         const c = this.cos720(ang)
         const s = this.sin720(ang)
         for (let x = 0; x < 21; x++) {
-          const symX = (Math.abs(x - 10) + 56) * 5
+          const symX = Math.abs(x - 10) * 14
           for (let y = 0; y < 6; y++) {
-            const symY = (y - 2) * 5
+            const symY = Math.round((y - 2.5) * 18)
             const rot = Math.trunc((symX * c - symY * s) / 255)
             const hue = ((rot + this.subPhase) % 360 + 360) % 360
             const vMod = (this.sin720(hue << 1) + 255) >> 1
@@ -800,20 +832,21 @@ export class AulaWin68ExactRgbEngine {
         } else {
           this.iris.progress += (spd + 25) / 2400.0
           if (this.iris.progress >= 1.0) {
-            this.iris.progress = 0.0
-            this.iris.subMode ^= 1
+            this.iris.progress -= 1.0
             this.iris.c1 = this.iris.t1
             this.iris.c2 = this.iris.t2
-            this.iris.t1 = this.hsvToRgb(this.rand16() % 360, 255, 255)
-            this.iris.t2 = this.hsvToRgb((this.rand16() + 150) % 360, 255, 255)
+            this.iris.hue1 = (this.iris.hue1 + 65 + (this.rand16() % 45)) % 360
+            this.iris.hue2 = (this.iris.hue1 + 110) % 360
+            this.iris.t1 = this.hsvToRgb(this.iris.hue1, 255, 255)
+            this.iris.t2 = this.hsvToRgb(this.iris.hue2, 255, 255)
           }
+          const smoothP = 0.5 - 0.5 * Math.cos(this.iris.progress * Math.PI)
           for (let x = 0; x < 21; x++) {
             for (let y = 0; y < 6; y++) {
-              const d = this.hypot256(x - 10, y - 2) / (12 * 256)
-              const t = this.iris.subMode ? Math.min(1, Math.max(0, this.iris.progress * 1.4 - d * 0.4)) : this.iris.progress
-              const colA = this.lerpRgb(this.iris.c1, this.iris.t1, t)
-              const colB = this.lerpRgb(this.iris.c2, this.iris.t2, t)
-              this.setPixel(x, y, this.lerpRgb(colA, colB, Math.min(1, d)))
+              const d = Math.min(1, this.hypot256(x - 10, y - 2) / (11 * 256))
+              const colA = this.lerpRgb(this.iris.c1, this.iris.t1, smoothP)
+              const colB = this.lerpRgb(this.iris.c2, this.iris.t2, smoothP)
+              this.setPixel(x, y, this.lerpRgb(colA, colB, d))
             }
           }
         }
@@ -821,12 +854,10 @@ export class AulaWin68ExactRgbEngine {
       }
 
       case 15: { // VA 0x0DC38 (Ext 8): 3-Zone Interleaved Sine
-        this.phase = (this.phase + Math.max(2, Math.trunc((spd + this.baseStep) / 4))) % 720
-        if (this.phase < 8) {
-          this.zoneHues = [(this.zoneHues[0] + 23) % 360, (this.zoneHues[1] + 47) % 360]
-        }
-        const cA = this.hsvToRgb((this.zoneHues[0] + (this.phase >> 2)) % 360, 255, 255)
-        const cB = this.hsvToRgb((this.zoneHues[1] + (this.phase >> 2)) % 360, 255, 255)
+        this.phase = (this.phase + Math.max(2, Math.trunc((spd + this.baseStep) / 5))) % 720
+        this.subPhase = (this.subPhase + Math.max(1, Math.trunc((spd + 20) / 18))) % 360
+        const cA = this.hsvToRgb((this.zoneHues[0] + this.subPhase) % 360, 255, 255)
+        const cB = this.hsvToRgb((this.zoneHues[1] + this.subPhase) % 360, 255, 255)
         for (let x = 0; x < 21; x++) {
           const zone = Math.trunc(x / 7)
           const inv = ((zone & 1) ^ dir) !== 0
@@ -851,11 +882,11 @@ export class AulaWin68ExactRgbEngine {
         } else if (this.ribbon.amp <= -256) {
           this.ribbon.amp = -256
           this.ribbon.dirFlag = 1
-          const cA = this.hsvToRgb(this.rand16() % 360, 255, 255) & 0xffffff
-          this.ribbon.cA = cA
-          this.ribbon.cB = (~cA) & 0xffffff
         }
-        this.phase = (this.phase + (dir ? delta : -delta)) % 720
+        this.subPhase = (this.subPhase + Math.max(1, Math.trunc((spd + 20) / 20))) % 360
+        this.ribbon.cA = this.hsvToRgb(this.subPhase, 255, 255) & 0xffffff
+        this.ribbon.cB = this.hsvToRgb((this.subPhase + 150) % 360, 255, 255) & 0xffffff
+        this.phase = ((this.phase + (dir ? delta : -delta)) % 720 + 720) % 720
         for (let x = 0; x < 21; x++) {
           const s = (this.sin720(this.phase + x * 34) * this.ribbon.amp) >> 8
           const t = (s + 255) / 510.0
@@ -871,23 +902,26 @@ export class AulaWin68ExactRgbEngine {
       }
 
       case 17: { // VA 0x0F4A4 (Ext 10): Color Wipe Curtain
-        this.subPhase = (this.subPhase + Math.max(2, Math.trunc((spd + this.baseStep) / 5))) & 0xffff
+        this.subPhase = (this.subPhase + Math.max(2, Math.trunc((spd + this.baseStep) / 9))) & 0xffff
         const parity = (this.subPhase >> 8) & 1
         if (parity !== this.wipe.lastParity) {
           this.wipe.lastParity = parity
           this.wipe.cA = this.wipe.cB
-          this.wipe.cB = this.hsvToRgb((this.rand16() + 95) % 360, 255, 255)
+          this.wipe.hue = (this.wipe.hue + 75 + (this.rand16() % 45)) % 360
+          this.wipe.cB = this.hsvToRgb(this.wipe.hue, 255, 255)
         }
         const pos = this.subPhase & 0xff
-        const colThreshold = Math.trunc((pos * 21) / 256)
+        const wipeFront = (pos / 255.0) * 28.0 - 4.0
         for (let x = 0; x < 21; x++) {
           const effX = dir ? 20 - x : x
-          const activeB = effX <= colThreshold
+          const linearBlend = Math.min(1, Math.max(0, (wipeFront - effX) / 6.5 + 0.5))
+          const blend = 0.5 - 0.5 * Math.cos(linearBlend * Math.PI)
           let rgb: number
           if (single.isSingle) {
-            rgb = this.modulateSingleColor(single.rgb, single.hsv, activeB ? 255 : 55, 40)
+            const vMod = Math.round(55 + 200 * blend)
+            rgb = this.modulateSingleColor(single.rgb, single.hsv, vMod, 40)
           } else {
-            rgb = activeB ? this.lerpRgb(this.wipe.cB, this.wipe.cA, x / 24) : this.lerpRgb(this.wipe.cA, this.wipe.cB, x / 24)
+            rgb = this.lerpRgb(this.wipe.cA, this.wipe.cB, blend)
           }
           for (let y = 0; y < 6; y++) this.setPixel(x, y, rgb)
         }
@@ -895,16 +929,19 @@ export class AulaWin68ExactRgbEngine {
       }
 
       case 18: { // VA 0x0E7EC (Ext 11): Dancing Sine Snake
-        this.phase = (this.phase + spd * 12 + this.baseStep) & 0xffffff
+        const period = 720 << 6
+        this.phase = (this.phase + Math.max(24, spd * 6 + this.baseStep)) % period
+        this.subPhase = (this.subPhase + Math.max(1, Math.trunc((spd + 20) / 16))) % 360
         for (let x = 0; x < 21; x++) {
           const sx = dir ? -x : x
           const ySnake = ((this.sin720(sx * 45 + (this.phase >> 6)) + 255) / 510.0) * 6.0 * 0.9
           for (let y = 0; y < 6; y++) {
             const d = Math.min(1.0, Math.abs(ySnake - y) / 6.0)
             const v = Math.max(45, Math.trunc(Math.pow(1.0 - d, 2) * 255))
+            const hue = (this.subPhase + x * 12 + Math.trunc(d * 40)) % 360
             const rgb = single.isSingle
               ? this.modulateSingleColor(single.rgb, single.hsv, v, 45)
-              : this.hsvToRgb((Math.trunc(d * 360) + (this.phase >> 8)) % 360, 255, v)
+              : this.hsvToRgb(hue, 255, v)
             this.setPixel(x, y, rgb)
           }
         }
@@ -912,7 +949,9 @@ export class AulaWin68ExactRgbEngine {
       }
 
       case 19: { // VA 0x0E07A (Ext 12): Symmetric Dual Sine (Smooth Flow)
-        this.phase = (this.phase + spd * 12 + this.baseStep) & 0xffffff
+        const period = 720 << 6
+        this.phase = (this.phase + Math.max(24, spd * 6 + this.baseStep)) % period
+        this.subPhase = (this.subPhase + Math.max(1, Math.trunc((spd + 20) / 16))) % 360
         for (let x = 0; x < 21; x++) {
           const distCenter = Math.abs(x - 10)
           const dx = dir ? distCenter : -distCenter
@@ -920,9 +959,10 @@ export class AulaWin68ExactRgbEngine {
           for (let y = 0; y < 6; y++) {
             const d = Math.min(1.0, Math.abs(ySnake - y) / 6.0)
             const v = Math.max(45, Math.trunc(Math.pow(1.0 - d, 2) * 255))
+            const hue = (this.subPhase + distCenter * 16 + Math.trunc(d * 40)) % 360
             const rgb = single.isSingle
               ? this.modulateSingleColor(single.rgb, single.hsv, v, 45)
-              : this.hsvToRgb((Math.trunc(d * 360) + (this.phase >> 8) + distCenter * 14) % 360, 255, v)
+              : this.hsvToRgb(hue, 255, v)
             this.setPixel(x, y, rgb)
           }
         }
@@ -1018,12 +1058,12 @@ export class AulaWin68ExactRgbEngine {
         if (this.orb.ax >= maxAng || this.orb.ax <= -maxAng) {
           this.orb.vx = (this.orb.ax >= maxAng ? -1 : 1) * (50 + (this.rand16() & 127))
           this.orb.ax = Math.max(-maxAng, Math.min(maxAng, this.orb.ax))
-          this.orb.hue = (this.orb.hue + 55 + (this.rand16() % 90)) % 360
         }
         if (this.orb.ay >= maxAng || this.orb.ay <= -maxAng) {
           this.orb.vy = (this.orb.ay >= maxAng ? -1 : 1) * (70 + (this.rand16() & 127))
           this.orb.ay = Math.max(-maxAng, Math.min(maxAng, this.orb.ay))
         }
+        this.orb.hue = (this.orb.hue + Math.max(1, Math.trunc((spd + 25) / 25))) % 360
         const cx = ((this.sin720(Math.trunc((this.orb.ax * 2) / 255)) + 255) * 20) / 510.0
         const cy = ((this.sin720(Math.trunc((this.orb.ay * 2) / 255)) + 255) * 5) / 510.0
         for (let x = 0; x < 21; x++) {
@@ -1055,7 +1095,7 @@ export class AulaWin68ExactRgbEngine {
         const decay = Math.max(3, Math.trunc((spd + 25) / 6))
         for (let i = 0; i < 126; i++) {
           let v = this.reactiveSingleV[i]
-          if (this.keyTrigger[i] !== 0 && v < 220) {
+          if (this.keyTrigger[i] !== 0) {
             v = 255
             if (!this.reactiveSingleRgb[i]) {
               this.reactiveSingleRgb[i] = single.isSingle ? single.rgb : this.palette[this.reactiveColorRot % 7]
@@ -1067,7 +1107,7 @@ export class AulaWin68ExactRgbEngine {
           if (v === 0) {
             this.rgbFb[i] = this.backColor
           } else {
-            const baseRgb = single.isSingle ? single.rgb : (this.reactiveSingleRgb[i] || this.palette[(i + this.reactiveColorRot) % 7] || 0xff0000)
+            const baseRgb = single.isSingle ? single.rgb : (this.reactiveSingleRgb[i] || this.palette[0] || 0xff0000)
             this.rgbFb[i] = this.modulateSingleColor(baseRgb, this.rgbToHsv(baseRgb), v, 37)
           }
         }
@@ -1079,7 +1119,11 @@ export class AulaWin68ExactRgbEngine {
         const newlyPressed = this.collectNewlyPressedCells()
         for (const p of newlyPressed) {
           this.reactiveColorRot = (this.reactiveColorRot + 1) % 7
-          const slot = this.crossSlots.find(s => !s.active) ?? this.crossSlots[0]
+          const existing = this.crossSlots.find(s => s.active && s.kx === p.col && s.ky === p.row)
+          const slot =
+            existing ??
+            this.crossSlots.find(s => !s.active) ??
+            this.crossSlots.reduce((min, s) => (s.v < min.v ? s : min), this.crossSlots[0])
           slot.kx = p.col
           slot.ky = p.row
           slot.cIdx = this.reactiveColorRot
@@ -1097,7 +1141,7 @@ export class AulaWin68ExactRgbEngine {
           const hsv = this.rgbToHsv(baseRgb)
           const rgb = this.modulateSingleColor(baseRgb, hsv, slot.v, 25)
           for (const [dx, dy] of NEIGHBORS_8) {
-            this.setPixel(slot.kx + dx, slot.ky + dy, rgb)
+            this.addPixel(slot.kx + dx, slot.ky + dy, rgb)
           }
           if (centerIdx < 0 || centerIdx >= 126 || this.keyTrigger[centerIdx] === 0) {
             slot.v -= decay
@@ -1115,7 +1159,9 @@ export class AulaWin68ExactRgbEngine {
         const newlyPressed = this.collectNewlyPressedCells()
         for (const p of newlyPressed) {
           this.reactiveColorRot = (this.reactiveColorRot + 1) % 7
-          const slot = this.laserSlots.find(s => !s.active) ?? this.laserSlots[0]
+          const slot =
+            this.laserSlots.find(s => !s.active) ??
+            this.laserSlots.reduce((oldest, s) => (s.radius > oldest.radius ? s : oldest), this.laserSlots[0])
           slot.kx = p.col
           slot.ky = p.row
           slot.cIdx = this.reactiveColorRot
@@ -1137,8 +1183,10 @@ export class AulaWin68ExactRgbEngine {
                 const rgb = single.isSingle
                   ? this.modulateSingleColor(baseRgb, hsv, v, 25)
                   : this.hsvToRgb((hsv.h + off * 18) % 360, 255, v)
-                this.setPixel(slot.kx + off, slot.ky, rgb)
-                this.setPixel(slot.kx - off, slot.ky, rgb)
+                this.addPixel(slot.kx + off, slot.ky, rgb)
+                if (off > 0) {
+                  this.addPixel(slot.kx - off, slot.ky, rgb)
+                }
               }
             }
           }
@@ -1156,7 +1204,9 @@ export class AulaWin68ExactRgbEngine {
         const newlyPressed = this.collectNewlyPressedCells()
         for (const p of newlyPressed) {
           this.reactiveColorRot = (this.reactiveColorRot + 1) % 7
-          const slot = this.rippleSlots.find(s => !s.active) ?? this.rippleSlots[0]
+          const slot =
+            this.rippleSlots.find(s => !s.active) ??
+            this.rippleSlots.reduce((oldest, s) => (s.curR > oldest.curR ? s : oldest), this.rippleSlots[0])
           slot.kx = p.col
           slot.ky = p.row
           slot.maxR = 26
@@ -1270,6 +1320,7 @@ export class XsydFirmwareRgbPreview {
       const delegateProfile = this.toHeroDelegateProfile(config)
       if (!this.heroDelegate) {
         this.heroDelegate = new FirmwareRgbPreview(delegateProfile)
+        this.heroDelegate.ticks = this.ticks
       } else {
         this.heroDelegate.configure(delegateProfile)
       }
@@ -1282,15 +1333,32 @@ export class XsydFirmwareRgbPreview {
     const normBright = normalizeXsydBrightness(k.brightness)
     const targetInternal = externalToInternalMode(extMode, normBright)
 
-    this.config = config
-    this.core.speedIdx = Math.max(0, Math.min(4, k.speed))
-    // Map wire brightness 0..4 -> BRIGHT_ROM_TABLE index (0 = Off, 1..4 -> indices 1..5, with 4 = full 80)
-    this.core.brightIdx = normBright <= 0 ? 0 : normBright === 4 ? 5 : normBright
-    this.core.bitmap = k.reverse ? 0x03 : 0x01
-
-    // Wire colorIndex: 0 = Multicolor (internal colorIdx = 7), 1..7 = Slot 1..7 (internal colorIdx = 0..6)
+    const nextSpeedIdx = Math.max(0, Math.min(4, k.speed))
+    const nextBrightIdx = normBright <= 0 ? 0 : normBright === 4 ? 5 : normBright
+    const nextBitmap = k.reverse ? 0x03 : 0x01
     const wireColorIdx = xsydColorIndexForZone(k)
-    this.core.colorIdx = wireColorIdx === 0 ? 7 : wireColorIdx - 1
+    const nextColorIdx = wireColorIdx === 0 ? 7 : wireColorIdx - 1
+
+    const modeChanged = initial || extMode !== prevExtMode || targetInternal !== this.core.internalMode
+    const paramsChanged =
+      modeChanged ||
+      nextSpeedIdx !== this.core.speedIdx ||
+      nextBrightIdx !== this.core.brightIdx ||
+      nextBitmap !== this.core.bitmap ||
+      nextColorIdx !== this.core.colorIdx ||
+      k.mix !== prevK?.mix ||
+      k.rgb?.[0] !== prevK?.rgb?.[0] ||
+      k.rgb?.[1] !== prevK?.rgb?.[1] ||
+      k.rgb?.[2] !== prevK?.rgb?.[2] ||
+      JSON.stringify(k.palette) !== JSON.stringify(prevK?.palette) ||
+      (targetInternal >= 1 && targetInternal <= 6 && JSON.stringify(config.colors) !== JSON.stringify(this.config?.colors))
+
+    this.config = config
+    this.core.speedIdx = nextSpeedIdx
+    // Map wire brightness 0..4 -> BRIGHT_ROM_TABLE index (0 = Off, 1..4 -> indices 1..5, with 4 = full 80)
+    this.core.brightIdx = nextBrightIdx
+    this.core.bitmap = nextBitmap
+    this.core.colorIdx = nextColorIdx
 
     // Update 7-slot palette (if user customized slot colors or selected a custom single RGB)
     for (let i = 0; i < 7; i++) {
@@ -1310,11 +1378,10 @@ export class XsydFirmwareRgbPreview {
       this.core.userRgb[cell.ledIdx] = ((pp << 24) | rgb24) >>> 0
     }
 
-    if (initial || extMode !== prevExtMode || targetInternal !== this.core.internalMode) {
+    if (modeChanged) {
       this.core.initInternalMode(targetInternal)
       this.core.stepTick()
-    } else {
-      // Refresh buffer immediately whenever color/palette/mix/speed/reverse changes
+    } else if (paramsChanged) {
       this.core.stepTick()
     }
   }
@@ -1327,8 +1394,11 @@ export class XsydFirmwareRgbPreview {
     const cell = WIN68_CELL_BY_KEY_ID.get(keyId)
     if (!cell) return
     this.core.keyTrigger[cell.linearIdx] = pressed ? 2 : 0
-    if (pressed && this.core.internalMode >= 24 && this.core.internalMode <= 27) {
-      this.core.stepTick()
+    if (pressed) {
+      this.core.pendingPress[cell.linearIdx] = 1
+      if (this.core.internalMode >= 24 && this.core.internalMode <= 27) {
+        this.core.stepTick()
+      }
     }
   }
 

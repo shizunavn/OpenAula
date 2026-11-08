@@ -4,7 +4,14 @@ import { getBoard, type HeroDeviceModelId } from './registry';
 import { FirmwareRgbPreview } from './rgbPreview';
 import { XsydFirmwareRgbPreview } from './xsydRgbPreview';
 import type { RgbColor, RgbProfile } from '../protocol/hero68/rgb';
-import { restoreCustomRgb, RGB_EFFECT_METADATA, RGB_GRADIENT_PALETTES, type CustomRgbConfiguration, type CustomRgbLayer } from './customRgbModel';
+import {
+  restoreCustomRgb,
+  RGB_EFFECT_METADATA,
+  RGB_GRADIENT_PALETTES,
+  type CustomRgbConfiguration,
+  type CustomRgbDirection,
+  type CustomRgbLayer
+} from './customRgbModel';
 import { pickCustomRgbColor, blendCustomRgbColor, sampleCustomRgbSpectrum, customRgbContrastPalette } from './customRgbColors';
 export * from './customRgbModel';
 const clamp = (v: number, low: number, high: number) => Math.max(low, Math.min(high, v));
@@ -15,13 +22,41 @@ export const CUSTOM_RGB_COORDINATES: Record<string, [number, number]> = Object.f
 export function customRgbCoordinatesForModel(model: HeroDeviceModelId = 'hero68'): Readonly<Record<string, readonly [number, number]>> {
   return getBoard(model).keyCoordinates;
 }
+export function directionVector(direction?: CustomRgbDirection): { dx: number; dy: number } {
+  switch (direction) {
+    case 'top-left':
+      return { dx: -1, dy: -1 };
+    case 'top':
+      return { dx: 0, dy: -1 };
+    case 'top-right':
+      return { dx: 1, dy: -1 };
+    case 'left':
+      return { dx: -1, dy: 0 };
+    case 'center':
+      return { dx: 0, dy: 0 };
+    case 'right':
+    case 'horizontal':
+      return { dx: 1, dy: 0 };
+    case 'bottom-left':
+      return { dx: -1, dy: 1 };
+    case 'bottom':
+    case 'vertical':
+      return { dx: 0, dy: 1 };
+    case 'bottom-right':
+      return { dx: 1, dy: 1 };
+    default:
+      return { dx: -1, dy: 0 };
+  }
+}
 type Colors = Record<string, RgbColor>;
 type Press = {
   id: string;
   at: number;
+  releasedAt?: number;
   x: number;
   y: number;
   colors: Colors;
+  paletteStep: number;
 };
 type PressureWave = Press & {
   layerId: string;
@@ -49,6 +84,19 @@ function gradient(layer: CustomRgbLayer, phase: number): RgbColor {
   return (stops[index].map((v, i) => v + (stops[index + 1][i] - v) * mix) as RgbColor);
 }
 const fract = (v: number) => v - Math.floor(v);
+function sampleCircularPalette(layer: CustomRgbLayer, pos01: number): RgbColor {
+  if (!layer.multicolor) {
+    return layer.color;
+  }
+  const stops = gradientStops[layer.palette ?? RGB_EFFECT_METADATA[layer.effect].defaults?.palette ?? 'wave'];
+  const n = stops.length;
+  const wrapped = fract(pos01);
+  const scaled = wrapped * n;
+  const i0 = Math.floor(scaled) % n;
+  const i1 = (i0 + 1) % n;
+  const a = scaled - Math.floor(scaled);
+  return (stops[i0].map((v, k) => v * (1 - a) + stops[i1][k] * a) as RgbColor);
+}
 const hash = (a: number, b = 0, c = 0) => fract(Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453);
 const mixNumber = (a: number, b: number, t: number) => a + (b - a) * t;
 const ease = (v: number) => {
@@ -121,10 +169,38 @@ function aurora(layer: CustomRgbLayer, x: number, y: number, seconds: number, bo
     tint: gradient(layer, palettePosition)
   };
 }
+/**
+ * Multi-directional Dynamic Wave (`wave` from AULA_CTRL V1.0.17 §2.5):
+ * Supports 9 directions (`top-left`, `top`, `top-right`, `left`, `center`, `right`,
+ * `bottom-left`, `bottom`, `bottom-right`) + legacy `horizontal`/`vertical`, with
+ * seamless circular linear interpolation across the palette stops.
+ */
+function dynamicWave(layer: CustomRgbLayer, x: number, y: number, seconds: number, bounds = defaultBounds) {
+  const { dx, dy } = directionVector(layer.direction);
+  const centerX = (bounds[0].min + bounds[0].max) / 2;
+  const centerY = (bounds[1].min + bounds[1].max) / 2;
+  const spatialPhase = dx === 0 && dy === 0
+    ? Math.hypot(x - centerX, y - centerY)
+    : x * dx + y * dy;
+  const scale = 0.08 * (2.5 / Math.max(0.25, layer.width));
+  const pos = fract(spatialPhase * scale - seconds * layer.speed * 0.5);
+  if (!layer.multicolor) {
+    const wave = 0.5 + 0.5 * Math.cos(pos * Math.PI * 2);
+    return {
+      strength: 0.2 + 0.8 * wave,
+      tint: layer.color
+    };
+  }
+  return {
+    strength: 1,
+    tint: sampleCircularPalette(layer, pos)
+  };
+}
 export class CustomRgbEngine {
   private base: FirmwareRgbPreview | XsydFirmwareRgbPreview;
   private time = 0;
   private events: Press[] = [];
+  private pressCounter = 0;
   private held = new Set<string>();
   private releases = new Map<string, number>();
   private transitions = new Map<string, {
@@ -286,7 +362,7 @@ export class CustomRgbEngine {
   advance(milliseconds: number) {
     this.time = Math.max(this.time, milliseconds);
     this.base.advance(this.time);
-    this.events = this.events.filter(e => this.time - e.at <= 4000);
+    this.events = this.events.filter(e => this.time - (e.releasedAt ?? e.at) <= 4000);
     this.pressureWaves = this.pressureWaves.filter(e => this.time - e.at <= 4000);
     for (const [id, at] of this.releases) {
       if (this.time - at > 4000) {
@@ -309,7 +385,8 @@ export class CustomRgbEngine {
         at: this.time,
         x: point[0],
         y: point[1],
-        colors
+        colors,
+        paletteStep: this.pressCounter++
       });
       this.events = this.events.slice(-64);
       this.held.add(id);
@@ -330,6 +407,12 @@ export class CustomRgbEngine {
     } else if (!pressed && this.held.delete(id)) {
       this.glowEvent(id, false);
       this.releases.set(id, this.time);
+      for (let i = this.events.length - 1; i >= 0; i--) {
+        if (this.events[i].id === id && this.events[i].releasedAt === undefined) {
+          this.events[i].releasedAt = this.time;
+          break;
+        }
+      }
       this.transitions.set(id, {
         at: this.time,
         pressed: false
@@ -452,11 +535,12 @@ export class CustomRgbEngine {
         }
       }
     }
-    if (this.config.baseEffect?.effect === 'aurora') {
+    if (this.config.baseEffect?.effect === 'aurora' || this.config.baseEffect?.effect === 'wave') {
       const settings = this.config.baseEffect;
       const layer = ({
         ...settings,
-        effect: 'aurora',
+        effect: settings.effect,
+        direction: settings.direction ?? 'left',
         multicolor: this.config.base.mix,
         color: this.config.base.rgb
       } as CustomRgbLayer);
@@ -468,7 +552,9 @@ export class CustomRgbEngine {
         const {
           strength,
           tint
-        } = aurora(layer, x, y, this.time / 1000, this.bounds);
+        } = settings.effect === 'wave'
+          ? dynamicWave(layer, x, y, this.time / 1000, this.bounds)
+          : aurora(layer, x, y, this.time / 1000, this.bounds);
         frame.keys[id] = '#' + tint.map(c => Math.round(c * strength * brightnessScale).toString(16).padStart(2, '0')).join('');
       }
     }
@@ -529,6 +615,7 @@ export class CustomRgbEngine {
           colors: {
             ...colors
           },
+          paletteStep: this.pressCounter,
           layerId: layer.id,
           strength
         });
@@ -635,6 +722,73 @@ export class CustomRgbEngine {
             strength,
             tint
           } = aurora(layer, x, y, seconds, this.bounds));
+        } else if (layer.effect === 'wave') {
+          ({
+            strength,
+            tint
+          } = dynamicWave(layer, x, y, seconds, this.bounds));
+        } else if (layer.effect === 'trigger') {
+          const paletteStops = gradientStops[layer.palette ?? 'trigger'] ?? gradientStops.trigger;
+          const rowHalfWidth = Math.max(0.28, layer.width * 0.38);
+          const colHalfWidth = Math.max(0.45, layer.width * 0.55);
+          const waveSpeed = 12 + layer.speed * 10;
+          const effectiveDuration = Math.max(120, layer.duration / Math.max(0.35, layer.speed / 1.5));
+          let accumR = 0;
+          let accumG = 0;
+          let accumB = 0;
+          let maxPower = 0;
+          for (const event of this.events) {
+            const dx = Math.abs(x - event.x);
+            const dy = Math.abs(y - event.y);
+            const onRow = dy <= rowHalfWidth * 2.2 ? Math.exp(-Math.pow(dy / rowHalfWidth, 2)) : 0;
+            const onCol = dx <= colHalfWidth * 2.2 ? Math.exp(-Math.pow(dx / colHalfWidth, 2)) : 0;
+            const crossWeight = Math.max(onRow, onCol);
+            if (crossWeight <= 0.02) {
+              continue;
+            }
+            const armDist = onRow >= onCol ? dx : dy;
+            const travelDelayMs = (armDist / waveSpeed) * 1000;
+            const isHeldOrigin = event.id === id && this.held.has(id) && event.releasedAt === undefined;
+            const rawAge = event.releasedAt !== undefined
+              ? (this.time - event.releasedAt) + Math.min(this.time - event.at, effectiveDuration * 0.25)
+              : this.held.has(event.id)
+                ? Math.min(this.time - event.at, effectiveDuration * 0.35 + travelDelayMs)
+                : this.time - event.at;
+            const localAge = (this.time - event.at) - travelDelayMs;
+            if (localAge < -35) {
+              continue;
+            }
+            const attack = ease((localAge + 35) / 45);
+            const fadeAge = Math.max(0, rawAge - travelDelayMs * 0.5);
+            const decay = isHeldOrigin ? 1 : Math.pow(1 - clamp(fadeAge / effectiveDuration, 0, 1), 1.35);
+            if (decay <= 0.005) {
+              continue;
+            }
+            const distAtten = 1 / (1 + armDist * 0.045);
+            const power = clamp(attack * decay * distAtten * crossWeight, 0, 1);
+            if (power <= 0.005) {
+              continue;
+            }
+            const eventColor = layer.multicolor
+              ? (paletteStops[event.paletteStep % paletteStops.length] as RgbColor)
+              : layer.color;
+            accumR += eventColor[0] * power;
+            accumG += eventColor[1] * power;
+            accumB += eventColor[2] * power;
+            if (power > maxPower) {
+              maxPower = power;
+            }
+          }
+          if (maxPower > 0) {
+            const peakChannel = Math.max(accumR, accumG, accumB);
+            strength = clamp(Math.max(maxPower, peakChannel / 255), 0, 1);
+            const norm = peakChannel > 255 ? 255 / peakChannel : 1 / strength;
+            tint = [
+              clamp(Math.round(accumR * norm), 0, 255),
+              clamp(Math.round(accumG * norm), 0, 255),
+              clamp(Math.round(accumB * norm), 0, 255)
+            ];
+          }
         } else if (layer.effect === 'comet') {
           const primary = layer.direction === 'horizontal' ? 0 : 1;
           const secondary = 1 - primary;

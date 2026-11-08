@@ -30,6 +30,21 @@ export const RHYTHM_MODES = ([{
   description: 'Frequency detail, from bass to treble.',
   shape: 'spectrum'
 }, {
+  id: 429,
+  name: 'Spectrum Bars',
+  description: 'Frequency equalizer stretched across 16 log-spaced bands.',
+  shape: 'spectrum'
+}, {
+  id: 432,
+  name: 'Audio Marquee',
+  description: 'A wrapping band fills up the rows with the music level.',
+  shape: 'stream'
+}, {
+  id: 434,
+  name: 'Radial Chase',
+  description: 'A light front rolls outward from the centre.',
+  shape: 'rings'
+}, {
   id: 180,
   name: 'Off',
   description: 'Clear the key LEDs while side rhythm continues.',
@@ -47,6 +62,15 @@ export const RHYTHM_SIDE_MODES = ([{
 }, {
   id: 503,
   name: 'Light field'
+}, {
+  id: 504,
+  name: 'Loop 18 slots'
+}, {
+  id: 505,
+  name: 'Peak-hold meter'
+}, {
+  id: 506,
+  name: 'Far-end meter'
 }] as const);
 export type RhythmMode = typeof RHYTHM_MODES[number]['id'];
 export type RhythmSideMode = typeof RHYTHM_SIDE_MODES[number]['id'];
@@ -159,10 +183,36 @@ export function hslToHex(h: number, sPct: number, lPct: number): string {
 }
 
 /**
+ * Log-spaced 16-band envelope from `AnalyserNode.getByteFrequencyData()`, mirroring
+ * `logBands()` in `service/native/rhythm_core.h`. Voice and most music live under
+ * ~2 kHz, so a linear bin-to-column map leaves everything in the first columns;
+ * the log edges spread bass, mids and treble across the row.
+ */
+export function logSpectrumBands(frequencyData: ArrayLike<number>) {
+  const bins = frequencyData.length;
+  const usable = Math.max(16, Math.min(bins, Math.floor(bins * 0.65)));
+  const edge = (band: number) => Math.min(usable - 1, Math.round(Math.pow(usable - 1, band / 16)));
+  const bands: number[] = [];
+  for (let band = 0; band < 16; band++) {
+    const start = edge(band);
+    const stop = Math.max(start + 1, edge(band + 1));
+    let energy = 0;
+    for (let b = start; b < stop; b++) {
+      const raw = frequencyData[b] ?? 0;
+      energy += raw > 4 ? Math.pow((raw - 4) / 251, 2) : 0;
+    }
+    const magnitude = Math.sqrt(energy);
+    bands.push(magnitude > 0 ? Math.min(1, .9 * magnitude + .5 * Math.log(1.1 * magnitude)) : 0);
+  }
+  return bands;
+}
+
+/**
  * Render a 68/84-key Rhythm Sync frame from live Web Audio FFT/waveform data
  * (or the illustrative demo generator when `allowSynthFallback` is true).
  * In live mode (`allowSynthFallback === false`), missing or silent audio stays
  * 100% dark (`#000000`) with `level === 0` so the preview never animates without music.
+ * `meter` is the peak-hold value used only by the side modes 505 (slot count) and 506.
  */
 export function renderRhythmAudioFrame(
   config: RhythmConfiguration,
@@ -178,6 +228,8 @@ export function renderRhythmAudioFrame(
 
   let level = 0;
   const colBins: number[] = Array(16).fill(0);
+  const bands: number[] = Array(16).fill(0);
+  let meter = 0;
 
   if (frequencyData && frequencyData.length > 0) {
     const usableBins = Math.max(16, Math.min(frequencyData.length, Math.floor(frequencyData.length * 0.65)));
@@ -197,6 +249,12 @@ export function renderRhythmAudioFrame(
       colBins[c] = boosted;
       energySum += boosted;
     }
+    // Spectrum Bars bypass the linear colBins; apply the same sensitivity the native engine
+    // gets from `value` so both renderers answer the slider identically.
+    const bandsRaw = logSpectrumBands(frequencyData);
+    for (let c = 0; c < 16; c++) {
+      bands[c] = bandsRaw[c] > 0 ? Math.min(1, bandsRaw[c] * dbGain * sensGain) : 0;
+    }
     level = Math.min(1, (energySum / 16) * 1.25);
     if (timeDomainData && timeDomainData.length > 0) {
       let rmsAcc = 0;
@@ -208,11 +266,19 @@ export function renderRhythmAudioFrame(
       const gatedRms = rms > 0.005 ? rms : 0;
       level = Math.min(1, Math.max(level, gatedRms * sensGain * 2.2));
     }
+    // Peak-hold is applied over the rendered (attack-smoothed) level by the playback loop;
+    // here the meter is the raw attack value so a loud hit raises it above `level`.
+    for (let c = 0; c < 16; c++) {
+      meter = Math.max(meter, bands[c]);
+    }
+    meter = Math.max(level, meter);
   } else if (allowSynthFallback) {
     level = Math.exp(-phase * 7) * (0.75 + 0.25 * Math.sin(t * 0.7));
+    meter = Math.max(meter, level);
     for (let c = 0; c < 16; c++) {
       const nx = c / 15;
       colBins[c] = Math.max(0, Math.min(1, Math.sin(nx * 9 + t * 3) * 0.4 + level * 0.6));
+      bands[c] = colBins[c];
     }
   }
 
@@ -232,9 +298,11 @@ export function renderRhythmAudioFrame(
   });
 
   const maxBin = smoothedBins.reduce((m, v) => Math.max(m, v), 0);
-  const isSilentLive = !allowSynthFallback && level < 0.008 && (config.keyMode !== 428 || maxBin < 0.012);
+  const isSpectrumMode = config.keyMode === 428 || config.keyMode === 429;
+  const isSilentLive = !allowSynthFallback && level < 0.008 && (!isSpectrumMode || maxBin < 0.012);
   if (isSilentLive) {
     level = 0;
+    meter = 0;
   }
 
   const keys: Record<string, string> = {};
@@ -276,6 +344,29 @@ export function renderRhythmAudioFrame(
             ? (ny >= 1 - colEnergy ? 1 : 0.02)
             : (colEnergy >= 0.012 && ny >= 1 - colEnergy ? 1 : 0);
           break;
+        case 429: {
+          const band = Math.max(0, Math.min(15, Math.floor(nx * 16)));
+          const energy = bands[band] ?? 0;
+          value = allowSynthFallback ? (ny >= 1 - energy ? 1 : 0.02) : (energy >= 0.012 && ny >= 1 - energy ? 1 : 0);
+          break;
+        }
+        case 432: {
+          // Audio Marquee: a wrapping band of height `level` fills down each row.
+          const cell = (ny + t / 0.13) % 1;
+          value = cell <= level ? Math.max(0, 1 - (level - cell) * 3) : 0;
+          break;
+        }
+        case 434: {
+          // Audio Sync radial roll: a front travels outward and stops at `level * 16` keys.
+          const distance = Math.hypot((nx - 0.5) * 16, (y - 2) * 2);
+          const front = level * 16;
+          let travel = distance - t / 0.045;
+          if (travel < 0) {
+            travel = (travel % 16) + 16;
+          }
+          value = travel < front ? Math.max(0, Math.min(1, 1 - Math.max(0, travel - front + 2) / 2)) : 0;
+          break;
+        }
       }
       const hue =
         config.palette === 'fire'
@@ -283,17 +374,18 @@ export function renderRhythmAudioFrame(
           : config.palette === 'aurora'
             ? 160 + nx * 120
             : (nx * 300 + t * 25) % 360;
+      const fullBrightness = config.keyMode === 429 || config.keyMode === 432 || config.keyMode === 434;
       keys[key.id] =
         config.palette === 'fixed'
           ? '#' +
             [1, 3, 5]
               .map(i =>
-                Math.round((parseInt(config.color.slice(i, i + 2), 16) * value * config.brightness) / 100)
+                Math.round((parseInt(config.color.slice(i, i + 2), 16) * value * config.brightness) / (fullBrightness ? 100 : 100 * 2))
                   .toString(16)
                   .padStart(2, '0')
               )
               .join('')
-          : hslToHex(hue, 90, value * config.brightness * 0.5);
+          : hslToHex(hue, 90, value * config.brightness * (fullBrightness ? 0.01 : 0.005));
     })
   );
   const sideCount = board.capabilities.sideLedCount;
@@ -304,15 +396,20 @@ export function renderRhythmAudioFrame(
     const lit =
       config.sideMode === 501
         ? i < level * sideCount
-        : config.sideMode === 502
-          ? Math.abs(i - Math.floor((sideCount - 1) / 2)) < level * (sideCount / 2)
-          : config.sideMode === 503;
+        : config.sideMode === 505
+          ? i < meter * sideCount
+          : config.sideMode === 502
+            ? Math.abs(i - Math.floor((sideCount - 1) / 2)) < level * (sideCount / 2)
+            : config.sideMode === 506
+              ? i >= sideCount - level * sideCount
+              : config.sideMode === 503 || config.sideMode === 504;
     return lit ? hslToHex((t * 60 + i * 15) % 360, 85, level * config.brightness * 0.5) : '#181c20';
   });
   return {
     keys,
     side,
-    level
+    level,
+    meter
   };
 }
 
