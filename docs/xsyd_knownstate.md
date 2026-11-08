@@ -78,7 +78,7 @@ The main dispatcher resides at `VA 0x9B58..0x9B74`:
 
 | Opcode | Handler VA | Function / Description |
 | :--- | :--- | :--- |
-| `0x00` | `0x9BEE` | Device Info / Profile Selector (`70 <00..03> FF FF`) |
+| `0x00` | `0x9BEE` | Device Info, Profile Selector (`70`), Polling Rate (`50`), WinLock (`20`), OS Mode (`21/22/30/31`) |
 | `0x01` | `0xA314` | System command (3-level nested jump tables: `0x1C6A8` → `0x1C6C0` → `0x1C6D8`; `sub 0x01` replies `0x0109`) |
 | `0x02..0x07` | `0xC312` | Routed to `0x9BC0` (`0x01` dispatcher) |
 | `0x08` | `0xA412` | Macro: builds 3×16-element arrays from `0x1C3F0` |
@@ -148,7 +148,9 @@ Contains 71 valid bytes covering rows 0..3 (stops at byte offset 66; bytes `0x5E
 
 | Table | VA | Size | Description |
 | :--- | :--- | :--- | :--- |
-| **NVRAM Descriptors** | `0x43C0` | 38 × 16 B | Main NVRAM descriptor table (terminator at `0x462C`) |
+| **NVRAM Descriptors** | `0x43C0` | 38 × 16 B | Main NVRAM descriptor table (terminator at `0x462C`; descriptor `25` = `0x200031CB` OS mode) |
+| **macOS Default Keymap** | `0x4630` | 4 × 252 B | 4-layer default keymap for macOS mode (`0x4630..0x4A1F`; swaps `LWin` `0xE3` ↔ `LAlt` `0xE2` at word 53) |
+| **Windows Default Keymap**| `0x4A20` | 4 × 252 B | 4-layer default keymap for Windows mode (`0x4A20..0x4E0F`) |
 | **Ticks / `gdBi`** | `0x4E10` | 32 B | Timing descriptor (terminator at `0x4E30`) |
 | **Macro Record Bank** | `0x1C3F0` | 230 × u16 | Macro records (`0000, F001, F002, F003, 0004...`), accessed by `0x08/0x09/0x0A/0x0E` |
 | **RGB Mode Table** | `0x1C994` | 28 × 8 B | 28 `(init_ptr u32, tick_ptr u32)` pairs (mode 0 has `tick = 0`) |
@@ -238,12 +240,20 @@ The switch function at `VA 0x11B5E` branches on `a0 ∈ {0, 1, 2, 3}` with overl
 
 ## 8. Feature Protocols (Verified via Captures & Disassembly)
 
-### 8.1 Profile Selection (`0x00`)
+### 8.1 Profile Selection, Polling Rate, WinLock & OS Mode (`0x00`, Handler `VA 0x09BEE`)
 
-```text
-5C 04 00 CK | 70 <index> FF FF
-```
-* `index`: `0x00..0x03` corresponding to Profiles 1..4.
+| Subcmd | Request (`5C 04 00 94 \| ...`) | Reply (`5C 04 80 14 \| ...`) | Firmware Handler & Hardware Behavior |
+| :--- | :--- | :--- | :--- |
+| `0x20` (Read) | `20 FF FF FF` | `00 20 <00\|01> FF` | `VA 0x09F38..0x09F4E` → `VA 0x12FAE()`: reads WinLock bit (`(lbu(-1757(gp)) >> 3) & 1`) |
+| `0x20` (Toggle)| `20 <01\|00> FF FF` | `20 <01\|00> FF FF` | `VA 0x09F50..0x09FA6`: toggles `Left Win` (`0xE3`) disable bit in `0x20006120` and updates `VA 0x12F6A(0\|1)` whenever `payload[1] != 0xFF` |
+| `0x21` (Read) | `21 FF FF FF` | `00 21 <01=Win\|00=Mac> FF` | `VA 0x09CC4..0x09CDA` → `VA 0x12960()`: returns `1` if `lbu(0x200031CB) == 0` (Windows mode) |
+| `0x22` (Read) | `22 FF FF FF` | `00 22 <01=Mac\|00=Win> FF` | `VA 0x0A128..0x0A13A` → `VA 0x12960()`: returns `1` if `lbu(0x200031CB) == 1` (macOS mode) |
+| `0x30` (Write) | `30 00 FF FF` | `00 30 01 FF` | `VA 0x0A13C..0x0A162` → `VA 0x128E8(0)`: saves keymap (`0x11DE8`), sets `0x200031CB = 0` (Windows), sets `-1684(gp) \|= 0x10000` (`VA 0x07CAC` → `0x11EA6(0)`) |
+| `0x31` (Write) | `31 00 FF FF` | `00 31 01 FF` | `VA 0x0A164..0x0A18A` → `VA 0x128E8(1)`: saves keymap (`0x11DE8`), sets `0x200031CB = 1` (macOS), clears WinLock, sets `-1684(gp) \|= 0x10000` (`VA 0x07CAC` → `0x11EA6(4)`) |
+| `0x50` (Write) | `50 <00..06> FF FF` | `00 50 <00..06> FF` | `VA 0x09DCA`: sets polling rate (`0=8k, 1=4k, 2=2k, 3=1k, 4=500, 5=250, 6=125 Hz`) and re-enumerates USB |
+| `0x50` (Read) | `50 07 FF FF` | `00 50 <00..06> FF` | `VA 0x09DE0`: reads active polling rate code (`0x00..0x06`) |
+| `0x70` (Write) | `70 <00..03> FF FF` | `00 70 <00..03> FF` | `VA 0x09E0C` → `0x16342`: selects onboard Profile 0..3 |
+| `0x70` (Read) | `70 04 FF FF` | `00 70 <00..03> FF` | `VA 0x09E1C`: reads active onboard Profile 0..3 |
 
 ### 8.2 Per-Key RGB (`0x2A` → Reply `0xAA`, Handler `VA 0xC12E`)
 

@@ -63,6 +63,7 @@ export function GeneralSettingsPage({
   const isWin68 = isWin68HeMaxModel(model.id);
   const busyOrDisconnected =
     !deviceConnected || deviceSettingsState === 'reading' || deviceSettingsState === 'saving';
+  const osAndWinLockDisabled = busyOrDisconnected;
   const controlsDisabled = busyOrDisconnected || isWin68;
   const pollingDisabled = busyOrDisconnected || !model.capabilities.writablePollingRate;
 
@@ -146,7 +147,7 @@ export function GeneralSettingsPage({
                 role="radio"
                 aria-checked={!deviceOsModeMac}
                 className={`device-option-row ${!deviceOsModeMac ? 'is-selected' : ''}`}
-                disabled={controlsDisabled}
+                disabled={osAndWinLockDisabled}
                 onClick={() =>
                   void applyBooleanDeviceSetting(
                     'OS mode',
@@ -166,7 +167,7 @@ export function GeneralSettingsPage({
                 role="radio"
                 aria-checked={deviceOsModeMac}
                 className={`device-option-row ${deviceOsModeMac ? 'is-selected' : ''}`}
-                disabled={controlsDisabled}
+                disabled={osAndWinLockDisabled}
                 onClick={() =>
                   void applyBooleanDeviceSetting(
                     'OS mode',
@@ -202,7 +203,7 @@ export function GeneralSettingsPage({
                 )
               }
               label={tr('Windows key lock')}
-              disabled={controlsDisabled}
+              disabled={osAndWinLockDisabled}
             />
           </div>
 

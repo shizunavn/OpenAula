@@ -12,7 +12,14 @@ import {
   readWinLock,
   writePollingRate
 } from '../../protocol/hero68/commands';
-import { readXsydPollingRate, xsydDeviceManager } from '../../protocol/xsyd/device';
+import {
+  readXsydOsModeMac,
+  readXsydPollingRate,
+  readXsydWinLock,
+  writeXsydOsModeMac,
+  writeXsydWinLock,
+  xsydDeviceManager
+} from '../../protocol/xsyd/device';
 import { setTachyonLighting } from '../../protocol/tachyon';
 import { rgbService } from '../../protocol/rgbService';
 import type { PollingRate } from '../../protocol/hero68/types';
@@ -120,7 +127,11 @@ export function useDeviceSettings({
     try {
       if (xsydDeviceManager.connected) {
         const polling = await readXsydPollingRate(xsydDeviceManager);
+        const osModeMac = await readXsydOsModeMac(xsydDeviceManager);
+        const winLock = await readXsydWinLock(xsydDeviceManager);
         setDevicePollingRateState(polling);
+        setDeviceOsModeMac(osModeMac);
+        setDeviceWinLock(winLock);
         setDeviceSettingsState('ready');
         return;
       }
@@ -209,12 +220,35 @@ export function useDeviceSettings({
     readReport: Uint8Array,
     setter: (next: boolean) => void
   ) {
-    if (!hero68DeviceManager.connected || deviceSettingsState === 'saving') {
+    if (
+      (!hero68DeviceManager.connected && !xsydDeviceManager.connected) ||
+      deviceSettingsState === 'saving'
+    ) {
       return;
     }
     setDeviceActionError(null);
     setDeviceSettingsState('saving');
     try {
+      if (xsydDeviceManager.connected) {
+        if (zone === 17) {
+          const actual = await writeXsydOsModeMac(xsydDeviceManager, value);
+          setter(actual);
+          // Switching OS mode on WIN 68 HE MAX (VA 0x128E8) automatically clears
+          // WinLock when entering macOS mode (and writeXsydOsModeMac unlocks WinLock
+          // before returning to Windows mode), so keep UI winLock state in sync.
+          const nextWinLock = await readXsydWinLock(xsydDeviceManager);
+          setDeviceWinLock(nextWinLock);
+          setDeviceSettingsState('ready');
+          return;
+        }
+        if (zone === 21) {
+          const actual = await writeXsydWinLock(xsydDeviceManager, value);
+          setter(actual);
+          setDeviceSettingsState('ready');
+          return;
+        }
+        throw new Error(`${label} is not supported on WIN 68 HE MAX.`);
+      }
       await hero68DeviceManager.request(writeReport, 0x04, zone, 1200);
       const verify = await hero68DeviceManager.request(readReport, 0x84, zone, 1200);
       const actual = (verify.data[0] ?? 0) !== 0;

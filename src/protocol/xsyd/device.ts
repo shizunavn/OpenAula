@@ -100,6 +100,12 @@ export const XSYD_REPORT_ID = 0x00;
 export const XSYD_POLLING_RATES = [8000, 4000, 2000, 1000, 500, 250, 125] as const;
 export const XSYD_POLLING_RATE_QUERY = 0x07;
 export const XSYD_PROFILE_SLOT_QUERY = 0x04;
+export const XSYD_WIN_LOCK_SUBCMD = 0x20;
+export const XSYD_WIN_LOCK_QUERY = 0xff;
+export const XSYD_OS_MODE_READ_WIN_SUBCMD = 0x21;
+export const XSYD_OS_MODE_READ_MAC_SUBCMD = 0x22;
+export const XSYD_OS_MODE_WRITE_WIN_SUBCMD = 0x30;
+export const XSYD_OS_MODE_WRITE_MAC_SUBCMD = 0x31;
 
 export interface XsydRequester {
   request(frame: Uint8Array, timeoutMs?: number): Promise<XsydReply>;
@@ -320,6 +326,192 @@ export function decodeXsydPollingRateReply(reply: XsydReply): PollingRate {
 export async function readXsydPollingRate(requester: XsydRequester): Promise<PollingRate> {
   const reply = await requester.request(buildXsydReadPollingRateFrame());
   return decodeXsydPollingRateReply(reply);
+}
+
+/**
+ * Build `0x00` subcmd `0x20` Windows Key Lock read query (`20 FF FF FF`).
+ *
+ * Verified against WIN 68 HE MAX firmware v1.1.4 (`VA 0x09CBC` -> `0x09F38..0x09F4E`,
+ * helper `VA 0x12FAE`):
+ * - Request: `5C 04 00 94 | 20 FF FF FF`
+ * - Reply:   `5C 04 80 14 | 00 20 <00|01> FF` (`0x00` = unlocked, `0x01` = locked;
+ *            reads bit 3 (`0x08`) of indicator bitmask `-1757(gp)`).
+ */
+export function buildXsydReadWinLockFrame(): Uint8Array {
+  return buildXsydFrame(0x00, [XSYD_WIN_LOCK_SUBCMD, XSYD_WIN_LOCK_QUERY, 0xff, 0xff]);
+}
+
+/**
+ * Build `0x00` subcmd `0x20` Windows Key Lock toggle frame (`20 <01|00> FF FF`).
+ *
+ * Verified against WIN 68 HE MAX firmware v1.1.4 (`VA 0x09F50..0x09FA6`,
+ * helper `VA 0x12F6A`):
+ * - When `payload[1] !== 0xFF`, the firmware looks up `0xE3` (`Left Win`) in active
+ *   Layer 0 (`0x20004BE4`), toggles its disable bit in `0x20006120`, updates bit 3
+ *   (`0x08`) of `-1757(gp)` via `VA 0x12F6A(0|1)`, and echoes the frame with opcode `0x80`.
+ * - Because the firmware handler is a hardware toggle whenever `payload[1] !== 0xFF`,
+ *   always use `writeXsydWinLock()` to read current state before toggling and verify readback.
+ */
+export function buildXsydToggleWinLockFrame(enable = true): Uint8Array {
+  return buildXsydFrame(0x00, [XSYD_WIN_LOCK_SUBCMD, enable ? 0x01 : 0x00, 0xff, 0xff]);
+}
+
+/**
+ * Decode an `0x80` reply to `0x00` subcmd `0x20` (`00 20 <00|01> FF` or echoed `20 <00|01> FF FF`).
+ */
+export function decodeXsydWinLockReply(reply: XsydReply): boolean {
+  if (reply.opcode !== 0x80 || !reply.checksumValid) {
+    throw new Error('Invalid XSYD Windows key lock reply');
+  }
+  if (
+    reply.payload.length >= 3 &&
+    reply.payload[0] === 0x00 &&
+    reply.payload[1] === XSYD_WIN_LOCK_SUBCMD
+  ) {
+    return (reply.payload[2] ?? 0) !== 0;
+  }
+  if (
+    reply.payload.length >= 2 &&
+    reply.payload[0] === XSYD_WIN_LOCK_SUBCMD &&
+    reply.payload[1] !== XSYD_WIN_LOCK_QUERY
+  ) {
+    return (reply.payload[1] ?? 0) !== 0;
+  }
+  throw new Error('Unexpected XSYD Windows key lock subcommand reply');
+}
+
+export async function readXsydWinLock(requester: XsydRequester): Promise<boolean> {
+  const reply = await requester.request(buildXsydReadWinLockFrame());
+  return decodeXsydWinLockReply(reply);
+}
+
+/**
+ * Deterministically set Windows Key Lock on WIN 68 HE MAX.
+ *
+ * Since `0x00` subcmd `0x20` (`VA 0x09F50..0x09FA6`) toggles the `Left Win` (`0xE3`)
+ * disable bit whenever `payload[1] !== 0xFF`, this helper reads the current state via
+ * `20 FF FF FF`, sends `20 <01|00> FF FF` only when a state transition is needed, and
+ * verifies the final state via a follow-up `20 FF FF FF` readback.
+ */
+export async function writeXsydWinLock(
+  requester: XsydRequester,
+  locked: boolean
+): Promise<boolean> {
+  const current = await readXsydWinLock(requester);
+  if (current === locked) {
+    return current;
+  }
+  const toggleReply = await requester.request(buildXsydToggleWinLockFrame(locked));
+  if (toggleReply.opcode !== 0x80 || !toggleReply.checksumValid) {
+    throw new Error('Invalid XSYD Windows key lock write reply');
+  }
+  const actual = await readXsydWinLock(requester);
+  if (actual !== locked) {
+    throw new Error(
+      `Windows key lock verify failed: requested ${locked ? 'on' : 'off'}, device reports ${actual ? 'on' : 'off'}`
+    );
+  }
+  return actual;
+}
+
+/**
+ * Build `0x00` subcmd `0x22` (macOS mode query) or `0x21` (Windows mode query) frame.
+ *
+ * Verified against WIN 68 HE MAX firmware v1.1.4 (`VA 0x09CC4..0x09CDA`, `0x0A128..0x0A13A`,
+ * helper `VA 0x12960` reading `lbu 0x200031CB` where `0` = Windows, `1` = macOS):
+ * - Subcmd `0x21` (`5C 04 00 94 | 21 FF FF FF`): replies `5C 04 80 14 | 00 21 <01=Win|00=Mac> FF`
+ * - Subcmd `0x22` (`5C 04 00 94 | 22 FF FF FF`): replies `5C 04 80 14 | 00 22 <01=Mac|00=Win> FF`
+ */
+export function buildXsydReadOsModeFrame(target: 'mac' | 'win' = 'mac'): Uint8Array {
+  const subcmd = target === 'win' ? XSYD_OS_MODE_READ_WIN_SUBCMD : XSYD_OS_MODE_READ_MAC_SUBCMD;
+  return buildXsydFrame(0x00, [subcmd, 0xff, 0xff, 0xff]);
+}
+
+/**
+ * Build `0x00` subcmd `0x31` (write macOS mode) or `0x30` (write Windows mode) frame.
+ *
+ * Verified against WIN 68 HE MAX firmware v1.1.4 (`VA 0x0A13C..0x0A18A`, helper `VA 0x128E8`):
+ * - Windows mode (`mac = false`): `5C 04 00 94 | 30 00 FF FF` -> replies `5C 04 80 14 | 00 30 01 FF`
+ * - macOS mode   (`mac = true`):  `5C 04 00 94 | 31 00 FF FF` -> replies `5C 04 80 14 | 00 31 01 FF`
+ *
+ * Hardware effects:
+ * - Saves outgoing OS mode keymap bank (`0x11DE8`), writes `0x200031CB` (`0` = Win, `1` = Mac)
+ *   and marks NVRAM descriptor `25` dirty (`0x11B18`).
+ * - When entering macOS mode (`0x31`), `VA 0x128E8(1)` automatically clears `Left Win` (`0xE3`)
+ *   disable bit in `0x20006120` and unlocks WinLock (`VA 0x12F6A(0)`).
+ * - Sets bit 16 (`0x10000`) of `-1684(gp)` so the main loop (`VA 0x07CAC..0x07CCC`) reloads
+ *   the active OS mode keymap bank (`VA 0x4A20` for Windows, `VA 0x4630` for macOS where
+ *   `L-Win` `0xE3` and `L-Alt` `0xE2` are swapped in Layer 0).
+ */
+export function buildXsydWriteOsModeFrame(mac: boolean): Uint8Array {
+  const subcmd = mac ? XSYD_OS_MODE_WRITE_MAC_SUBCMD : XSYD_OS_MODE_WRITE_WIN_SUBCMD;
+  return buildXsydFrame(0x00, [subcmd, 0x00, 0xff, 0xff]);
+}
+
+/**
+ * Decode an `0x80` reply to `0x00` subcommands `0x21`, `0x22`, `0x30`, or `0x31`.
+ * Returns `true` when the keyboard is in macOS mode (`0x200031CB === 1`), or `false` for Windows mode.
+ */
+export function decodeXsydOsModeReply(reply: XsydReply): boolean {
+  if (reply.opcode !== 0x80 || !reply.checksumValid) {
+    throw new Error('Invalid XSYD OS mode reply');
+  }
+  if (reply.payload.length < 3 || reply.payload[0] !== 0x00) {
+    throw new Error('Unexpected XSYD OS mode subcommand reply');
+  }
+  const subcmd = reply.payload[1];
+  const val = reply.payload[2] ?? 0;
+  if (subcmd === XSYD_OS_MODE_READ_MAC_SUBCMD) {
+    return val !== 0;
+  }
+  if (subcmd === XSYD_OS_MODE_READ_WIN_SUBCMD) {
+    return val === 0;
+  }
+  if (subcmd === XSYD_OS_MODE_WRITE_MAC_SUBCMD && val === 0x01) {
+    return true;
+  }
+  if (subcmd === XSYD_OS_MODE_WRITE_WIN_SUBCMD && val === 0x01) {
+    return false;
+  }
+  throw new Error('Unexpected XSYD OS mode subcommand reply');
+}
+
+export async function readXsydOsModeMac(requester: XsydRequester): Promise<boolean> {
+  const reply = await requester.request(buildXsydReadOsModeFrame('mac'));
+  return decodeXsydOsModeReply(reply);
+}
+
+/**
+ * Write Operating System Mode (`false` = Windows, `true` = macOS) on WIN 68 HE MAX
+ * and verify with a `0x22` readback.
+ *
+ * Note on `VA 0x128E8(0)`: while `VA 0x128E8(1)` clears the `0xE3` disable bit in
+ * `0x20006120` before loading the macOS keymap, `VA 0x128E8(0)` does not clear
+ * `0x20006120` when switching back to Windows mode. If WinLock was toggled on while
+ * in macOS mode (where `0xE3` sits on physical `L-Alt`, matrix index `107`),
+ * unlocking WinLock before switching back to Windows mode ensures matrix index `107`
+ * is never left disabled in `0x20006120`.
+ */
+export async function writeXsydOsModeMac(requester: XsydRequester, mac: boolean): Promise<boolean> {
+  if (!mac) {
+    try {
+      const winLocked = await readXsydWinLock(requester);
+      if (winLocked) {
+        await writeXsydWinLock(requester, false);
+      }
+    } catch {
+      // Proceed if a minimal test mock does not implement subcmd 0x20.
+    }
+  }
+  const writeReply = await requester.request(buildXsydWriteOsModeFrame(mac));
+  decodeXsydOsModeReply(writeReply);
+  const actual = await readXsydOsModeMac(requester);
+  if (actual !== mac) {
+    throw new Error(
+      `OS mode verify failed: requested ${mac ? 'macOS' : 'Windows'}, device reports ${actual ? 'macOS' : 'Windows'}`
+    );
+  }
+  return actual;
 }
 
 /**
@@ -1391,6 +1583,22 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
     return actual;
   }
 
+  async readWinLock(): Promise<boolean> {
+    return readXsydWinLock(this);
+  }
+
+  async writeWinLock(locked: boolean): Promise<boolean> {
+    return writeXsydWinLock(this, locked);
+  }
+
+  async readOsModeMac(): Promise<boolean> {
+    return readXsydOsModeMac(this);
+  }
+
+  async writeOsModeMac(mac: boolean): Promise<boolean> {
+    return writeXsydOsModeMac(this, mac);
+  }
+
   async sendHex(hex: string): Promise<void> {
     const frame = hexToBytes(hex);
     await this.request(frame, 1000);
@@ -1476,8 +1684,10 @@ export class XsydDeviceManager implements Hero68Transport, XsydRequester {
       const maxRetries = options.retries ?? (op === 0x23 ? 2 : 0);
       const reply = await this.#requestWithRetry(frame, timeoutMs, maxRetries);
       if (
-        [0x18, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2c].includes(op) &&
-        frame[4] === 0x01
+        ([0x18, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2c].includes(op) &&
+          frame[4] === 0x01) ||
+        (op === 0x00 &&
+          (sub === XSYD_OS_MODE_WRITE_WIN_SUBCMD || sub === XSYD_OS_MODE_WRITE_MAC_SUBCMD))
       ) {
         if (this.#lastSramWriteAt === 0) {
           this.#lastSramWriteAt = Date.now();

@@ -253,6 +253,40 @@ test('SOCD, disable-binding, handshake, polling rate, and 0x23 readback frames m
   assert.equal(hex(xsydDevice.buildXsydWritePollingRateFrame(125)), '5c0400945006ffff')
   assert.equal(hex(xsydDevice.buildXsydReadPollingRateFrame()), '5c0400945007ffff')
 
+  // WinLock 0x00 subcmd 0x20 & OS mode 0x00 subcmds 0x21/0x22/0x30/0x31 verified against firmware v1.1.4:
+  assert.equal(hex(xsydDevice.buildXsydReadWinLockFrame()), '5c04009420ffffff')
+  assert.equal(hex(xsydDevice.buildXsydToggleWinLockFrame(true)), '5c0400942001ffff')
+  assert.equal(hex(xsydDevice.buildXsydToggleWinLockFrame(false)), '5c0400942000ffff')
+  assert.equal(
+    xsydDevice.decodeXsydWinLockReply(xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x20, 0x01, 0xff]))),
+    true
+  )
+  assert.equal(
+    xsydDevice.decodeXsydWinLockReply(xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x20, 0x00, 0xff]))),
+    false
+  )
+
+  assert.equal(hex(xsydDevice.buildXsydReadOsModeFrame('win')), '5c04009421ffffff')
+  assert.equal(hex(xsydDevice.buildXsydReadOsModeFrame('mac')), '5c04009422ffffff')
+  assert.equal(hex(xsydDevice.buildXsydWriteOsModeFrame(false)), '5c0400943000ffff')
+  assert.equal(hex(xsydDevice.buildXsydWriteOsModeFrame(true)), '5c0400943100ffff')
+  assert.equal(
+    xsydDevice.decodeXsydOsModeReply(xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x22, 0x01, 0xff]))),
+    true
+  )
+  assert.equal(
+    xsydDevice.decodeXsydOsModeReply(xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x22, 0x00, 0xff]))),
+    false
+  )
+  assert.equal(
+    xsydDevice.decodeXsydOsModeReply(xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x21, 0x01, 0xff]))),
+    false
+  )
+  assert.equal(
+    xsydDevice.decodeXsydOsModeReply(xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x21, 0x00, 0xff]))),
+    true
+  )
+
   for (const [code, rate] of [
     [0x00, 8000],
     [0x01, 4000],
@@ -446,9 +480,10 @@ test('XsydDeviceManager connects without reopening an open handle, reassembles m
   }
 })
 
-test('GeneralSettingsPage enables Polling Rate on WIN 68 HE MAX while keeping HERO68-only toggles disabled', () => {
+test('GeneralSettingsPage enables Polling Rate, OS Mode, and WinLock on WIN 68 HE MAX while keeping HERO68-only toggles disabled', async () => {
   const { GeneralSettingsPage } = generalSettingsMod
   const selectedRates = []
+  const appliedBooleanSettings = []
   const tree = renderComponent({ type: GeneralSettingsPage, props: {
     model: devicesMod.heroDeviceModel('win68HeMax'),
     deviceConnected: true,
@@ -467,7 +502,9 @@ test('GeneralSettingsPage enables Polling Rate on WIN 68 HE MAX while keeping HE
     async handlePollingRateChange(rate) {
       selectedRates.push(rate)
     },
-    async applyBooleanDeviceSetting() {},
+    async applyBooleanDeviceSetting(label, value, zone) {
+      appliedBooleanSettings.push({ label, value, zone })
+    },
   } })
 
   const radioButtons = collectNodes(tree, el => el.type === 'button' && el.props?.role === 'radio')
@@ -483,8 +520,66 @@ test('GeneralSettingsPage enables Polling Rate on WIN 68 HE MAX while keeping HE
   const osModeButtons = radioButtons.filter(b => !textContent(b).includes('Hz'))
   assert.equal(osModeButtons.length, 2)
   for (const btn of osModeButtons) {
-    assert.equal(btn.props.disabled, true, 'HERO68 OS mode buttons stay disabled on WIN 68 HE MAX')
+    assert.equal(btn.props.disabled, false, 'OS mode buttons must be enabled on WIN 68 HE MAX')
   }
+  osModeButtons[1].props.onClick()
+  assert.deepEqual(appliedBooleanSettings, [{ label: 'OS mode', value: true, zone: 17 }])
+
+  // Verify writeXsydWinLock and writeXsydOsModeMac state machine against simulated firmware v1.1.4
+  let hwWinLock = false
+  let hwOsModeMac = false
+  const sentSubcmds = []
+  const mockFw = {
+    async request(frame) {
+      const sub = frame[4]
+      const arg = frame[5]
+      sentSubcmds.push([sub, arg])
+      if (sub === 0x20) {
+        if (arg === 0xff) {
+          return xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x20, hwWinLock ? 1 : 0, 0xff]))
+        }
+        // Firmware VA 0x09F50 toggles WinLock whenever arg != 0xFF
+        hwWinLock = !hwWinLock
+        return xsydCodec.decodeXsydFrame(makeReply(0x00, [0x20, arg, 0xff, 0xff]))
+      }
+      if (sub === 0x21) {
+        return xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x21, hwOsModeMac ? 0 : 1, 0xff]))
+      }
+      if (sub === 0x22) {
+        return xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x22, hwOsModeMac ? 1 : 0, 0xff]))
+      }
+      if (sub === 0x30) {
+        hwOsModeMac = false
+        return xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x30, 0x01, 0xff]))
+      }
+      if (sub === 0x31) {
+        hwOsModeMac = true
+        hwWinLock = false // VA 0x128E8(1) clears WinLock on macOS switch
+        return xsydCodec.decodeXsydFrame(makeReply(0x00, [0x00, 0x31, 0x01, 0xff]))
+      }
+      throw new Error(`Unexpected subcmd 0x${sub.toString(16)}`)
+    }
+  }
+
+  assert.equal(await xsydDevice.readXsydWinLock(mockFw), false)
+  assert.equal(await xsydDevice.writeXsydWinLock(mockFw, true), true)
+  assert.equal(hwWinLock, true)
+  // Idempotent write when already locked must not toggle it back off!
+  assert.equal(await xsydDevice.writeXsydWinLock(mockFw, true), true)
+  assert.equal(hwWinLock, true)
+
+  // Switching to macOS mode (0x31) sets hwOsModeMac=true and clears hwWinLock
+  assert.equal(await xsydDevice.writeXsydOsModeMac(mockFw, true), true)
+  assert.equal(hwOsModeMac, true)
+  assert.equal(await xsydDevice.readXsydWinLock(mockFw), false)
+
+  // If WinLock is toggled on while in macOS mode, switching back to Windows mode (0x30)
+  // unlocks WinLock first so matrix index 107 (L-Alt) is never left disabled in 0x20006120
+  await xsydDevice.writeXsydWinLock(mockFw, true)
+  assert.equal(hwWinLock, true)
+  assert.equal(await xsydDevice.writeXsydOsModeMac(mockFw, false), false)
+  assert.equal(hwOsModeMac, false)
+  assert.equal(hwWinLock, false)
 })
 
 test('saveXsydAdvancedBindings, xsydProtocolEncoder, and hydrateFromXsydDevice round-trip Profile 0 Actuation, 0.15mm/0.02mm RT Press/Release, Top/Bottom Deadzones, and Switch Types', async () => {

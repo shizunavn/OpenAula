@@ -67,6 +67,12 @@ See `src/protocol/xsyd/codec.ts`.
 | `70 04 ff ff` (subcmd `0x70`) | `00 70 <00..03> ff` | read active onboard profile (`4k_to_2k_to_1k.pcapng` #10 → #11, `VA 0x09E1C`) |
 | `50 <00..06> ff ff` (subcmd `0x50`) | `00 50 <00..06> ff` | write polling rate (`4k_to_2k_to_1k.pcapng` #0, #636, #996, `VA 0x09DCA`); triggers USB re-enumeration |
 | `50 07 ff ff` (subcmd `0x50`) | `00 50 <00..06> ff` | read current polling rate (`4k_to_2k_to_1k.pcapng` #14, #650, #1010) |
+| `20 ff ff ff` (subcmd `0x20`) | `00 20 <00\|01> ff` | read Windows Key Lock (`0x00` = unlocked, `0x01` = locked; `VA 0x09CBC` → `0x09F38`, `VA 0x12FAE`) |
+| `20 <00\|01> ff ff` (subcmd `0x20`) | `20 <00\|01> ff ff` | toggle Windows Key Lock (`VA 0x09F50..0x09FA6`, `VA 0x12F6A`; hardware toggle whenever `payload[1] != 0xFF`) |
+| `21 ff ff ff` (subcmd `0x21`) | `00 21 <01=Win\|00=Mac> ff` | read Windows OS mode active flag (`VA 0x09CC4..0x09CDA`, `VA 0x12960` reading `0x200031CB`) |
+| `22 ff ff ff` (subcmd `0x22`) | `00 22 <01=Mac\|00=Win> ff` | read macOS OS mode active flag (`VA 0x09CB0` → `0x0A128..0x0A13A`, `VA 0x12960`) |
+| `30 00 ff ff` (subcmd `0x30`) | `00 30 01 ff` | switch to Windows OS mode (`0x200031CB = 0`, loads `VA 0x4A20` keymap bank `0..3`; `VA 0x0A13C..0x0A162`, `VA 0x128E8(0)`) |
+| `31 00 ff ff` (subcmd `0x31`) | `00 31 01 ff` | switch to macOS OS mode (`0x200031CB = 1`, clears WinLock, loads `VA 0x4630` keymap bank `4..7`; `VA 0x0A164..0x0A18A`, `VA 0x128E8(1)`) |
 
 ### 2.1 Profile switching (`0x00` subcmd `0x70`) vs. 500 ms deferred Flash flush (`VA 0x07E28` & `VA 0x09AF0`)
 
@@ -104,6 +110,35 @@ reply:  5C 04 80 14 | 00 50 <code> FF
 | `0x05` | 250 Hz | — | `8000 >> 5` |
 | `0x06` | 125 Hz | — | `8000 >> 6` |
 | `0x07` | read query | — | `50 07 ff ff` queries the active rate code `0x00..0x06` |
+
+### 2.3 Windows Key Lock (`0x00` subcmd `0x20`, `VA 0x09CBC` → `0x09F30..0x09FA6`)
+
+- **Hardware state**:
+  - Indicator LED bitmask at `lbu -1757(gp)`: `bit 1 (0x02)` = CapsLock (`0x39`), `bit 3 (0x08)` = WinLock (`0xE3` `Left Win`, evaluated at `VA 0x1405E..0x14092`).
+  - `VA 0x12FAE()` reads `(lbu(-1757(gp)) >> 3) & 1`; `VA 0x12F6A(a0)` writes `(a0 & 1) << 3` into `-1757(gp)`.
+  - Per-key disable bitmap at `0x20006120`: bit corresponding to the Layer 0 matrix index of `0xE3` (`Left Win`, resolved via `VA 0x174D2(0x20004BE4, 0, 0xE3)`).
+- **Read query (`payload = [0x20, 0xFF, 0xFF, 0xFF]`, `VA 0x09F38..0x09F4E`)**:
+  - Request: `5C 04 00 94 | 20 FF FF FF`
+  - Reply:   `5C 04 80 14 | 00 20 <00|01> FF` (`0x00` = unlocked, `0x01` = locked).
+- **Toggle write (`payload = [0x20, 0x00..0xFE, 0xFF, 0xFF]`, `VA 0x09F50..0x09FA6`)**:
+  - Request: `5C 04 00 94 | 20 <01|00> FF FF`
+  - Reply:   `5C 04 80 14 | 20 <01|00> FF FF`
+  - **Important firmware quirk**: Whenever `payload[1] != 0xFF`, `VA 0x09F50..0x09FA6` **toggles** the current disable bit of `0xE3` in `0x20006120` rather than assigning `payload[1]` directly. `writeXsydWinLock()` therefore reads the current state via `20 FF FF FF` first, sends `20 <01|00> FF FF` only when `current !== target`, and verifies the final state with a follow-up `20 FF FF FF` readback.
+
+### 2.4 Operating System Mode — Windows vs. macOS (`0x00` subcmds `0x21`, `0x22`, `0x30`, `0x31`)
+
+- **Hardware state (`0x200031CB`, NVRAM descriptor `25` at `VA 0x43C0`)**:
+  - `VA 0x12960()` reads `lbu 0x200031CB` (`0` = Windows mode, `1` = macOS mode).
+  - `VA 0x128E8(mode)` updates `0x200031CB`, marks NVRAM descriptor `25` dirty (`VA 0x11B18` → 500 ms deferred Flash flush via `-1688(gp)` bit 12 at `VA 0x07E50..0x08036`), and when `mode == 1` (macOS) automatically clears the `0xE3` (`Left Win`) disable bit in `0x20006120` and calls `VA 0x12F6A(0)` to unlock WinLock.
+- **Read queries (`VA 0x09CC4..0x09CDA` & `VA 0x0A128..0x0A13A`)**:
+  - Windows mode query: `5C 04 00 94 | 21 FF FF FF` → `5C 04 80 14 | 00 21 <01=Win|00=Mac> FF`
+  - macOS mode query:   `5C 04 00 94 | 22 FF FF FF` → `5C 04 80 14 | 00 22 <01=Mac|00=Win> FF`
+- **Write commands (`VA 0x0A13C..0x0A18A`)**:
+  - Switch to Windows mode: `5C 04 00 94 | 30 00 FF FF` → `5C 04 80 14 | 00 30 01 FF`
+  - Switch to macOS mode:   `5C 04 00 94 | 31 00 FF FF` → `5C 04 80 14 | 00 31 01 FF`
+  - Both handlers save the outgoing OS mode keymap bank (`VA 0x11DE8`), call `VA 0x128E8(0|1)`, and set bit 16 (`0x10000`) of `-1684(gp)` so the main loop (`VA 0x07CAC..0x07CCC`) calls `VA 0x11EA6(0|4)` to load the active OS mode's 4 keymap layers into `0x20004BE4`:
+    - **Windows default keymap (`VA 0x4A20`, bank `0..3`)**: Layer 0 `key 106 (L-Win) = 0x00E3`, `key 107 (L-Alt) = 0x00E2`; Layer 1 `Fn + L-Win = 0xF309` (WinLock toggle).
+    - **macOS default keymap (`VA 0x4630`, bank `4..7`)**: Layer 0 swaps `key 106 = 0x00E2` (`Left Option`) and `key 107 = 0x00E3` (`Left Command`); Layer 1 disables `Fn + L-Win` (`0x0001`); Layer 2 maps number row `keys 22..33` to macOS media/system actions (`0x1070` Brightness Down, `0x106F` Brightness Up, `0x6152` Mission Control, `0x681B` Launchpad, `0x10B6` Prev, `0x10CD` Play/Pause, `0x10B5` Next, `0x10E2` Mute, `0x10EA` Vol Down, `0x10E9` Vol Up).
 
 ---
 

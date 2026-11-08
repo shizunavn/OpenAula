@@ -3,6 +3,24 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.6.1.1 — WIN 68 HE MAX Hardware WinLock & OS Mode Switching
+
+- Hardware Windows Key Lock (`src/protocol/xsyd/device.ts`, `GeneralSettingsPage.tsx`, `useDeviceSettings.ts`):
+  - Verified and implemented `0x00` subcmd `0x20` for WIN 68 HE MAX firmware v1.1.4 (`VA 0x09CBC` -> `0x09F38`, helper `VA 0x12FAE`).
+  - Read query `20 FF FF FF` retrieves current lock status (`00 20 <00|01> FF`).
+  - Toggling frame `20 <01|00> FF FF` updates `Left Win` (`0xE3`) disable bit in `0x20006120` and bit 3 of indicator bitmask (`VA 0x12F6A`).
+  - Added idempotent `writeXsydWinLock()` guard to prevent accidental toggling when already in the desired state, verified with a follow-up readback.
+- Operating System Mode Switching (`src/protocol/xsyd/device.ts`, `GeneralSettingsPage.tsx`, `useDeviceSettings.ts`):
+  - Verified and implemented OS mode commands for WIN 68 HE MAX (`VA 0x09CC4`, `0x0A128`, helper `VA 0x12960` reading `0x200031CB`):
+    - Subcmd `0x21`: query Windows mode active flag.
+    - Subcmd `0x22`: query macOS mode active flag.
+    - Subcmd `0x30`: switch to Windows OS mode (`0x200031CB = 0`, loads `VA 0x4A20` keymap bank `0..3`).
+    - Subcmd `0x31`: switch to macOS OS mode (`0x200031CB = 1`, loads `VA 0x4630` keymap bank `4..7` with `L-Win`/`L-Alt` swapped, automatically clears WinLock).
+  - Automatically unlocks WinLock before returning to Windows mode to protect matrix index 107 (`L-Alt`) from lingering disabled in `0x20006120`.
+- Documentation & Verification:
+  - Documented disassembled firmware handlers (`VA 0x09F50`, `VA 0x128E8`, etc.) in `docs/xsyd-protocol.md` and `docs/xsyd_knownstate.md`.
+  - Added integration unit tests in `tests/xsyd-win68-integration.test.mjs` verifying OS mode reply decoding, GeneralSettingsPage radio controls, idempotent WinLock writes, and macOS/Windows state transitions.
+
 ## 1.6.1 — Rhythm Equalizer Full-Scale Scaling, Audio Marquee Row Direction & Radial Chase Shockwave
 
 - Rhythm Sync Spectrum Bars (Mode 429) Full-Scale & Row Distribution (`service/native/rhythm_core.h`, `rhythm.ts`):
