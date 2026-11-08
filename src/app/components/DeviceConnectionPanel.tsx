@@ -1,13 +1,16 @@
 import { useMemo } from 'react';
 import { Activity } from 'lucide-react';
 import hero68Thumb from '../../assets/hero68.png';
+import hero68XsThumb from '../../assets/hero68xs.png';
 import hero84Thumb from '../../assets/hero84.png';
+import win68Thumb from '../../assets/win68HeMax.png';
 
 const BUILTIN_THUMBNAILS: Readonly<Record<string, string>> = {
   hero68: hero68Thumb,
+  hero68xs: hero68XsThumb,
   hero84: hero84Thumb,
-  win68HeMax: hero68Thumb,
-  win68: hero68Thumb
+  win68HeMax: win68Thumb,
+  win68: win68Thumb
 };
 import { AppSelect } from './AppSelect';
 import { useT } from '../../i18n';
@@ -32,6 +35,7 @@ export type DeviceConnectionPanelProps = {
   deviceReadState: 'idle' | 'reading' | 'success' | 'error';
   deviceActionError: string | null;
   deviceError: string | null;
+  isXs?: boolean;
 };
 
 export function DeviceConnectionPanel({
@@ -46,10 +50,15 @@ export function DeviceConnectionPanel({
   profileBusy,
   deviceReadState,
   deviceActionError,
-  deviceError
+  deviceError,
+  isXs
 }: DeviceConnectionPanelProps) {
   const tr = useT();
   const deviceConnected = deviceConnectionState === 'connected';
+  const showHero68XsThumb = deviceConnected && Boolean(isXs) && deviceModel === 'hero68';
+  const activeThumbnail = showHero68XsThumb
+    ? hero68XsThumb
+    : (BUILTIN_THUMBNAILS[deviceModel] ?? selectedModel.thumbnail);
   const deviceConnecting = deviceConnectionState === 'connecting';
   const deviceStatusLabel =
     deviceConnectionState === 'connected'
@@ -86,9 +95,9 @@ export function DeviceConnectionPanel({
       <div className="device-card device-card-static">
         <span className="device-thumb">
           <img
-            key={deviceModel}
-            src={BUILTIN_THUMBNAILS[deviceModel] ?? selectedModel.thumbnail}
-            alt={selectedModel.label}
+            key={`${deviceModel}-${showHero68XsThumb ? 'xs' : 'std'}`}
+            src={activeThumbnail}
+            alt={showHero68XsThumb ? 'AULA HERO 68 XS' : selectedModel.label}
           />
         </span>
         <span className="device-copy">

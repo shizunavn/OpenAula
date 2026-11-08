@@ -8,6 +8,7 @@ import {
   type ReactNode
 } from 'react';
 import { createPortal } from 'react-dom';
+import { formatMillimeters } from '../app/helpers';
 import { heroLayout } from '../keyboard/layout';
 import type { HeroDeviceModelId } from '../keyboard/devices';
 import { subscribeLightingFrame, type LightingFrame } from '../keyboard/lightingPreviewBus';
@@ -456,7 +457,7 @@ export default function Hero68Preview({
                             ) : showActuationOverlay ? (
                               <span className="hero-key-actuation-content">
                                 <span className="hero-key-actuation-value">
-                                  {actuationValue.toFixed(2)}
+                                  {formatMillimeters(actuationValue)}
                                 </span>
                                 {!advanced && (
                                   <span className="hero-key-actuation-name">
@@ -490,7 +491,9 @@ export default function Hero68Preview({
                               >
                                 <span className="hero-key-stream-fill" aria-hidden="true" />
                                 <span className="hero-key-stream-value">
-                                  {streamPreview ? streamPreview.distanceMm.toFixed(2) : '—'}
+                                  {streamPreview
+                                    ? formatMillimeters(streamPreview.distanceMm)
+                                    : '—'}
                                 </span>
                                 <small>mm</small>
                               </span>

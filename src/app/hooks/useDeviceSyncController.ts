@@ -19,7 +19,11 @@ import {
 } from '../../protocol/hero68/advanced';
 import { liveIdle, readActiveProfile, selectProfile } from '../../protocol/hero68/commands';
 import { hero68HallStream, type Hero68HallStreamState } from '../../protocol/hero68/hallStream';
-import { hydrateFromDevice, type HydratedKeySettings } from '../../protocol/hero68/hero68Encoder';
+import {
+  hydrateFromDevice,
+  syncDevicePrecision,
+  type HydratedKeySettings
+} from '../../protocol/hero68/hero68Encoder';
 import { syncHero68MacroLibrary } from '../../protocol/hero68/macroDevice';
 import {
   isMacroRemapValue,
@@ -595,6 +599,7 @@ export function useDeviceSyncController({
           }
         }
       }
+      await syncDevicePrecision(hero68DeviceManager);
       const hydrated = await hydrateFromDevice(
         hero68DeviceManager,
         slot,
@@ -934,9 +939,6 @@ export function useDeviceSyncController({
         setAdvancedBaseline(verified);
       }
       if ((rgbPending || customRgbChanged) && !tachyon) {
-        // Only the Onboard tab is a request to leave host playback: pressing Onboard is how the
-        // user asks for the firmware effect back. Saving a side-Light edit from any other tab must
-        // not disturb a running Custom Effects or Rhythm session.
         if (activePage === 'rgb' && activeRgbTab === 'onboard' && hero68DeviceManager.viaService) {
           const result = await rgbService.mode('onboard');
           publishRgbServiceStatus(result);

@@ -295,6 +295,9 @@ function App() {
       deviceReadState={deviceSettings.deviceReadState}
       deviceActionError={deviceSettings.deviceActionError}
       deviceError={activeDevice.error}
+      isXs={Boolean(
+        activeDevice.isXs || (activeDevice.deviceName && /xs/i.test(activeDevice.deviceName))
+      )}
     />
   );
   return (

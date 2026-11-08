@@ -112,7 +112,7 @@ export function detectBoardFromUuid(data?: ArrayLike<number> | null): HeroDevice
     if (data[5] === 0x05 || data[5] === 0x15) {
       return 'hero84';
     }
-    if (data[5] === 0x03) {
+    if (data[5] === 0x03 || data[5] === 0x10) {
       return 'hero68';
     }
     for (const board of REGISTRY.values()) {

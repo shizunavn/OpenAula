@@ -112,6 +112,78 @@ export const HERO68_SWITCH_PROFILES = [
 }[];
 
 /**
+ * Additional switch presets present in HERO 68 XS firmware v1.17 (`VA 0x08029D7E` indices 11..16):
+ * - `59` (`0x3B`): Lingyun (`灵云轴`, 3.4 mm)
+ * - `60` (`0x3C`): Snow God / Xue Shen (`雪神轴`, 3.3 mm, dual light guide, 28±5gf, 85–550Gs)
+ * - `37` (`0x25`): Ash Wood (`灰木轴`, 3.4 mm)
+ * - `61` (`0x3D`): Nick Magnetic (`尼克磁轴`, 3.4 mm)
+ * - `62` (`0x3E`): Ice Jade (`冰玉轴`, 3.4 mm, single light guide, 28±5gf, 80–480Gs)
+ * - `76` (`0x4C`): HERO 68 XS Custom (`ID 76`, 3.4 mm)
+ */
+export const HERO68_XS_SWITCH_PROFILES = [
+  {
+    id: 'switch-60',
+    firmwareId: 60,
+    xsydFirmwareId: 1,
+    name: 'Snow God (Xue Shen)',
+    color: '#f8f8ff',
+    travelMm: 3.3
+  },
+  {
+    id: 'switch-62',
+    firmwareId: 62,
+    xsydFirmwareId: 1,
+    name: 'Ice Jade',
+    color: '#e0fff7',
+    travelMm: 3.4
+  },
+  {
+    id: 'switch-59',
+    firmwareId: 59,
+    xsydFirmwareId: 1,
+    name: 'Lingyun',
+    color: '#b3e6ff',
+    travelMm: 3.4
+  },
+  {
+    id: 'switch-37',
+    firmwareId: 37,
+    xsydFirmwareId: 0,
+    name: 'Ash Wood',
+    color: '#c5c5c5',
+    travelMm: 3.4
+  },
+  {
+    id: 'switch-61',
+    firmwareId: 61,
+    xsydFirmwareId: 3,
+    name: 'Nick Magnetic',
+    color: '#ffe4b5',
+    travelMm: 3.4
+  },
+  {
+    id: 'switch-76',
+    firmwareId: 76,
+    xsydFirmwareId: 1,
+    name: 'HERO 68 XS Custom (ID 76)',
+    color: '#7ee8fa',
+    travelMm: 3.4
+  }
+] as const satisfies readonly {
+  id: SwitchProfileId;
+  firmwareId: number;
+  xsydFirmwareId: number;
+  name: string;
+  color: string;
+  travelMm: number;
+}[];
+
+export const ALL_HERO68_SWITCH_PROFILES = [
+  ...HERO68_SWITCH_PROFILES,
+  ...HERO68_XS_SWITCH_PROFILES
+] as const;
+
+/**
  * Native 4-switch table in WIN 68 HE MAX firmware v1.1.4 (`VA 0x1D48C`, `0x04E44`, `0x05644`, `0x12CEA..0x12D14`):
  * - `0`: Wing Chun / Graywood (`switch-4`, Curve 0 at `0x04E44`, max travel `3.40 mm` / `3400 µm`)
  * - `1`: Jade Pro / Magnetic Jade (`switch-1`, Curve 0 at `0x04E44`, max travel `3.40 mm` / `3400 µm`)
@@ -159,7 +231,7 @@ export const WIN68_SWITCH_PROFILES = [
 
 export function switchFirmwareId(profile: string): number {
   const normalized = normalizeSwitchProfileId(profile);
-  const known = HERO68_SWITCH_PROFILES.find(option => option.id === normalized);
+  const known = ALL_HERO68_SWITCH_PROFILES.find(option => option.id === normalized);
   if (known) {
     return known.firmwareId;
   }
@@ -176,7 +248,7 @@ export function switchProfileId(firmwareId: number): SwitchProfileId {
     throw new RangeError('Switch ID must fit in one byte');
   }
   return (
-    HERO68_SWITCH_PROFILES.find(option => option.firmwareId === firmwareId)?.id ??
+    ALL_HERO68_SWITCH_PROFILES.find(option => option.firmwareId === firmwareId)?.id ??
     `switch-${firmwareId}`
   );
 }
@@ -196,7 +268,7 @@ export function isSwitchProfileId(value: unknown): value is SwitchProfileId {
 export function switchProfileLabel(profile: string): string {
   const normalized = normalizeSwitchProfileId(profile);
   return (
-    HERO68_SWITCH_PROFILES.find(option => option.id === normalized)?.name ??
+    ALL_HERO68_SWITCH_PROFILES.find(option => option.id === normalized)?.name ??
     `Stored profile (ID ${switchFirmwareId(normalized)})`
   );
 }

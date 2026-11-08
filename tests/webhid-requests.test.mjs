@@ -49,6 +49,26 @@ test('connect reads the model UUID instead of trusting the product name',async()
     assert.equal(await manager.detectConnectedModel(),'hero84')
   }finally{await manager.disconnect();globalThis.window=oldWindow;if(oldNavigator)Object.defineProperty(globalThis,'navigator',oldNavigator);else delete globalThis.navigator}
 })
+test('connect resolves HERO 68 XS paired via 8K wireless receiver sub-device UUID (0x82 zone 0x09)',async()=>{
+  const oldNavigator=Object.getOwnPropertyDescriptor(globalThis,'navigator'),oldWindow=globalThis.window
+  const listeners=new Set()
+  const device={opened:false,vendorId:0x372e,productId:0x106c,productName:'8K Wireless Receiver',collections:[],async open(){this.opened=true},async close(){this.opened=false},addEventListener(_type,listener){listeners.add(listener)},removeEventListener(_type,listener){listeners.delete(listener)},async sendReport(_id,data){
+    const request=decodeReport(Uint8Array.from([9,...new Uint8Array(data)]))
+    const packet=request.zone===0x09
+      ? buildReport({command:0x82,zone:0x09,data:[0x12,0,0,0,0,0x10,0x01,0x01]})
+      : buildReport({command:0x82,zone:1,data:[0x22,0,0,0,0,0x10]})
+    for(const listener of listeners)listener({reportId:9,data:new DataView(packet.buffer,1,63)})
+  }}
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{hid:{async getDevices(){return [device]}}}})
+  globalThis.window={setTimeout,clearTimeout}
+  const manager=new Hero68DeviceManager()
+  try{
+    await manager.connect(false)
+    assert.equal(manager.getSnapshot().detectedModel,'hero68')
+    assert.equal(manager.getSnapshot().detectedModelFromUuid,true)
+    assert.equal(await manager.detectConnectedModel(),'hero68')
+  }finally{await manager.disconnect();globalThis.window=oldWindow;if(oldNavigator)Object.defineProperty(globalThis,'navigator',oldNavigator);else delete globalThis.navigator}
+})
 test('connect refuses a keyboard that reports no HERO68/HERO84 UUID',async()=>{
   const oldNavigator=Object.getOwnPropertyDescriptor(globalThis,'navigator'),oldWindow=globalThis.window
   // A well-formed UUID reply that names neither model must not fall back to the

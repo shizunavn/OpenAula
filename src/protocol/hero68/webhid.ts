@@ -16,6 +16,16 @@ import {
 } from '../../keyboard/devices';
 const HERO68_USAGE = 0x0061;
 const HERO68_REPORT_ID = 0x09;
+const HERO_RECEIVER_PRODUCT_IDS: readonly number[] = [0x1000, 0x106c];
+function isHeroReceiverProductId(productId?: number | null): boolean {
+  return (
+    productId !== undefined && productId !== null && HERO_RECEIVER_PRODUCT_IDS.includes(productId)
+  );
+}
+function isReceiverUuidPrefix(data?: ArrayLike<number> | null): boolean {
+  const first = Number(data?.[0] ?? 0);
+  return first >= 0x20;
+}
 interface HIDReportInfoLike {
   reportId?: number;
   featureId?: number;
@@ -92,6 +102,7 @@ export type Hero68DeviceSnapshot = {
   detectedModel?: HeroDeviceModelId | null;
   /** `detectedModel` came from the device UUID (CMD 0x82 zone 1), not a name heuristic. */
   detectedModelFromUuid?: boolean;
+  isXs?: boolean;
   error: string | null;
 };
 export type Hero68RawInputReport = {
@@ -169,10 +180,12 @@ function errorMessage(error: unknown): string {
 }
 export class Hero68DeviceManager implements Hero68Transport {
   #device: HIDDeviceLike | undefined;
+  #isHero68Xs = false;
   #snapshot: Hero68DeviceSnapshot = {
     state: getHid() ? 'disconnected' : 'unsupported',
     deviceName: 'AULA Hero68',
     detectedModel: null,
+    isXs: false,
     error: null
   };
   #subscribers = new Set<() => void>();
@@ -277,7 +290,7 @@ export class Hero68DeviceManager implements Hero68Transport {
       }
       if (devices.length === 0 && requestPermission) {
         const requested = await hid.requestDevice({
-          // Official AULA HUB asks by VID/PID (0x372e:0x103e wired + 0x372e:0x1000 2.4G receiver),
+          // Official AULA HUB asks by VID/PID (0x372e:0x103e wired + 0x372e:0x1000 / 0x106c wireless receivers),
           // and the WIN 68 HE MAX by 0x1c4f:0xee88 / 0x1ca2:0x1901.
           filters: HERO_USB_FILTERS.map(filter => ({
             vendorId: filter.vendorId,
@@ -308,24 +321,33 @@ export class Hero68DeviceManager implements Hero68Transport {
       }
       device.addEventListener('inputreport', this.#onInputReport);
       this.#device = device;
+      this.#isHero68Xs = /hero\s*68\s*xs/i.test(device.productName ?? '');
       // Ask the board itself so a stale or generic productName cannot select
       // the wrong model's key tables and overwrite the keyboard's settings.
       const fromUuid = await this.#readModelUuid();
       if (fromUuid === null) {
-        throw new Error('This keyboard did not report a HERO68/HERO84 device UUID');
+        throw new Error(
+          'This keyboard did not report a supported OpenAula device UUID (HERO68, HERO84, HERO68 XS, WIN 68 MAX)'
+        );
       }
       this.#setSnapshot({
         state: 'connected',
         detectedModel: fromUuid,
         detectedModelFromUuid: true,
-        deviceName: deviceDisplayName(device, fromUuid),
+        deviceName:
+          this.#isHero68Xs && (!device.productName || device.productName.includes('Receiver'))
+            ? 'AULA HERO 68 XS'
+            : deviceDisplayName(device, fromUuid),
+        isXs: this.#isHero68Xs,
         error: null
       });
       return true;
     } catch (error) {
       this.#device = undefined;
+      this.#isHero68Xs = false;
       this.#setSnapshot({
         state: 'error',
+        isXs: false,
         error: errorMessage(error)
       });
       throw error;
@@ -342,16 +364,41 @@ export class Hero68DeviceManager implements Hero68Transport {
         1,
         600
       );
-      return detectHeroDeviceModelFromUuid(reply.data);
+      const direct = detectHeroDeviceModelFromUuid(reply.data);
+      if (direct) {
+        if (reply.data && reply.data[5] === 0x10) {
+          this.#isHero68Xs = true;
+        }
+        return direct;
+      }
+      if (isHeroReceiverProductId(this.#device?.productId) || isReceiverUuidPrefix(reply.data)) {
+        const subReply = await this.request(
+          buildReport({
+            command: 0x82,
+            zone: 0x09
+          }),
+          0x82,
+          0x09,
+          600
+        );
+        const subDirect = detectHeroDeviceModelFromUuid(subReply.data);
+        if (subDirect) {
+          if (subReply.data && subReply.data[5] === 0x10) {
+            this.#isHero68Xs = true;
+          }
+          return subDirect;
+        }
+      }
+      return null;
     } catch {
       return null;
     }
   }
 
   /**
-   * Identify whether the connected keyboard is HERO68 (`0x110000000003`) or
+   * Identify whether the connected keyboard is HERO68 (`0x110000000003` / `0x120000000010`) or
    * HERO84 (`0x110000000005` / `0x120000000015`) using `productName` or
-   * CMD `0x82` zone `1` (`readDeviceUuid`).
+   * CMD `0x82` zone `1` (`readDeviceUuid`) / zone `0x09` (`readSubDeviceInfo`).
    */
   async detectConnectedModel(): Promise<HeroDeviceModelId | null> {
     if (!this.connected) {
@@ -363,23 +410,18 @@ export class Hero68DeviceManager implements Hero68Transport {
     }
     const fromDevice = this.#device ? inferModelFromHidDevice(this.#device) : null;
     if (fromDevice) {
+      if (/hero\s*68\s*xs/i.test(this.#device?.productName ?? '')) {
+        this.#isHero68Xs = true;
+      }
       this.#setSnapshot({
         detectedModel: fromDevice,
-        deviceName: deviceDisplayName(this.#device, fromDevice)
+        deviceName: deviceDisplayName(this.#device, fromDevice),
+        isXs: this.#isHero68Xs
       });
       return fromDevice;
     }
     try {
-      const reply = await this.request(
-        buildReport({
-          command: 0x82,
-          zone: 1
-        }),
-        0x82,
-        1,
-        600
-      );
-      const fromUuid = detectHeroDeviceModelFromUuid(reply.data);
+      const fromUuid = await this.#readModelUuid();
       if (fromUuid) {
         // Keep a detailed productName ("AULA HERO 84 HE") instead of the generic
         // "AULA Hero84" label; this also runs on the service transport, where
@@ -387,7 +429,12 @@ export class Hero68DeviceManager implements Hero68Transport {
         this.#setSnapshot({
           detectedModel: fromUuid,
           detectedModelFromUuid: true,
-          deviceName: deviceDisplayName(this.#device, fromUuid)
+          deviceName:
+            this.#isHero68Xs &&
+            (!this.#device?.productName || this.#device.productName.includes('Receiver'))
+              ? 'AULA HERO 68 XS'
+              : deviceDisplayName(this.#device, fromUuid),
+          isXs: this.#isHero68Xs
         });
         return fromUuid;
       }
@@ -398,6 +445,7 @@ export class Hero68DeviceManager implements Hero68Transport {
   async disconnect(): Promise<void> {
     this.#viaService = false;
     this.#reconnectViaService = false;
+    this.#isHero68Xs = false;
     const device = this.#device;
     this.#device = undefined;
     this.#rejectWaiters(new Error('HERO68 disconnected'));
@@ -411,6 +459,7 @@ export class Hero68DeviceManager implements Hero68Transport {
       state: getHid() ? 'disconnected' : 'unsupported',
       detectedModel: null,
       detectedModelFromUuid: false,
+      isXs: false,
       error: null
     });
   }
@@ -446,9 +495,22 @@ export class Hero68DeviceManager implements Hero68Transport {
           zone: 1
         })
       );
-      const detectedModel = detectHeroDeviceModelFromUuid(identity?.data);
+      let detectedModel = detectHeroDeviceModelFromUuid(identity?.data);
+      if (!detectedModel && isReceiverUuidPrefix(identity?.data)) {
+        try {
+          const subIdentity = await rgbService.deviceRequest(
+            buildReport({
+              command: 0x82,
+              zone: 0x09
+            })
+          );
+          detectedModel = detectHeroDeviceModelFromUuid(subIdentity?.data);
+        } catch {}
+      }
       if (!detectedModel) {
-        throw new Error('This keyboard did not report a HERO68/HERO84 device UUID');
+        throw new Error(
+          'This keyboard did not report a supported OpenAula device UUID (HERO68, HERO84, HERO68 XS, WIN 68 MAX)'
+        );
       }
       if (detectedModel === 'win68HeMax' || detectedModel === 'win68') {
         // WIN 68 HE MAX uses XsydDeviceManager for WebHID configuration; recognize

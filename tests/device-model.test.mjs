@@ -14,6 +14,7 @@ async function bundle(path) {
 const layouts = await bundle('src/keyboard/layout.ts')
 const {
   HERO_DEVICE_MODELS,
+  HERO_PRODUCT_IDS,
   heroDeviceModel,
   detectHeroDeviceModelFromUuid,
   detectHeroDeviceModelFromProductName,
@@ -86,15 +87,22 @@ test('HERO84 hardware key positions match official web driver keyValues (1..103)
   }
 })
 
-test('device model detection recognizes HERO68 and HERO84 UUIDs and productNames', () => {
+test('device model detection recognizes HERO68, HERO68 XS, and HERO84 UUIDs, receivers, and productNames', () => {
   assert.equal(detectHeroDeviceModelFromUuid([0x11, 0, 0, 0, 0, 0x03]), 'hero68')
+  assert.equal(detectHeroDeviceModelFromUuid([0x12, 0, 0, 0, 0, 0x10]), 'hero68')
+  assert.equal(detectHeroDeviceModelFromUuid([0x11, 0, 0, 0, 0, 0x10]), 'hero68')
+  assert.equal(detectHeroDeviceModelFromUuid([0x12, 0, 0, 0, 0, 0x10, 0x01, 0x01]), 'hero68')
   assert.equal(detectHeroDeviceModelFromUuid([0x11, 0, 0, 0, 0, 0x05]), 'hero84')
   assert.equal(detectHeroDeviceModelFromUuid([0x12, 0, 0, 0, 0, 0x15]), 'hero84')
   assert.equal(detectHeroDeviceModelFromUuid([0, 0, 0, 0, 0, 0]), null)
   assert.equal(detectHeroDeviceModelFromProductName('HERO 84 HE'), 'hero84')
   assert.equal(detectHeroDeviceModelFromProductName('AULA HERO 75 HE'), 'hero84')
   assert.equal(detectHeroDeviceModelFromProductName('HERO 68 HE'), 'hero68')
+  assert.equal(detectHeroDeviceModelFromProductName('HERO 68 XS'), 'hero68')
+  assert.equal(detectHeroDeviceModelFromProductName('AULA HERO 68 XS'), 'hero68')
   assert.equal(detectHeroDeviceModelFromProductName('Unknown Board'), null)
+  assert.deepEqual(HERO_PRODUCT_IDS, [0x103e, 0x1000, 0x106c])
+  assert.deepEqual(heroDeviceModel('hero68').productIds, [0x103e, 0x1000, 0x106c])
 })
 
 test('HERO84 84-key remap, RGB, and performance hydration round-trip cleanly', async () => {

@@ -86,7 +86,8 @@ bool heroKeyboard(HANDLE handle) {
   }
   const bool hero = name.find(L"VID_372E") != std::wstring::npos &&
                     (name.find(L"PID_103E") != std::wstring::npos ||
-                     name.find(L"PID_1000") != std::wstring::npos);
+                     name.find(L"PID_1000") != std::wstring::npos ||
+                     name.find(L"PID_106C") != std::wstring::npos);
   const bool xsyd = (name.find(L"VID_1CA2") != std::wstring::npos &&
                      name.find(L"PID_1901") != std::wstring::npos) ||
                     (name.find(L"VID_1C4F") != std::wstring::npos &&
@@ -248,7 +249,7 @@ std::unique_ptr<Device> openDevice() {
     const bool heroMatch =
         hasAttrs &&
         attrs.VendorID == 0x372e &&
-        (attrs.ProductID == 0x103e || attrs.ProductID == 0x1000) &&
+        (attrs.ProductID == 0x103e || attrs.ProductID == 0x1000 || attrs.ProductID == 0x106c) &&
         caps.UsagePage == 0xff60 &&
         caps.Usage == 0x61;
     const bool xsydMatch =

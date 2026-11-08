@@ -45,12 +45,12 @@ export type HeroDeviceModel = {
   deviceUuids: readonly string[];
   /** Firmware header model byte (`0x03` = HERO68, `0x05` = HERO84). */
   modelByte: number;
-  /** Supported USB Product IDs (`0x103e` wired, `0x1000` 2.4G receiver on HERO84). */
+  /** Supported USB Product IDs (`0x103e` wired, `0x1000` 2.4G receiver, `0x106c` 8K wireless receiver). */
   productIds: readonly number[];
 };
 
 export const HERO_VENDOR_ID = BYTETECH_VENDOR_ID;
-export const HERO_PRODUCT_IDS = [0x103e, 0x1000] as const;
+export const HERO_PRODUCT_IDS = [0x103e, 0x1000, 0x106c] as const;
 
 export type HeroUsbFilter = {
   vendorId: number;

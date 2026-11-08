@@ -12,9 +12,20 @@ import jadeProTop from '../assets/switches/jade-pro-top.png';
 import wingChunFront from '../assets/switches/wing-chun-front.png';
 import uranusFront from '../assets/switches/uranus-front.png';
 import jadeProFront from '../assets/switches/jade-pro-front.png';
+import lingyunFront from '../assets/switches/lingyun-front.png';
+import lingyunTop from '../assets/switches/lingyun-top.png';
+import snowgodFront from '../assets/switches/snowgod-front.webp';
+import snowgodTop from '../assets/switches/snowgod-top.png';
+import icejadeFront from '../assets/switches/icejade-front.png';
+import icejadeTop from '../assets/switches/icejade-top.png';
+import nickFront from '../assets/switches/nick-front.png';
+import nickTop from '../assets/switches/nick-top.png';
+import ashwoodFront from '../assets/switches/ashwood-front.png';
+import ashwoodTop from '../assets/switches/ashwood-top.png';
 import { isWin68HeMaxModel, type HeroDeviceModelId } from '../keyboard/devices';
 import {
-  HERO68_SWITCH_PROFILES,
+  ALL_HERO68_SWITCH_PROFILES,
+  HERO68_XS_SWITCH_PROFILES,
   WIN68_SWITCH_PROFILES,
   type SwitchProfileId
 } from '../protocol/hero68/switchProfiles';
@@ -45,18 +56,37 @@ const SWITCH_IMAGES: Partial<Record<SwitchTone, { front: string; top: string }>>
   uranus: { front: uranusFront, top: uranusTop },
   'switch-1': { front: jadeProFront, top: jadeProTop },
   'jade-pro': { front: jadeProFront, top: jadeProTop },
-  'switch-14': { front: jadeProFront, top: jadeProTop }
+  'switch-14': { front: jadeProFront, top: jadeProTop },
+  'switch-60': { front: snowgodFront, top: snowgodTop },
+  'switch-62': { front: icejadeFront, top: icejadeTop },
+  'switch-59': { front: lingyunFront, top: lingyunTop },
+  'switch-37': { front: ashwoodFront, top: ashwoodTop },
+  'switch-61': { front: nickFront, top: nickTop },
+  'switch-76': { front: blueFront, top: blueTop }
 };
 
-const SWITCH_OPTIONS: SwitchOption[] = HERO68_SWITCH_PROFILES.filter(
+const HERO68_XS_SWITCH_IDS = new Set<number>(
+  HERO68_XS_SWITCH_PROFILES.map(profile => profile.firmwareId)
+);
+
+const SWITCH_NOTES: Partial<Record<SwitchTone, string>> = {
+  'switch-60': 'ID 60 · 3.3 mm · 28±5 gf · 85–550 Gs · Dual light guide (雪神轴)',
+  'switch-62': 'ID 62 · 3.4 mm · 28±5 gf · 80–480 Gs · Single light guide (冰玉轴)',
+  'switch-59': 'ID 59 · 3.4 mm · Lingyun Magnetic (灵云轴)',
+  'switch-37': 'ID 37 · 3.4 mm · Ash Wood Magnetic (灰木轴)',
+  'switch-61': 'ID 61 · 3.4 mm · Nick Magnetic (尼克磁轴)',
+  'switch-76': 'ID 76 · 3.4 mm · HERO 68 XS v1.17 preset'
+};
+
+const SWITCH_OPTIONS: SwitchOption[] = ALL_HERO68_SWITCH_PROFILES.filter(
   option => ![5, 22, 24].includes(option.firmwareId)
 ).map(option => ({
   id: option.id,
   name: option.name,
   fullName: `${option.name} Switch`,
-  brand: 'AULA presets',
+  brand: HERO68_XS_SWITCH_IDS.has(option.firmwareId) ? 'HERO 68 XS presets' : 'AULA presets',
   accent: option.color,
-  note: '',
+  note: SWITCH_NOTES[option.id] ?? `ID ${option.firmwareId} · ${option.travelMm.toFixed(1)} mm`,
   travelMm: option.travelMm,
   xsydFirmwareId: option.xsydFirmwareId,
   ...SWITCH_IMAGES[option.id]

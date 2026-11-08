@@ -21,6 +21,18 @@ test('capture preserves the twelve firmware IDs while the retired profile has no
   assert.deepEqual(capture.switchRuns.map(run => run.switchIds[0]), [8,4,13,1,3,5,14,15,16,22,24,27,8])
   assert.equal(switches.HERO68_SWITCH_PROFILES.length, 11)
   assert.equal(switches.HERO68_SWITCH_PROFILES.some(profile => profile.firmwareId === 27), false)
+  assert.equal(switches.HERO68_XS_SWITCH_PROFILES.length, 6)
+  assert.deepEqual(
+    switches.HERO68_XS_SWITCH_PROFILES.map(profile => profile.firmwareId),
+    [60, 62, 59, 37, 61, 76]
+  )
+  assert.equal(switches.switchProfileId(60), "switch-60")
+  assert.equal(switches.switchProfileLabel("switch-60"), "Snow God (Xue Shen)")
+  assert.equal(switches.switchProfileLabel("switch-62"), "Ice Jade")
+  assert.equal(switches.switchProfileLabel("switch-59"), "Lingyun")
+  assert.equal(switches.switchProfileLabel("switch-37"), "Ash Wood")
+  assert.equal(switches.switchProfileLabel("switch-61"), "Nick Magnetic")
+  assert.equal(switches.switchProfileLabel("switch-76"), "HERO 68 XS Custom (ID 76)")
   for (const run of capture.switchRuns) assert.deepEqual(run.positions, [56,57,62,63])
   assert.equal(switches.switchProfileLabel('clear'), 'Jade')
   assert.equal(switches.switchProfileLabel('switch-14'), 'Jade King')

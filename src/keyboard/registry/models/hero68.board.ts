@@ -101,12 +101,12 @@ export const HERO68_BOARD: BoardDescriptor = {
   thumbnail: hero68Thumb,
   usb: {
     vendorId: BYTETECH_VENDOR_ID,
-    productIds: [0x103e],
+    productIds: [0x103e, 0x1000, 0x106c],
     usagePage: BYTETECH_USAGE_PAGE,
     usage: BYTETECH_USAGE,
     reportId: BYTETECH_REPORT_ID,
-    productNames: ['HERO 68 HE', 'AULA HERO 68 HE', 'AULA Hero68'],
-    deviceUuids: ['110000000003'],
+    productNames: ['HERO 68 HE', 'AULA HERO 68 HE', 'AULA Hero68', 'HERO 68 XS', 'AULA HERO 68 XS'],
+    deviceUuids: ['110000000003', '120000000010', '110000000010'],
     modelByte: 0x03
   },
   capabilities: {

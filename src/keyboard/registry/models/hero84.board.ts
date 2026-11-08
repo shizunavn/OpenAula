@@ -373,7 +373,7 @@ export const HERO84_BOARD: BoardDescriptor = {
   thumbnail: hero84Thumb,
   usb: {
     vendorId: BYTETECH_VENDOR_ID,
-    productIds: [0x103e, 0x1000],
+    productIds: [0x103e, 0x1000, 0x106c],
     usagePage: BYTETECH_USAGE_PAGE,
     usage: BYTETECH_USAGE,
     reportId: BYTETECH_REPORT_ID,

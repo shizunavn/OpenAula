@@ -21,7 +21,7 @@ import {
   type XsydHallTableId
 } from '../xsyd/device';
 import { rgbService, type RgbServiceHallRecord } from '../rgbService';
-import { HERO68_DISTANCE_UNIT_MM } from './precision';
+import { getHero68DistanceUnitMm, HERO68_DISTANCE_UNIT_MM } from './precision';
 import { runHallPolling } from './hallPolling';
 
 /** The usable HERO68/HERO84 key travel tops out around 3.4 mm. Clamp the UI to 3.40 mm so full travel visually reaches 100%. */
@@ -301,7 +301,10 @@ class Hero68HallStream {
       if (keyHz !== null) {
         keyTelemetryHz[keyId] = keyHz;
       }
-      const distanceMm = record.distanceUnits * HERO68_DISTANCE_UNIT_MM;
+      const distanceMm =
+        Math.round(
+          record.distanceUnits * (getHero68DistanceUnitMm() || HERO68_DISTANCE_UNIT_MM) * 1000
+        ) / 1000;
       const moved =
         !previous ||
         previous.distanceUnits !== record.distanceUnits ||

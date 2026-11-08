@@ -3,6 +3,25 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.7.0 — AULA WIN 68 HE MAX & HERO 68 XS Hardware Imagery, Switch Visual Assets & 8K Receiver Support
+
+- Hardware Visual Imagery & Keyboard Assets:
+  - Added dedicated high-fidelity image asset for AULA WIN 68 HE MAX (`src/assets/win68HeMax.png`).
+  - Updated `WIN68_HE_MAX_BOARD` descriptor and `DeviceConnectionPanel` to render the WIN 68 HE MAX hardware thumbnail instead of the generic HERO68 placeholder.
+  - Added dedicated crystal-edition hardware asset for AULA HERO 68 XS (`src/assets/hero68xs.png`).
+  - Dynamically switches keyboard thumbnail to HERO 68 XS in `DeviceConnectionPanel` when connected device is recognized as HERO 68 XS (via `0x10` sub-device UUID or XS product name).
+- Authentic Switch Visual Assets (`src/assets/switches/`, `switchAssets.ts`):
+  - Added real front and top switch photo assets:
+    - Lingyun Magnetic (`switch-59`, `lingyun-front.png`, `lingyun-top.png`).
+    - Snow God / Xue Shen (`switch-60`, `snowgod-front.webp`, `snowgod-top.png`).
+    - Nick Magnetic (`switch-61`, `nick-front.png`, `nick-top.png`).
+    - Ice Jade (`switch-62`, `icejade-front.png`, `icejade-top.png`).
+    - Ash Wood (`switch-37`, `ashwood-front.png`, `ashwood-top.png`).
+  - Mapped all 5 new switches in `SWITCH_IMAGES` in `switchAssets.ts`, providing authentic switch card and per-key visual previews on the keyboard stage.
+- HERO 68 XS 8K Receiver & 5 µm Precision Scale (`service/native/hid_bridge.cpp`, `hero68Encoder.ts`, `precision.ts`):
+  - Added 8K wireless receiver (`PID 0x106C`) to Windows background service HID bridge filter (`service/native/hid_bridge.cpp`).
+  - Implemented dynamic distance scaling (`0.005 mm` / `5 µm`) for HERO 68 XS query replies via CMD `0x82` zone 6/8 (`precision_rt` / `precision_distance`).
+
 ## 1.6.1.1 — WIN 68 HE MAX Hardware WinLock & OS Mode Switching
 
 - Hardware Windows Key Lock (`src/protocol/xsyd/device.ts`, `GeneralSettingsPage.tsx`, `useDeviceSettings.ts`):

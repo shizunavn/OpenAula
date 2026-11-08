@@ -660,11 +660,7 @@ function ActiveRgbSettingsPage({
             hint={
               perKey
                 ? tr('Select keys on the preview to paint.')
-                : activeZone === 'side' && (customActive || rhythmActive)
-                  ? tr(
-                      'Side Light is stored on the keyboard, so Custom Effects and Rhythm keep running on the keys meanwhile. Save to apply the side change.'
-                    )
-                  : tr('Onboard changes use Save to profile.')
+                : tr('Onboard changes use Save to profile.')
             }
             actions={
               capability?.reactive ? (

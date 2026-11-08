@@ -23,6 +23,8 @@ export type DeviceConfigurationSnapshot = {
   profileSlot: ProfileSlot;
   /** Target board model used for keyIdToPos mapping when saving. */
   model?: HeroDeviceModelId;
+  /** Optional host-facing distance unit override (e.g. `0.005` on HERO 68 XS, `0.01` on HERO 68 HE). */
+  precisionMm?: number;
 };
 export type Hero68ProtocolEncoder = {
   /**

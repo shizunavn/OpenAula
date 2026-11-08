@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  formatMillimeters,
   mergeHydratedBooleans,
   mergeHydratedNumbers,
   mergePerKeyState,
@@ -140,8 +141,10 @@ export function usePerKeyPerformance({
           return [
             keyId,
             {
-              primary: primary.toFixed(2),
-              secondary: split ? (releaseSensitivityByKey[keyId] ?? 0.55).toFixed(2) : undefined,
+              primary: formatMillimeters(primary),
+              secondary: split
+                ? formatMillimeters(releaseSensitivityByKey[keyId] ?? 0.55)
+                : undefined,
               active: rapidTriggerByKey[keyId] ?? false
             }
           ];
@@ -169,8 +172,8 @@ export function usePerKeyPerformance({
         modelKeyIds.map(keyId => [
           keyId,
           {
-            top: (topDeadzoneByKey[keyId] ?? 0).toFixed(2),
-            bottom: (bottomDeadzoneByKey[keyId] ?? 0).toFixed(2),
+            top: formatMillimeters(topDeadzoneByKey[keyId] ?? 0),
+            bottom: formatMillimeters(bottomDeadzoneByKey[keyId] ?? 0),
             active: deadzoneEnabledByKey[keyId] ?? true
           }
         ])
@@ -257,7 +260,7 @@ export function usePerKeyPerformance({
     });
   }
   function setActuationForSelection(value: number) {
-    const nextValue = snapToStep(value, 0.1, 3.4, 0.05);
+    const nextValue = snapToStep(value, 0.1, 3.4, 0.005);
     setActuation(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -373,7 +376,7 @@ export function usePerKeyPerformance({
     });
   }
   function setTopDeadzoneForSelection(value: number) {
-    const nextValue = snapToStep(value, 0, 1, 0.01);
+    const nextValue = snapToStep(value, 0, 1, 0.005);
     setTopDeadzone(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -390,7 +393,7 @@ export function usePerKeyPerformance({
     });
   }
   function setBottomDeadzoneForSelection(value: number) {
-    const nextValue = snapToStep(value, 0, 1, 0.01);
+    const nextValue = snapToStep(value, 0, 1, 0.005);
     setBottomDeadzone(nextValue);
     if (!selectedKeys.size) {
       return;

@@ -1,4 +1,4 @@
-const hero68Thumb = '/src/assets/hero68.png';
+const win68Thumb = '/src/assets/win68HeMax.png';
 import { HERO68_LAYOUT, makeDemoLighting } from '../../hero68Layout';
 import { MAX_HE_IDS, MAX_HE_USAGE, MAX_HE_USAGE_PAGE } from '../../maxHe';
 import { XSYD_KEYS } from '../../../protocol/xsyd/keymap';
@@ -37,7 +37,7 @@ export const WIN68_HE_MAX_BOARD: BoardDescriptor = {
   label: 'AULA WIN 68 HE MAX',
   layoutTag: '65%',
   sideTab: false,
-  thumbnail: hero68Thumb,
+  thumbnail: win68Thumb,
   usb: {
     vendorId: MAX_HE_IDS[1]?.vendorId ?? 0x1ca2,
     productIds: MAX_HE_IDS.map(id => id.productId),

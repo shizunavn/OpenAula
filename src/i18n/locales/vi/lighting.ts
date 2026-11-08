@@ -164,10 +164,6 @@ export const VI_LIGHTING: Record<string, string> = {
   'Side LED output': 'Đầu ra LED cạnh',
   'Side LEDs retain onboard lighting': 'LED cạnh giữ hiệu ứng onboard',
   'Side lights keep their onboard effect.': 'Đèn cạnh giữ hiệu ứng onboard.',
-  'Keys, side and colors you export to Custom Effects.':
-    'Các phím, đèn cạnh và màu bạn xuất sang Custom Effects.',
-  'Custom Effects runs on the keys. Side Light stays on the keyboard.':
-    'Custom Effects chạy trên các phím. Đèn cạnh vẫn do bàn phím giữ.',
   'Side rhythm': 'Nhịp đèn cạnh',
   'Side rhythm is not yet verified on HERO68. Choose Leave onboard to play on the keys.':
     'Nhịp đèn cạnh chưa được xác minh trên HERO68. Chọn giữ onboard để hiệu ứng chỉ chạy trên các phím.',
