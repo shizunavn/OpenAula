@@ -8,11 +8,11 @@ const {nativeRhythmCommand}=await bundle('service/rhythm.ts')
 const {HERO68_KEY_POSITIONS}=await bundle('src/protocol/hero68/keyPositions.ts')
 test('rhythm defaults use low-latency controls and reject invalid persisted/API configuration',()=>{
   const c=defaultRhythm();assert.deepEqual(validateRhythm(c),c);assert.equal(c.releaseMs,80);assert.equal(c.spectrum.window,'hann');assert.equal(c.spectrum.db,35)
-  for(const patch of [{version:1},{keyMode:168},{keyMode:430},{sideMode:507},{brightness:101},{sensitivity:0},{releaseMs:201},{speed:200},{speed:4001},{color:'#xyzxyz'},{endpoint:'x\nstop'},{palette:'unknown'},{spectrum:{...c.spectrum,spatialRadius:1.5}},{spectrum:{...c.spectrum,window:'unknown'}},{brightness:NaN}])assert.throws(()=>validateRhythm({...c,...patch}))
+  for(const patch of [{version:2},{keyMode:168},{keyMode:430},{sideMode:507},{brightness:101},{sensitivity:0},{releaseMs:201},{color:'#xyzxyz'},{endpoint:'x\nstop'},{palette:'unknown'},{spectrum:{...c.spectrum,spatialRadius:1.5}},{spectrum:{...c.spectrum,window:'unknown'}},{brightness:NaN}])assert.throws(()=>validateRhythm({...c,...patch}))
   assert.equal(validateRhythm({...c,keyMode:169,sensitivity:.1}).sensitivity,.1)
 })
 test('native command preserves endpoint UTF-8 and all control fields, gates unverified side output',()=>{
-  const c={...defaultRhythm(),endpoint:'Thiết bị âm thanh;test'};const fields=nativeRhythmCommand(c).slice(7).split(';');assert.equal(fields.length,15);assert.equal(Buffer.from(fields[14],'hex').toString('utf8'),c.endpoint);assert.equal(+fields[4],80);assert.equal(+fields[5],1300)
+  const c={...defaultRhythm(),endpoint:'Thiết bị âm thanh;test'};const fields=nativeRhythmCommand(c).slice(7).split(';');assert.equal(fields.length,14);assert.equal(Buffer.from(fields[13],'hex').toString('utf8'),c.endpoint);assert.equal(+fields[4],80)
   assert.throws(()=>nativeRhythmCommand({...c,keyMode:430}),/Invalid rhythm/)
   for(const sideMode of [501,502,503,504,505,506])assert.throws(()=>nativeRhythmCommand({...c,sideMode}),/not been verified/)
 })
@@ -25,8 +25,6 @@ test('saved removed Beat Pulse migrates to Spectrum and web-synth migrates to de
   assert.throws(()=>validateRhythm(old));assert.throws(()=>nativeRhythmCommand(old))
   assert.throws(()=>restoreRhythm({...old,keyMode:999}));assert.throws(()=>restoreRhythm({...old,brightness:101}))
   for(const mode of RHYTHM_MODES)assert.deepEqual(restoreRhythm({...defaultRhythm(),keyMode:mode.id}),validateRhythm({...defaultRhythm(),keyMode:mode.id}))
-  const {speed,...v1}=old;assert.deepEqual(restoreRhythm({...v1,version:1}),migrated)
-  assert.equal(restoreRhythm({...v1,version:1,keyMode:432,speed:2600}).speed,2600)
 })
 test('native color order exactly matches all web key IDs and real POS, including AltRight',()=>{
   const header=readFileSync('service/native/rhythm_core.h','utf8'),body=header.match(/positions\s*=\s*\{([^}]+)\}/)[1]
@@ -53,20 +51,4 @@ test('live renderRhythmAudioFrame stays 100% dark with 0% level across all modes
     assert.ok(Object.values(zeroAudio.keys).every(c=>c==='#000000'),`mode ${mode.id} with silent audio must keep all keys #000000`)
     assert.ok(zeroAudio.side.every(c=>c==='#181c20'),`mode ${mode.id} with silent audio must keep side LEDs dark`)
   }
-})
-test('Spectrum Bars draws a bar from the bottom row up to the number row as loudness rises',()=>{
-  const fft=new Uint8Array(512)
-  for(let i=0;i<fft.length;i++)fft[i]=Math.max(0,120*Math.pow(1-i/fft.length,1.4)+10)
-  const lit=(amplitude,cfg)=>{
-    const wave=new Uint8Array(1024)
-    for(let i=0;i<wave.length;i++)wave[i]=128+Math.round(amplitude*128*Math.sin(2*Math.PI*5*i/256))
-    const frame=renderRhythmAudioFrame(cfg,1000,fft,wave,'win68HeMax',false)
-    return Object.values(frame.keys).filter(c=>c!=='#000000').length
-  }
-  const cfg={...defaultRhythm(),keyMode:429}
-  // The number row sits at bar height 1, so it only lights when the loudest band fills the column.
-  const quiet=lit(0.15,cfg),loud=lit(0.5,cfg)
-  assert.ok(quiet>0,'a normal window must light some keys')
-  assert.ok(loud>quiet,'louder audio must raise the bars')
-  assert.ok(loud>=40,'a loud window must reach the number row instead of stopping at the Tab row')
 })

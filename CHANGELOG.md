@@ -3,30 +3,6 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
-## 1.6.1 — Rhythm Sync Speed Control, Side Light Isolation & Row-Normalized Equalizer
-
-- Rhythm Sync Speed Control & Position-Driven Modes (`rhythm.ts`, `RhythmSyncEditor.tsx`, `service/native/rhythm_core.h`, `service/rhythm.ts`, `service/native/hid_bridge.cpp`):
-  - Added configurable `speed` parameter (ms per full sweep, range 250..4000 ms, default 1300 ms) for Mode 432 (Audio Marquee) and Mode 434 (Radial Chase).
-  - Upgraded `RhythmConfiguration` to `version: 2` with automatic backwards-compatible migration of v1 drafts.
-  - Extended native rhythm IPC command to 15 fields (`rhythm:<keyMode>;<sideMode>;<brightness>;<sensitivity>;<releaseMs>;<speed>;...`).
-  - Corrected Marquee phase cycle calculation to advance directly with millisecond timestamps (`elapsed / speed`), guaranteeing that 1300 ms yields a 1300 ms cycle.
-  - Position-driven modes (432 Audio Marquee & 434 Radial Chase) scale with raw audio window loudness (`amount`) rather than saturated `level_`, maintaining visual motion even at high sensitivity.
-  - Radial Chase (Mode 434) ring wrap adjusted to 16 units with doubled speed factor, ensuring continuous outward waves across keyboard dimensions without blank gaps.
-  - Position-driven modes bypass envelope release smoothing (`fixedRelease`), eliminating lagging delay artifacts.
-  - Automatically hidden release / smoothing slider for modes where envelope smoothing does not apply (Modes 169, 432, 434).
-- Row-Normalized Equalizer Columns & Dynamic Spectrum Bars (`service/native/rhythm_core.h`, `rhythm.ts`):
-  - Introduced `Key::nx` (row-relative horizontal position `0..1`) into key geometry calculations.
-  - Spectrum Bars (Mode 429) and Audio Marquee (Mode 432) now index equalizer columns using row-normalized coordinates, ensuring all 16 frequency bands span each row evenly regardless of physical key count/width differences.
-  - Spectrum Bars dynamically scale bar height from baseline up to the number row based on window loudness (`inputPeak * 0.4 * max(1, sensitivity) + 0.35`), and preserve decayed spectrum state (`bandState_`) without dropping frames.
-- Side Light Hardware Isolation (`useDeviceSyncController.ts`, `CustomRgbEditor.tsx`, `RgbSettingsPage.tsx`):
-  - Saving side light settings from non-Onboard tabs no longer calls `rgbService.mode('onboard')`, preventing active Custom Effects and Rhythm streaming sessions from being interrupted.
-  - Added contextual UI guidance explaining that Side Light persists on keyboard hardware while Custom Effects and Rhythm run independently on keys.
-- Internationalization & Test Coverage:
-  - Added Vietnamese localization keys for rhythm scroll speed and side light persistence notices.
-  - Updated architectural and protocol documentation in `docs/RHYTHM_SYNC_OPENRGB.md`.
-  - Added C++17 unit tests verifying 15-field parser, 1300 ms cycle periodicity, and multi-band column rendering in `tests/native-rhythm.test.cpp`.
-  - Added tests for `version: 2` validation, v1 -> v2 migration, and 15-field IPC command formatting in `tests/rhythm.test.mjs`.
-
 ## 1.6.0 — Dynamic Wave 9-Direction, Trigger Response, Log-Spaced Rhythm Equalizer & Smooth Multi-Color Wraparound
 
 - Dynamic Wave (`wave`):

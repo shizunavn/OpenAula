@@ -813,44 +813,23 @@ export default function RhythmSyncEditor({
                   }
                 />
               </label>
-              {(config.keyMode === 432 || config.keyMode === 434) && (
-                <label>
-                  {tr('Scroll speed')} <strong>{config.speed} ms</strong>
-                  <input
-                    aria-label={tr('Rhythm scroll speed')}
-                    type="range"
-                    min={250}
-                    max={4000}
-                    step={50}
-                    value={config.speed}
-                    onChange={e =>
-                      change({
-                        speed: +e.target.value
-                      })
-                    }
-                  />
-                  <small>{tr('Time for one full sweep. Higher is slower.')}</small>
-                </label>
-              )}
-              {config.keyMode !== 169 && config.keyMode !== 432 && config.keyMode !== 434 && (
-                <label>
-                  {tr('Release / smoothing')} <strong>{config.releaseMs} ms</strong>
-                  <input
-                    aria-label={tr('Rhythm release time')}
-                    type="range"
-                    min={0}
-                    max={200}
-                    step={5}
-                    value={config.releaseMs}
-                    onChange={e =>
-                      change({
-                        releaseMs: +e.target.value
-                      })
-                    }
-                  />
-                  <small>{tr('Fast attack. Release only softens the fade.')}</small>
-                </label>
-              )}
+              <label>
+                {tr('Release / smoothing')} <strong>{config.releaseMs} ms</strong>
+                <input
+                  aria-label={tr('Rhythm release time')}
+                  type="range"
+                  min={0}
+                  max={200}
+                  step={5}
+                  value={config.releaseMs}
+                  onChange={e =>
+                    change({
+                      releaseMs: +e.target.value
+                    })
+                  }
+                />
+                <small>{tr('Fast attack. Release only softens the fade.')}</small>
+              </label>
             </div>
             <label className="rhythm-select">
               {tr('Colors')}

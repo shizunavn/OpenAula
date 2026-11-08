@@ -345,10 +345,7 @@ function xsydTick() {
       'win68HeMax',
       false
     );
-    const releaseFactor =
-      xsydRhythmConfig.keyMode === 432 || xsydRhythmConfig.keyMode === 434
-        ? 0
-        : Math.max(0.15, Math.min(0.92, xsydRhythmConfig.releaseMs / 220));
+    const releaseFactor = Math.max(0.15, Math.min(0.92, xsydRhythmConfig.releaseMs / 220));
     const nextLevel =
       rendered.level >= xsydRhythmAudioLevel
         ? rendered.level

@@ -29,10 +29,6 @@ constexpr std::array<uint8_t, 68> positions = {
 struct Key {
   double x;
   double y;
-  // Row-relative horizontal position (0..1), independent of the row's key count. `x` is a
-  // width-weighted position on a variable-width row, so `x / 16` puts the number row's gap
-  // above its keys and made Spectrum Bars skip the top row.
-  double nx;
 };
 
 inline std::array<Key, 68> geometry() {
@@ -48,7 +44,7 @@ inline std::array<Key, 68> geometry() {
   for (size_t row = 0; row < widths.size(); ++row) {
     double x = 0;
     for (double w : widths[row]) {
-      keys[k++] = {x + w * .5, double(row), (x + w * .5) / 16};
+      keys[k++] = {x + w * .5, double(row)};
       x += w;
     }
   }
@@ -64,7 +60,6 @@ struct Config {
   double brightness = 80;
   double sensitivity = 4;
   double releaseMs = 80;
-  double speed = 1300;
   double db = 35;
   Color color{246, 17, 165};
   std::string endpoint = "default";
@@ -82,7 +77,6 @@ inline bool valid(const Config& c) {
          std::isfinite(c.brightness) && c.brightness >= 0 && c.brightness <= 100 &&
          std::isfinite(c.sensitivity) && c.sensitivity >= .1 && c.sensitivity <= 10 &&
          std::isfinite(c.releaseMs) && c.releaseMs >= 0 && c.releaseMs <= 200 &&
-         std::isfinite(c.speed) && c.speed >= 250 && c.speed <= 4000 &&
          std::isfinite(c.db) && c.db >= 0 && c.db <= 100 &&
          !c.endpoint.empty() && c.endpoint.size() <= 512;
 }
@@ -328,10 +322,6 @@ class Engine {
   std::array<double, 22> history_{};
   std::array<double, 64> peaks_{};
   std::array<double, 16> bands_{};
-  // Decayed copy handed to the 429 renderer. It does not live inside the `spectrumAt_`-only
-  // update block: a fresh band packet must survive to the same frame's render loop.
-  std::array<double, 16> bandState_{};
-  double amount_ = 0;
   uint64_t spectrumSequence_ = 0;
   double meter_{};
   std::array<double, 256> display_{};
@@ -367,10 +357,8 @@ public:
     history_.fill(0);
     peaks_.fill(0);
     bands_.fill(0);
-    bandState_.fill(0);
     meter_ = 0;
     spectrumSequence_ = 0;
-    amount_ = 0;
     display_.fill(0);
     // Stale spectrum/2A fields would otherwise resurface on the first frame after a stream
     // restart, when a spectrum mode has not re-filled them yet.
@@ -409,15 +397,7 @@ public:
     double target = active ? std::clamp(a.envelope * config_.sensitivity, 0., 1.) : 0;
     // Side 503 only needs to know whether the level is rising, so a literal copy is enough.
     const double previous = level_;
-    // Audio Marquee and Radial Chase are position-driven; release only lengthens the band and the
-    // browser smooths `level` separately, so neither should reach the engine's shared envelope.
-    const bool fixedRelease = config_.keyMode == 432 || config_.keyMode == 434;
-    level_ = fixedRelease ? target : target >= level_ ? target : level_ + (target - level_) * std::exp(-dt / std::max(1., config_.releaseMs));
-    // Marquee and Radial scale their travel by this value, so `sensitivity` would stretch them past
-    // the whole board: at 4x any normal track kept every key lit and no motion was visible. They
-    // track the raw loudness instead, which is what makes them read as a VU meter.
-    amount_ = fixedRelease ? (active ? std::clamp(a.envelope, 0., 1.) : 0) : level_;
-
+    level_ = target >= level_ ? target : level_ + (target - level_) * std::exp(-dt / std::max(1., config_.releaseMs));
     if (level_ < .001) {
       level_ = 0;
     }
@@ -430,10 +410,6 @@ public:
     // OpenRGB Audio VU Meter peak-hold: jump straight up, decay at 0.1/speed per frame.
     meter_ = level_ >= meter_ ? level_ : std::max(level_, meter_ - .1 * dt * 60 / 1000);
 
-    // Bands are normalised by the loudest band of the frame, like an equaliser: a raw band
-    // magnitude is ~0.1..0.5 at typical music levels, which turned every bar into a stub. Loudness
-    // then decides how tall that loudest band gets, so quiet passages sit low and loud ones fill
-    // the column up to the number row.
     if (config_.keyMode == 429) {
       // Keyed on its own sequence: sharing `sequence_` with the 428 field meant a packet
       // consumed by 428 never refreshed these bands, leaving them frozen while live.
@@ -447,24 +423,12 @@ public:
         for (float x : a.samples) {
           rms += std::isfinite(x) ? double(x) * x : 0;
         }
-        const double silence = std::sqrt(rms / a.samples.size());
-        if (silence < 1. / 32768) {
+        if (std::sqrt(rms / a.samples.size()) < 1. / 32768) {
           bands.fill(0);
         }
-        const double peak = *std::max_element(bands.begin(), bands.end());
-        // Loudness sets the cap, the spectrum sets the shape: the relative peak is pushed toward
-        // full height as the window gets louder, so quiet passages sit low and loud ones fill it.
-        double inputPeak = 0;
-        for (float x : a.samples) {
-          inputPeak = std::max(inputPeak, std::isfinite(x) ? std::abs(double(x)) : 0.);
-        }
-        const double loudness = std::clamp(inputPeak * .4 * std::max(1., config_.sensitivity) + .35, 0., 1.);
-        // `span` maps the loudest band onto `cap / (1 - eps)`: the peak lands at `cap` and the row
-        // whose height threshold is exactly `cap` still counts as covered.
-        const double span = peak > 1e-6 ? std::min(1.5, loudness / peak) / (1 - 1e-9) : 0;
         double decay = config_.releaseMs == 0 ? 0 : std::exp(-std::max(0., now - spectrumAt_) / config_.releaseMs);
         for (int i = 0; i < 16; ++i) {
-          bands_[i] = std::max(std::min(1., bands[i] * span), bands_[i] * decay);
+          bands_[i] = std::max(bands[i], bands_[i] * decay);
         }
         spectrumAt_ = now;
         spectrumSequence_ = a.sequence;
@@ -473,7 +437,6 @@ public:
           b *= config_.releaseMs == 0 ? 0 : std::exp(-dt / config_.releaseMs);
         }
       }
-      bandState_ = bands_;
     }
 
     if (config_.keyMode == 428) {
@@ -533,9 +496,6 @@ public:
       for (size_t i = 0; i < keys_.size(); ++i) {
         const auto k = keys_[i];
         double nx = k.x / 16;
-        // Spectrum Bars and Audio Marquee pick a column with `nx`; use the row-normalised
-        // position so every row spans all 16 bands and the marquee spans the full width.
-        const double column = k.nx;
         double value = 0;
         auto color = palette(nx, elapsed);
         if (config_.keyMode == 169) {
@@ -588,30 +548,27 @@ public:
           out.keys[i] = fields_[fieldIndex_][y * 256 + x];
           continue;
         } else if (config_.keyMode == 429) {
-          const int band = std::clamp(int(column * 16), 0, 15);
+          const int band = std::clamp(int(nx * 16), 0, 15);
           const double ny = k.y / 4;
           // The bottom row owns the baseline, so a band with any energy always reaches it.
-          if (bandState_[band] > .001 && ny >= (1 - bandState_[band]) * (1 - 1e-9)) {
-            const double edge = std::clamp((bandState_[band] - (1 - ny)) * 16., 0., 1.);
+          if (bands_[band] > .001 && ny >= (1 - bands_[band]) * (1 - 1e-9)) {
+            const double edge = std::clamp((bands_[band] - (1 - ny)) * 16., 0., 1.);
             value = .35 + .65 * edge;
           }
         } else if (config_.keyMode == 432) {
           const double ny = k.y / 4;
-          // `speed` is the full scroll cycle in ms; the phase must advance in ms, not seconds.
-          const double cell = std::fmod(ny + elapsed / config_.speed, 1.);
-          // `amount_` == 0 must stay dark (the bottom row is exactly 0 at phase 0).
-          if (amount_ > 0 && cell < amount_) {
-            value = 1 - std::max(0., amount_ - cell) * 3;
+          const double cell = std::fmod(ny + elapsed / 130, 1.);
+          // level_ == 0 must stay dark (the bottom row is exactly 0 at phase 0).
+          if (level_ > 0 && cell < level_) {
+            value = 1 - std::max(0., level_ - cell) * 3;
           }
         } else if (config_.keyMode == 434) {
           // OpenRGB Audio Sync radial roll: distance from centre, advanced by time, cut at the level.
-          const double distance = std::hypot((column - .5) * 16, (k.y - 2) * 2);
-          const double travel = std::fmod(elapsed / config_.speed * 16 * 2, 32.);
+          const double distance = std::hypot((nx - .5) * 16, (k.y - 2) * 2);
+          const double travel = std::fmod(elapsed / 45, 16.);
           double phase = distance - travel;
-          const double front = amount_ * 16;
-          // The board spans ~16 units from the centre, so the ring has to wrap there; wrapping at
-          // 32 left a dead stretch where the front sat outside the board and nothing lit up.
-          while (phase < 0) {
+          const double front = level_ * 16;
+          if (phase < 0) {
             phase += 16;
           }
           if (phase < front) {

@@ -154,10 +154,6 @@ export const VI_LIGHTING: Record<string, string> = {
   'Rhythm Sync': 'Rhythm Sync',
   'Rhythm brightness': 'Độ sáng Rhythm',
   'Rhythm release time': 'Thời gian release của Rhythm',
-  'Rhythm scroll speed': 'Tốc độ cuộn của Rhythm',
-  'Scroll speed': 'Tốc độ cuộn',
-  'Time for one full sweep. Higher is slower.':
-    'Thời gian cho một vòng quét. Số lớn hơn là chậm hơn.',
   'Rhythm sensitivity': 'Độ nhạy Rhythm',
   'Run and apply your effects': 'Chạy ứng dụng và áp dụng hiệu ứng',
   'Run the background app to use Custom Effects, or try a preview.':
