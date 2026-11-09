@@ -353,11 +353,15 @@ function App() {
                         ).length,
                       0
                     )}
+                    advancedKeys={workspace.advancedBindings.length}
                     onSelect={slot => void sync.selectOnboardProfile(slot)}
                     onRename={sync.renameProfile}
                     onExport={sync.exportProfile}
                     onRemap={() => ui.setActivePage('remap')}
+                    onAdvanced={() => ui.setActivePage('advanced')}
                     onRefresh={() => void sync.handleReadFromDevice()}
+                    onResetProfile={sync.resetProfileToDefaults}
+                    onDiscardDraft={sync.discardProfileDraftChanges}
                   />
                 ) : ui.activePage === 'macros' ? (
                   <MacroPage />
@@ -669,7 +673,20 @@ function App() {
                   </div>
                 )
               ) : (
-                <HelpPage />
+                <HelpPage
+                  onOpenBackgroundService={() => {
+                    ui.setActiveSettingsPage('background-service');
+                    ui.setActiveRail('settings');
+                  }}
+                  onOpenDiagnostics={() => {
+                    ui.setActiveSettingsPage('diagnostics');
+                    ui.setActiveRail('settings');
+                  }}
+                  onOpenProfiles={() => {
+                    ui.setActivePage('profile');
+                    ui.setActiveRail('keyboard');
+                  }}
+                />
               )}
             </AppShell>
           </TachyonContext.Provider>

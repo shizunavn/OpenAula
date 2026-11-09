@@ -26,6 +26,7 @@ import {
 } from '../../protocol/hero68/hero68Encoder';
 import { syncHero68MacroLibrary } from '../../protocol/hero68/macroDevice';
 import {
+  defaultRemapLayers,
   isMacroRemapValue,
   readOnboardProfileName,
   readRemapLayers,
@@ -38,6 +39,7 @@ import {
 import {
   mergeRgb,
   readRgbProfile,
+  restoreStoredRgb,
   saveRgbProfile,
   type RgbChanges,
   type RgbProfile
@@ -763,6 +765,54 @@ export function useDeviceSyncController({
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  function resetProfileToDefaults(): () => void {
+    const previousDraft = structuredClone(currentProfileDraft());
+    restorePerformanceFromDraft(undefined, modelKeyIds);
+    setDirtyKeys(new Set(modelKeyIds));
+    const factoryRemap = defaultRemapLayers(modelKeyIds);
+    setRemapLayers(factoryRemap);
+    const nextDirtyRemaps = new Set<string>();
+    for (const layer of REMAP_LAYERS) {
+      for (const keyId of modelKeyIds) {
+        if (remapBaselineRef.current[layer]?.[keyId] !== factoryRemap[layer]?.[keyId]) {
+          nextDirtyRemaps.add(`${layer}:${keyId}`);
+        }
+      }
+    }
+    setDirtyRemaps(nextDirtyRemaps);
+    setAdvancedBindings(advancedBaseline.filter(b => b.kind === 'UNKNOWN'));
+    setRgb(isWin68HeMaxModel(deviceModel) ? defaultXsydRgb() : restoreStoredRgb(undefined));
+    setSaveState('idle');
+    setDeviceActionError(null);
+    return () => {
+      restorePerformanceFromDraft(previousDraft, modelKeyIds);
+      if (previousDraft.remapLayers) {
+        setRemapLayers(previousDraft.remapLayers);
+      }
+      setDirtyRemaps(new Set(previousDraft.dirtyRemaps ?? []));
+      setAdvancedBindings(previousDraft.advancedBindings ?? []);
+      if (previousDraft.rgb) {
+        setRgb(previousDraft.rgb);
+      }
+      setSaveState('idle');
+    };
+  }
+  function discardProfileDraftChanges() {
+    if (profileBusyRef.current) {
+      return;
+    }
+    setDeviceActionError(null);
+    if (isAnyDeviceConnected() && loadedProfileSlot === profileSlot) {
+      void handleReadFromDevice(profileSlot);
+      return;
+    }
+    setRemapLayers(structuredClone(remapBaselineRef.current));
+    setDirtyRemaps(new Set());
+    setAdvancedBindings(structuredClone(advancedBaseline));
+    setRgb(structuredClone(rgbBaseline));
+    setDirtyKeys(new Set());
+    setSaveState('idle');
+  }
   async function handleSaveAll() {
     if (profileBusyRef.current) {
       return;
@@ -992,6 +1042,8 @@ export function useDeviceSyncController({
     selectOnboardProfile,
     renameProfile,
     exportProfile,
+    resetProfileToDefaults,
+    discardProfileDraftChanges,
     handleSaveAll
   };
 }

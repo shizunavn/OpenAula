@@ -145,11 +145,11 @@
 }
 .profile-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 22px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.065);
   border-bottom: 1px solid rgba(255, 255, 255, 0.065);
-  gap: 20px;
+  gap: 18px;
 }
 .profile-summary > div {
   display: flex;
@@ -169,6 +169,44 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
+}
+.profile-detail-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.profile-reset-button {
+  color: #ffb8b0;
+  border-color: rgba(235, 106, 94, 0.34);
+  background: rgba(235, 106, 94, 0.07);
+}
+.profile-reset-button:hover:not(:disabled) {
+  color: #ffd5d0;
+  border-color: rgba(235, 106, 94, 0.58);
+  background: rgba(235, 106, 94, 0.15);
+}
+.profile-reset-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 11px 16px;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  background: rgba(111, 219, 152, 0.08);
+  border: 1px solid rgba(111, 219, 152, 0.22);
+  color: #d0f0db;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.profile-undo-button {
+  min-height: 30px;
+  height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
 }
 .profile-section-heading {
   display: flex;

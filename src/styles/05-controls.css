@@ -751,3 +751,174 @@
   font-size: 13px;
   letter-spacing: 0;
 }
+
+/* Upgraded Help Page styles */
+.help-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.help-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.help-action-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 10px;
+  background: #222628;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-1);
+  text-decoration: none;
+  transition:
+    background var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease);
+}
+
+.help-action-card:hover {
+  background: #282d30;
+  border-color: rgba(255, 212, 92, 0.45);
+  transform: translateY(-1px);
+}
+
+.help-action-card.is-primary {
+  border-color: rgba(255, 212, 92, 0.34);
+  background: rgba(255, 212, 92, 0.045);
+}
+
+.help-action-card.is-accent {
+  border-color: rgba(111, 219, 152, 0.28);
+  background: rgba(111, 219, 152, 0.04);
+}
+
+.help-action-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffd45c;
+}
+
+.help-action-card.is-accent .help-action-icon {
+  color: #79dfa0;
+}
+
+.help-action-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.help-action-copy strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.help-action-copy span {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.help-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+.help-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ffd45c;
+}
+
+.help-card-head h2 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text-1);
+}
+
+.help-card p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.help-card-detail {
+  color: var(--text-3) !important;
+  font-size: 12.5px !important;
+}
+
+.help-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.help-footer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.help-footer-card h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.help-footer-card p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.help-footer-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  font-size: 13px;
+}
+
+.help-footer-links a {
+  color: #ffd45c;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.help-footer-links a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .help-quick-actions,
+  .help-grid {
+    grid-template-columns: 1fr;
+  }
+}

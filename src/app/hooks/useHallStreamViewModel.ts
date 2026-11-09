@@ -152,8 +152,49 @@ export function useHallStreamViewModel({
       setDeviceActionError(error instanceof Error ? error.message : String(error));
     }
   }
+  useEffect(() => {
+    if (!hallStream.active || hallStream.starting || activeRail !== 'keyboard') {
+      return;
+    }
+    const requested = hero68HallStream.getRequestedKeyIds();
+    const desired =
+      activePage === 'stream' ? [] : activePage === 'actuation' ? Array.from(selectedKeys) : null;
+    if (desired === null) {
+      return;
+    }
+    const same =
+      requested.length === desired.length &&
+      requested.every((keyId, index) => keyId === desired[index]);
+    if (same) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        await hero68HallStream.stop();
+        if (!cancelled) {
+          await hero68HallStream.start(desired, 'direct-poll', modelKeyIds);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDeviceActionError(error instanceof Error ? error.message : String(error));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activePage,
+    activeRail,
+    hallStream.active,
+    hallStream.starting,
+    modelKeyIds,
+    selectedKeys,
+    setDeviceActionError
+  ]);
   async function handleHallStreamToggle() {
-    await toggleHallStream(hallStreamPinnedKeyId ? [hallStreamPinnedKeyId] : []);
+    await toggleHallStream([]);
   }
   async function handleActuationHallStreamToggle() {
     await toggleHallStream(selectedKeys);

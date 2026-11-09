@@ -32,7 +32,7 @@ export const VI_SERVICE_AND_SETTINGS: Record<string, string> = {
   'Save to profile': 'Lưu vào hồ sơ',
   'Your keyboard settings, together in one profile.':
     'Tất cả cài đặt bàn phím của bạn trong một hồ sơ.',
-  'Export profile': 'Xuất hồ sơ',
+  'Export profile': 'Xuất cấu hình',
   'Profile name': 'Tên hồ sơ',
   'Onboard Profiles': 'Hồ sơ trên bàn phím',
   '3 slots on your HERO68': '3 khe hồ sơ trên HERO68',

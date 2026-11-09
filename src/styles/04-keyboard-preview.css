@@ -139,12 +139,12 @@
 /* Mouse clicks leave a native Chromium button focus ring on the last key,
    which reads as a stray black border. Keep mouse selection clean while still
    giving keyboard users a deliberate focus-visible treatment. */
-.hero-key:focus {
-  outline: none;
-}
+.hero-key:focus,
 .hero-key:focus-visible {
-  outline: 1px solid rgba(255, 212, 92, 0.58);
-  outline-offset: 1px;
+  outline: none !important;
+}
+.hero-key:focus-visible:not(.is-selected) {
+  border-color: rgba(255, 212, 92, 0.85);
 }
 
 /* Wootility's keyRender is the inner 45.2656px colored face of a 47.2656px key. */

@@ -96,6 +96,8 @@ class Hero68HallStream {
 
   getSnapshot = (): HallStreamState => this.#state;
 
+  getRequestedKeyIds = (): readonly string[] => this.#requestedKeyIds;
+
   subscribe = (listener: () => void): (() => void) => {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);

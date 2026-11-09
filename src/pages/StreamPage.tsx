@@ -133,17 +133,29 @@ function StreamPage({
               </span>
               <h2>{tr(hallKeyLabel(hallStreamFocusKeyId))}</h2>
             </div>
-            <span
-              className={`stream-pressed-badge ${hallStreamFocusSample?.pressed ? 'is-pressed' : ''} ${hallStreamFocusSample?.releaseInferred ? 'is-inferred' : ''}`}
-            >
-              {tr(
-                hallStreamFocusSample?.pressed
-                  ? 'PRESSED'
-                  : hallStreamFocusSample?.releaseInferred
-                    ? 'RELEASED · HID'
-                    : 'RELEASED'
+            <div className="stream-travel-head-actions">
+              {hallStreamPinnedKeyId && (
+                <button
+                  type="button"
+                  className="stream-unpin-button"
+                  onClick={() => toggleHallStreamPin(hallStreamPinnedKeyId)}
+                  title={tr('Unpin focused key and follow live presses')}
+                >
+                  {tr('Unpin')}
+                </button>
               )}
-            </span>
+              <span
+                className={`stream-pressed-badge ${hallStreamFocusSample?.pressed ? 'is-pressed' : ''} ${hallStreamFocusSample?.releaseInferred ? 'is-inferred' : ''}`}
+              >
+                {tr(
+                  hallStreamFocusSample?.pressed
+                    ? 'PRESSED'
+                    : hallStreamFocusSample?.releaseInferred
+                      ? 'RELEASED · HID'
+                      : 'RELEASED'
+                )}
+              </span>
+            </div>
           </div>
           <div className="stream-travel-visual">
             <div className="stream-travel-scale" aria-hidden="true">
@@ -207,8 +219,17 @@ function StreamPage({
                 : 0;
               return (
                 <div
-                  className="stream-selected-row"
+                  className={`stream-selected-row ${hallStreamPinnedKeyId === keyId ? 'is-pinned' : ''}`}
                   key={keyId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleHallStreamPin(keyId)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      toggleHallStreamPin(keyId);
+                    }
+                  }}
                   title={
                     sample && hallStream.keyTelemetryHz[keyId]
                       ? `${hallKeyLabel(keyId)} · ${hallStream.keyTelemetryHz[keyId].toFixed(1)} Hz`
@@ -247,7 +268,11 @@ function StreamPage({
       </section>
 
       <div className="stream-footline">
-        <span>{tr('68-key Hall monitoring')}</span>
+        <span>
+          {heroLayout(model).keyIds.length === 68
+            ? tr('68-key Hall monitoring')
+            : tr('{count}-key Hall monitoring', { count: heroLayout(model).keyIds.length })}
+        </span>
         <span>
           {hallStream.recovering
             ? tr('Recovering Hall telemetry…')

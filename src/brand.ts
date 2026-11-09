@@ -14,6 +14,10 @@ export const BRAND = {
   exportSchemaPrefix: 'openhero68',
   docsUrl: 'https://github.com/shizunavn/OpenAula/blob/main/docs/README.md',
   issuesUrl: 'https://github.com/shizunavn/OpenAula/issues',
+  bugReportUrl: 'https://github.com/shizunavn/OpenAula/issues/new?template=bug-report.yml',
+  addBoardUrl: 'https://github.com/shizunavn/OpenAula/issues/new?template=add-a-board.yml',
+  submitBoardDocUrl: 'https://github.com/shizunavn/OpenAula/blob/main/docs/SUBMIT_A_BOARD.md',
+  releasesUrl: 'https://github.com/shizunavn/OpenAula/releases/latest',
   /** Canonical web app origin; the pre-rename host shows a move notice. */
   webAppUrl: 'https://open-aula.pages.dev',
   /** Hosts that used to serve the web app and now only forward to webAppUrl. */

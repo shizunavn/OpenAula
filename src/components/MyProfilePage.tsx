@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Keyboard, Pencil, Check, ArrowRight } from 'lucide-react';
+import { Keyboard, Pencil, Check, ArrowRight, Download, RotateCcw, Undo2 } from 'lucide-react';
 import type { ProfileSlot } from '../protocol/hero68/types';
 import { useI18n } from '../i18n';
 import { heroDeviceModel, type HeroDeviceModelId } from '../keyboard/devices';
+
 type Props = {
   model: HeroDeviceModelId;
   slot: ProfileSlot;
@@ -13,12 +14,17 @@ type Props = {
   pending: number;
   rapidKeys: number;
   remappedKeys: number;
+  advancedKeys?: number;
   onSelect: (slot: ProfileSlot) => void;
   onRename: (name: string) => Promise<boolean>;
   onExport?: () => void;
   onRemap: () => void;
+  onAdvanced?: () => void;
   onRefresh: () => void;
+  onResetProfile?: () => () => void;
+  onDiscardDraft?: () => void;
 };
+
 export default function MyProfilePage({
   model,
   slot,
@@ -29,21 +35,32 @@ export default function MyProfilePage({
   pending,
   rapidKeys,
   remappedKeys,
+  advancedKeys = 0,
   onSelect,
   onRename,
+  onExport,
   onRemap,
-  onRefresh
+  onAdvanced,
+  onRefresh,
+  onResetProfile,
+  onDiscardDraft
 }: Props) {
   const { tr } = useI18n();
   const device = heroDeviceModel(model);
   const [name, setName] = useState(names[slot]);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [undoReset, setUndoReset] = useState<(() => void) | null>(null);
+
   useEffect(() => {
     setName(names[slot]);
     setEditing(false);
     setError('');
+    setNotice('');
+    setUndoReset(null);
   }, [slot, names]);
+
   async function rename() {
     if (!name.trim()) {
       setError(tr('Enter a profile name.'));
@@ -58,6 +75,38 @@ export default function MyProfilePage({
       setEditing(false);
     }
   }
+
+  function handleResetProfile() {
+    if (!onResetProfile || busy) {
+      return;
+    }
+    const restore = onResetProfile();
+    setUndoReset(() => restore);
+    setNotice(
+      tr(
+        'Profile draft reset to factory defaults. Click Save to profile above to apply to the keyboard.'
+      )
+    );
+  }
+
+  function handleUndoReset() {
+    if (!undoReset || busy) {
+      return;
+    }
+    undoReset();
+    setUndoReset(null);
+    setNotice(tr('Restored previous profile draft settings.'));
+  }
+
+  function handleDiscardDraft() {
+    if (!onDiscardDraft || busy) {
+      return;
+    }
+    onDiscardDraft();
+    setUndoReset(null);
+    setNotice(tr('Discarded unsaved draft changes.'));
+  }
+
   return (
     <div className="page my-profile-page page-enter">
       <div className="profile-page-heading">
@@ -66,6 +115,24 @@ export default function MyProfilePage({
           <p>{tr('Your keyboard settings, together in one profile.')}</p>
         </div>
       </div>
+
+      {notice && (
+        <div className="profile-reset-notice" role="status">
+          <span>{notice}</span>
+          {undoReset && (
+            <button
+              type="button"
+              className="secondary-button profile-undo-button"
+              disabled={busy}
+              onClick={handleUndoReset}
+            >
+              <Undo2 size={14} />
+              {tr('Undo')}
+            </button>
+          )}
+        </div>
+      )}
+
       <article className="profile-detail settings-card">
         <div className={`profile-detail-icon profile-accent-${slot}`}>
           <Keyboard size={32} />
@@ -161,18 +228,54 @@ export default function MyProfilePage({
             <span>{tr('Remapped functions')}</span>
           </div>
           <div>
+            <strong>{advancedKeys}</strong>
+            <span>{tr('Advanced Keys')}</span>
+          </div>
+          <div>
             <strong>3</strong>
             <span>{tr('Keyboard layers')}</span>
           </div>
         </div>
         <div className="profile-detail-actions">
-          <button className="secondary-button" disabled={busy} onClick={onRemap}>
-            {tr('Edit key mappings')}
-            <ArrowRight size={15} />
-          </button>
-          <button className="ghost-button" disabled={!connected || busy} onClick={onRefresh}>
-            {tr('Refresh from keyboard')}
-          </button>
+          <div className="profile-detail-actions-group">
+            <button className="secondary-button" disabled={busy} onClick={onRemap}>
+              {tr('Edit key mappings')}
+              <ArrowRight size={15} />
+            </button>
+            {onAdvanced && (
+              <button className="secondary-button" disabled={busy} onClick={onAdvanced}>
+                {tr('Advanced Keys')}
+                <ArrowRight size={15} />
+              </button>
+            )}
+            {onExport && (
+              <button className="ghost-button" disabled={busy} onClick={onExport}>
+                <Download size={15} />
+                {tr('Export profile')}
+              </button>
+            )}
+          </div>
+          <div className="profile-detail-actions-group">
+            {onDiscardDraft && pending > 0 && (
+              <button className="ghost-button" disabled={busy} onClick={handleDiscardDraft}>
+                <Undo2 size={15} />
+                {tr('Discard draft changes')}
+              </button>
+            )}
+            {onResetProfile && (
+              <button
+                className="secondary-button profile-reset-button"
+                disabled={busy}
+                onClick={handleResetProfile}
+              >
+                <RotateCcw size={15} />
+                {tr('Reset to default')}
+              </button>
+            )}
+            <button className="ghost-button" disabled={!connected || busy} onClick={onRefresh}>
+              {tr('Refresh from keyboard')}
+            </button>
+          </div>
         </div>
       </article>
       <div className="profile-section-heading">

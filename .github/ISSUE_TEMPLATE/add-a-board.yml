@@ -5,9 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping expand OpenHero68! You do not need reverse-engineering experience.
+        Thanks for helping expand OpenAula! You do not need reverse-engineering experience.
         Fill in the basic information first; **Unknown** is fine where indicated. Technical evidence is optional.
-        OpenHero68 currently targets the AULA HERO68. A similar name, USB ID or layout does not confirm compatibility.
+        OpenAula currently supports AULA HERO68, HERO84, HERO 68 XS, and WIN 68 HE MAX. A similar name, USB ID or layout does not confirm compatibility.
         A request does not enable device writes or mean the model is supported.
 
         [Submission guide: finding IDs, firmware and useful captures](https://github.com/shizunavn/OpenAula/blob/main/docs/SUBMIT_A_BOARD.md)
@@ -100,8 +100,8 @@ body:
     id: environment
     attributes:
       label: Test environment
-      description: "OS version and browser/version. Include OpenHero68 web/service versions only if already used. The Windows service is currently Windows x64 only."
-      placeholder: "Windows 11 x64; Chrome ...; OpenHero68 not tested"
+      description: "OS version and browser/version. Include OpenAula web/service versions only if already used. The Windows service is currently Windows x64 only."
+      placeholder: "Windows 11 x64; Chrome ...; OpenAula not tested"
     validations:
       required: true
 
@@ -157,7 +157,7 @@ body:
     id: existing-work
     attributes:
       label: Existing support, observations or reverse engineering
-      description: "Link relevant projects, issues or protocol notes. If OpenHero68 was already tried, give version, connection and exact observed behavior. A working vendor travel test or another app is useful evidence, but does not establish OpenHero68 compatibility."
+      description: "Link relevant projects, issues or protocol notes. If OpenAula was already tried, give version, connection and exact observed behavior. A working vendor travel test or another app is useful evidence, but does not establish OpenAula compatibility."
 
   - type: dropdown
     id: testing

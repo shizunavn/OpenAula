@@ -398,6 +398,33 @@ export default function KeyRemapPage({
                     >
                       {tr('Paste layer')}
                     </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => {
+                        setLayer(id);
+                        const applied = remapPreset('default', id);
+                        setPresetUndo({
+                          layer: id,
+                          keys: Object.fromEntries(
+                            Object.keys(applied).map(key => [key, layers[id][key]])
+                          ),
+                          applied
+                        });
+                        for (const [key, value] of Object.entries(applied)) {
+                          onAssign(id, key, value);
+                        }
+                        setPresetNotice(
+                          tr('{preset} applied to {layer}. Save to profile to keep it.', {
+                            preset: tr('Default'),
+                            layer: tr(REMAP_LAYER_NAMES[id])
+                          })
+                        );
+                        setLayerMenu(null);
+                      }}
+                    >
+                      <RotateCcw size={14} />
+                      {tr('Reset layer')}
+                    </button>
                   </div>
                 )}
               </div>

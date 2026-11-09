@@ -417,7 +417,12 @@ export default function Hero68Preview({
                               '--stream-travel': `${streamTravelPercent}%`
                             } as React.CSSProperties
                           }
-                          onClick={() => onToggleKey(key.id)}
+                          onClick={event => {
+                            if (event.detail > 0) {
+                              event.currentTarget.blur();
+                            }
+                            onToggleKey(key.id);
+                          }}
                           draggable={draggableKeys?.has(key.id) ?? false}
                           onDragStart={event => {
                             hideKeyTooltip();

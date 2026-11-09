@@ -6,19 +6,16 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 
 [**Website**](https://open-aula.pages.dev/) · [Open the web app](https://open-aula.pages.dev/) · [Download the Windows service](https://github.com/shizunavn/OpenAula/releases/latest) · [Release notes](https://github.com/shizunavn/OpenAula/releases/latest)
 
-**Found a problem? [Report a bug](https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dbug-report.yml)** — web app, keyboard features, Windows service or installer.
+**Found a problem? [Report a bug](https://github.com/shizunavn/OpenAula/issues/new?template=bug-report.yml)** — web app, keyboard features, Windows service or installer.
 
 > [!IMPORTANT]
 > **Own a HERO84 or another Hall-effect keyboard? Help bring support to your model.**
 >
-> **[Request keyboard support →](https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dadd-a-board.yml)** · [Submission guide](docs/SUBMIT_A_BOARD.md)
+> **[Request keyboard support →](https://github.com/shizunavn/OpenAula/issues/new?template=add-a-board.yml)** · [Submission guide](docs/SUBMIT_A_BOARD.md)
 >
 > No coding needed. Share your exact model, firmware version, USB IDs and a layout photo; write **Unknown** if you need help. Protocol captures are optional. Owners who can test on real hardware are especially welcome.
 >
 > **Currently verified: AULA HERO68 / HERO84 (verified lighting, RT, AP) / HERO 68 XS (5 µm high precision, 8K receiver) / WIN 68 HE MAX.** Other models still need protocol and hardware validation. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings, Rapid Trigger, 4-mode SOCD, 7-node visual DKS, OS switching, WinLock, and WebHID configuration are fully supported.
-
-
-
 
 > **Unofficial project.** OpenAula is a community effort based on reverse engineering. It is not affiliated with or endorsed by AULA or the makers of Wootility.
 
@@ -41,15 +38,17 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 
 | Area | What you can do |
 | --- | --- |
-| Profiles | Switch between 3 on-board profile slots, read from and save to device; displays dynamic key counts and model names for recognized boards (e.g. HERO68, HERO84, HERO 68 XS, WIN 68 HE MAX) |
+| Profiles | Switch between 3 on-board profile slots, read from and save to device, export/import profiles, discard unsaved draft edits, or reset a profile to factory defaults with one-click Undo; displays dynamic key counts and model names for recognized boards (`HERO68`, `HERO84`, `HERO 68 XS`, `WIN 68 HE MAX`) |
 | Actuation Point | Per-key or multi-key actuation from 0.10 to 3.40 mm (with fine 0.005 mm / 5 µm resolution on HERO 68 XS), live Hall test overlay on the keyboard |
 | Rapid Trigger | Rapid Trigger and deadzone settings with up to 0.005 mm sensitivity steps on supported hardware (HERO 68 XS) |
 | Key Remap | Remap keys across layers, with a searchable icon catalog |
-| Advanced Keys | SOCD (4 priority modes), DKS (7-node visual track & official keycap palette), Mod Tap, Toggle, MPT and END bindings (Main Layer) |
+| Advanced Keys | SOCD (4 priority modes), DKS (7-node visual track & official keycap palette), Mod Tap, Toggle, MPT and END bindings (Main Layer), with one-click binding deletion, Clear All, and instant Undo |
 | Macros | Macro editor with a local library synced to the keyboard |
 | RGB Settings | On-board effects for keys and side light, plus **Custom Effects** (Dynamic Wave across 9 directions, Trigger Response, Aurora, and 16 FX layers) and **Rhythm Sync** (with 16 log-spaced equalizer bands, Spectrum Bars, Audio Marquee, Radial Chase & Peak-hold side meters); per-key painting tools sit directly below the keyboard preview |
 | Gamepad | Setup & Remap with automatic saves, analog response curves/travel, digital AP/RT, Snappy, circle/square, angle adjustment, live tester with XInput verification, and **custom toggle keybinding** to start/stop emulation in-game |
+| Hall Stream | Real-time full-keyboard Hall travel telemetry with interactive key pinning/unpinning and live travel readouts |
 | Device settings | Polling rate (125 Hz – 8000 Hz, with 8K wireless receiver support), Tachyon Mode, OS mode (Windows/macOS), Windows key lock, Hall debounce, auto calibration, authentic switch selector with photo assets |
+| Help & Support | Built-in bilingual Help center with direct links to pre-filled GitHub Bug Report and Add-a-Board templates, quick navigation to Background Service & Diagnostics, and troubleshooting guides |
 | Interface | English and Vietnamese UI, optional advanced pages (Hall Stream), compact sidebar |
 
 **RGB tray service** (Windows x64, installed)
@@ -227,7 +226,7 @@ docs/                Reverse-engineering notes, feature docs, release notes
 - [All docs, including reverse-engineering notes](docs/README.md)
 - [Changelog](CHANGELOG.md) · [Service release notes](docs/releases/)
 
-## Known limitations
+## Status and known limitations
 
 - **Gamepad v1** supports one HERO68 / HERO 68 XS and one Xbox controller on Windows x64. Firmware blocking saves exact original remaps before writing zero and recovers them after service restart. Advanced Keys on assigned keys must be removed first. Windows hook fallback affects matching keys on other keyboards, may not block Raw Input, and displays an anti-cheat warning when selected. No suppression method guarantees anti-cheat approval. DirectInput, mouse-to-stick and kernel keyboard filters are outside v1.
 - **WIN 68 HE MAX** operates on a separate XSYD 0x5C protocol stack. While per-key AP/RT, 4-mode SOCD, 7-node visual DKS, OS mode switching, WinLock, and WebHID configuration are fully supported, background service features (virtual Gamepad and service RGB streaming) currently target the HERO68 / HERO 68 XS family.
@@ -238,7 +237,7 @@ docs/                Reverse-engineering notes, feature docs, release notes
 ## Contributing
 
 Want another keyboard model or hardware revision supported? Use the
-[keyboard support form](https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dadd-a-board.yml)
+[keyboard support form](https://github.com/shizunavn/OpenAula/issues/new?template=add-a-board.yml)
 and [submission guide](docs/SUBMIT_A_BOARD.md). Include the exact model, installed
 firmware, USB IDs for each connection and layout. Protocol captures are optional;
 you can submit basic details first and volunteer for hardware testing later.
@@ -250,7 +249,7 @@ npm run build
 npm test
 ```
 
-Found a problem? Use the [bug report form](https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dbug-report.yml)
+Found a problem? Use the [bug report form](https://github.com/shizunavn/OpenAula/issues/new?template=bug-report.yml)
 and tell us what happened in your own words. **Only the problem description is required.**
 English and Vietnamese reports are welcome; screenshots, steps and technical details are optional.
 You do not need to find logs or version numbers to report a bug. We can ask follow-up questions if needed.

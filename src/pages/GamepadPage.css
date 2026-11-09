@@ -46,7 +46,7 @@
   opacity: 0.45;
   cursor: default;
 }
-.gamepad-page button:focus-visible,
+.gamepad-page button:not(.hero-key):focus-visible,
 .gp-curve circle:focus-visible {
   outline: 2px solid #ffd45a;
   outline-offset: 3px;

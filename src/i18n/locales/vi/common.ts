@@ -504,5 +504,54 @@ export const VI_COMMON: Record<string, string> = {
   RECOVERING: 'ĐANG PHỤC HỒI',
   '~{rate} Hz refresh': 'Tần số cập nhật ~{rate} Hz',
   'Auto group {group}/{total}': 'Tự chuyển nhóm {group}/{total}',
-  'Changes apply automatically': 'Thay đổi được áp dụng tự động'
+  'Changes apply automatically': 'Thay đổi được áp dụng tự động',
+  'Clear all': 'Xóa tất cả',
+  Undo: 'Hoàn tác',
+  'Removed {keys} from your profile draft. Save the profile to apply it to the keyboard.':
+    'Đã xóa {keys} khỏi bản nháp cấu hình. Lưu cấu hình để áp dụng xuống bàn phím.',
+  'Cleared all Advanced Keys from your profile draft. Save the profile to apply it to the keyboard.':
+    'Đã xóa toàn bộ Phím nâng cao khỏi bản nháp cấu hình. Lưu cấu hình để áp dụng xuống bàn phím.',
+  'Restored deleted Advanced Keys to your profile draft.':
+    'Đã khôi phục các Phím nâng cao vừa xóa vào bản nháp cấu hình.',
+  'Remove {keys} binding': 'Xóa gán phím {keys}',
+  Unpin: 'Bỏ ghim',
+  'Unpin focused key and follow live presses':
+    'Bỏ ghim phím đang chọn và tự động theo dõi phím đang nhấn',
+  '{count}-key Hall monitoring': 'Giám sát Hall {count} phím',
+  'Reset to default': 'Đặt lại mặc định',
+  'Discard draft changes': 'Hủy thay đổi nháp',
+  'Reset layer': 'Đặt lại lớp',
+  'Profile draft reset to factory defaults. Click Save to profile above to apply to the keyboard.':
+    'Đã đặt lại bản nháp cấu hình về mặc định. Bấm Lưu vào cấu hình ở trên để áp dụng xuống bàn phím.',
+  'Restored previous profile draft settings.': 'Đã khôi phục cài đặt bản nháp cấu hình trước đó.',
+  'Discarded unsaved draft changes.': 'Đã hủy các thay đổi nháp chưa lưu.',
+  'Connect your keyboard, manage onboard profiles, set up the Windows background service, or report a bug / request a new board.':
+    'Kết nối bàn phím, quản lý cấu hình trên thiết bị, cài đặt dịch vụ nền Windows, hoặc báo lỗi / yêu cầu hỗ trợ bàn phím mới.',
+  'Support and issue templates': 'Hỗ trợ và biểu mẫu GitHub',
+  'Report a bug': 'Báo lỗi',
+  'Opens the pre-selected GitHub Bug Report template. Only a short description is required.':
+    'Mở sẵn biểu mẫu Báo lỗi (Bug Report) trên GitHub. Chỉ cần mô tả ngắn gọn vấn đề.',
+  'Request keyboard support': 'Yêu cầu hỗ trợ bàn phím mới',
+  'Opens the pre-selected Add a Board template to submit your model, firmware, and USB IDs.':
+    'Mở sẵn biểu mẫu Thêm bàn phím (Add a Board) để gửi tên mẫu phím, firmware và USB ID.',
+  'Guides for Custom RGB, Rhythm Sync, Gamepad, Advanced Keys, and protocol notes.':
+    'Hướng dẫn chi tiết cho Custom RGB, Rhythm Sync, Gamepad, Phím nâng cao và ghi chú giao thức.',
+  'Verified models include AULA HERO68, HERO84, HERO 68 XS (5 µm precision & 8K receiver), and WIN 68 HE MAX (XSYD 0x5C).':
+    'Các mẫu đã xác minh gồm AULA HERO68, HERO84, HERO 68 XS (độ chính xác 5 µm & đầu thu 8K) và WIN 68 HE MAX (XSYD 0x5C).',
+  'Save & reset onboard profiles': 'Lưu & đặt lại cấu hình trên bàn phím',
+  'In My Profile you can reset a profile to factory defaults (with Undo), discard draft changes, or export your profile. In Advanced Keys you can delete individual bindings or clear all in one click.':
+    'Trong Cấu hình của tôi, bạn có thể đặt lại cấu hình về mặc định (có Hoàn tác), hủy thay đổi nháp hoặc xuất cấu hình. Trong Phím nâng cao, bạn có thể xóa nhanh từng phím hoặc xóa tất cả chỉ với 1 cú nhấp.',
+  'Open My Profile': 'Mở Cấu hình của tôi',
+  'Hall Stream & live testing': 'Hall Stream & kiểm tra trực tiếp',
+  'Hall Stream always scans every key on the keyboard in real time, even if you click a key on the preview before starting.':
+    'Hall Stream luôn quét toàn bộ các phím trên bàn phím theo thời gian thực, kể cả khi bạn bấm chọn một phím trên hình mô phỏng trước khi bắt đầu.',
+  'Click any key on the keyboard preview or in the Live keys list to pin it as the focused readout, and click it again (or press Unpin) to return to automatic focus.':
+    'Bấm vào bất kỳ phím nào trên hình bàn phím hoặc trong danh sách Phím trực tiếp để ghim theo dõi, và bấm lại (hoặc nhấn Bỏ ghim) để tự động theo dõi phím đang nhấn.',
+  'Open Background Service': 'Mở Dịch vụ nền',
+  'Open Diagnostics': 'Mở Chẩn đoán',
+  'Documentation & community links': 'Tài liệu & liên kết cộng đồng',
+  'Bug reports and new keyboard requests in English or Vietnamese are welcome. Clicking the links below pre-selects the matching GitHub issue template.':
+    'Hoan nghênh báo lỗi và yêu cầu thêm bàn phím bằng tiếng Việt hoặc tiếng Anh. Các liên kết bên dưới đều tự động chọn sẵn mẫu GitHub tương ứng.',
+  'Board submission guide': 'Hướng dẫn gửi thông tin bàn phím',
+  'Windows Service releases': 'Bản phát hành Dịch vụ Windows'
 };

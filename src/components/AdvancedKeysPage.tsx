@@ -1,6 +1,6 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDown, ArrowUp, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import Hero68Preview from './Hero68Preview';
 import AdvancedKeyIcon from './AdvancedKeyIcon';
 import FeatureHelp from './FeatureHelp';
@@ -1003,11 +1003,23 @@ export default function AdvancedKeysPage({
   const [kind, setKind] = useState<AdvancedKind>('SOCD');
   const [presetReview, setPresetReview] = useState<AdvancedPreset | null>(null);
   const page = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    page.current?.scrollIntoView({
-      block: 'start',
-      behavior: 'instant'
-    });
+  const savedScrollTop = useRef<number | null>(null);
+  const captureScrollPosition = () => {
+    const scrollEl = page.current?.closest('.workspace') as HTMLElement | null;
+    if (scrollEl) {
+      savedScrollTop.current = scrollEl.scrollTop;
+    }
+  };
+  useLayoutEffect(() => {
+    if (savedScrollTop.current === null) {
+      return;
+    }
+    const scrollEl = page.current?.closest('.workspace') as HTMLElement | null;
+    const targetScroll = savedScrollTop.current;
+    savedScrollTop.current = null;
+    if (scrollEl) {
+      scrollEl.scrollTop = targetScroll;
+    }
   }, [view]);
   const [keys, setKeys] = useState<(string | null)[]>([]);
   const [slot, setSlot] = useState(0);
@@ -1027,6 +1039,7 @@ export default function AdvancedKeysPage({
   const required = kind === 'SOCD' ? 2 : 1;
   const info = INFO[kind];
   const [notice, setNotice] = useState('');
+  const [undoBindings, setUndoBindings] = useState<AdvancedBinding[] | null>(null);
   const assignedKeys = keys.filter((key): key is string => key !== null);
   const ready = assignedKeys.length === required;
   const occupied = useMemo(
@@ -1070,6 +1083,7 @@ export default function AdvancedKeysPage({
         setError(tr('This firmware binding is preserved, but its editor is unavailable.'));
         return;
       }
+      captureScrollPosition();
       setKind(existing.kind);
       setDraft(structuredClone(existing));
       setEditingId(existing.id);
@@ -1109,6 +1123,7 @@ export default function AdvancedKeysPage({
     }
   }
   function begin(mode: AdvancedKind, preset?: string[]) {
+    captureScrollPosition();
     setKind(mode);
     setEditingId(null);
     setError('');
@@ -1122,6 +1137,7 @@ export default function AdvancedKeysPage({
     setView('assign');
   }
   function cancel() {
+    captureScrollPosition();
     setView('overview');
     setDraft(null);
     setKeys([]);
@@ -1144,6 +1160,7 @@ export default function AdvancedKeysPage({
         }
       ];
       validateAdvanced(next, model);
+      setUndoBindings(null);
       onChange(next);
       cancel();
       setNotice(
@@ -1157,6 +1174,49 @@ export default function AdvancedKeysPage({
       setError(e instanceof Error ? e.message : String(e));
     }
   }
+  function removeBindingById(id: string) {
+    if (busy) {
+      return;
+    }
+    const target = bindings.find(b => b.id === id);
+    if (!target || target.kind === 'UNKNOWN') {
+      return;
+    }
+    setUndoBindings(bindings);
+    onChange(bindings.filter(b => b.id !== id));
+    cancel();
+    setNotice(
+      tr('Removed {keys} from your profile draft. Save the profile to apply it to the keyboard.', {
+        keys: target.keys.map(label).join(' + ')
+      })
+    );
+  }
+  function clearAllBindings() {
+    if (busy) {
+      return;
+    }
+    const editableCount = bindings.filter(b => b.kind !== 'UNKNOWN').length;
+    if (editableCount === 0) {
+      return;
+    }
+    setUndoBindings(bindings);
+    onChange(bindings.filter(b => b.kind === 'UNKNOWN'));
+    cancel();
+    setNotice(
+      tr(
+        'Cleared all Advanced Keys from your profile draft. Save the profile to apply it to the keyboard.'
+      )
+    );
+  }
+  function handleUndoDelete() {
+    if (!undoBindings || busy) {
+      return;
+    }
+    onChange(undoBindings);
+    setUndoBindings(null);
+    setError('');
+    setNotice(tr('Restored deleted Advanced Keys to your profile draft.'));
+  }
   function applyPreset(preset: AdvancedPreset, confirmed = false) {
     try {
       const next = applyAdvancedPreset(bindings, preset, model);
@@ -1165,6 +1225,7 @@ export default function AdvancedKeysPage({
         setPresetReview(preset);
         return;
       }
+      setUndoBindings(null);
       onChange(next);
       setPresetReview(null);
       cancel();
@@ -1242,10 +1303,21 @@ export default function AdvancedKeysPage({
           {error}
         </p>
       )}
-      {view === 'overview' && notice && pending && (
-        <p className="ak-draft-notice" role="status">
-          {notice}
-        </p>
+      {view === 'overview' && notice && (pending || undoBindings !== null) && (
+        <div className="ak-draft-notice" role="status">
+          <span>{notice}</span>
+          {undoBindings !== null && (
+            <button
+              type="button"
+              className="secondary-button ak-undo-btn"
+              disabled={busy}
+              onClick={handleUndoDelete}
+            >
+              <RotateCcw size={14} />
+              {tr('Undo')}
+            </button>
+          )}
+        </div>
       )}
       {view === 'overview' ? (
         <>
@@ -1290,12 +1362,25 @@ export default function AdvancedKeysPage({
               </div>
             </article>
             <article className="ak-card ak-current">
-              <h2>
-                {tr('Configured Advanced Keys')}{' '}
-                <small>
-                  {bindings.length} / {ADVANCED_LIMIT}
-                </small>
-              </h2>
+              <div className="ak-current-head">
+                <h2>
+                  {tr('Configured Advanced Keys')}{' '}
+                  <small>
+                    {bindings.length} / {ADVANCED_LIMIT}
+                  </small>
+                </h2>
+                {bindings.some(b => b.kind !== 'UNKNOWN') && (
+                  <button
+                    type="button"
+                    className="secondary-button ak-clear-all-btn"
+                    disabled={busy}
+                    onClick={clearAllBindings}
+                  >
+                    <Trash2 size={14} />
+                    {tr('Clear all')}
+                  </button>
+                )}
+              </div>
               {!bindings.length ? (
                 <div className="ak-empty">
                   <p>
@@ -1310,32 +1395,55 @@ export default function AdvancedKeysPage({
               ) : (
                 <div className="ak-binding-list">
                   {bindings.map(b => (
-                    <button
+                    <div
                       key={b.id}
+                      className="ak-binding-row"
                       onMouseEnter={() => setHovered(b.keys[0])}
                       onMouseLeave={() => setHovered(null)}
-                      onFocus={() => setHovered(b.keys[0])}
-                      onBlur={() => setHovered(null)}
-                      onClick={() => assign(b.keys[0])}
                     >
-                      <AdvancedKeyIcon kind={b.kind} />
-                      <span>
-                        <strong>
-                          {b.kind === 'UNKNOWN' ? tr('Firmware binding') : tr(INFO[b.kind].title)}
-                        </strong>
+                      <button
+                        type="button"
+                        className="ak-binding-main"
+                        onFocus={() => setHovered(b.keys[0])}
+                        onBlur={() => setHovered(null)}
+                        onClick={() => assign(b.keys[0])}
+                      >
+                        <AdvancedKeyIcon kind={b.kind} />
                         <span>
-                          {b.keys.map(k => (
-                            <kbd key={k}>{label(k)}</kbd>
-                          ))}
+                          <strong>
+                            {b.kind === 'UNKNOWN' ? tr('Firmware binding') : tr(INFO[b.kind].title)}
+                          </strong>
+                          <span>
+                            {b.keys.map(k => (
+                              <kbd key={k}>{label(k)}</kbd>
+                            ))}
+                          </span>
+                          <small className="ak-binding-summary">
+                            {bindingSummary(b, tr, isWin68)}
+                          </small>
                         </span>
-                        <small className="ak-binding-summary">
-                          {bindingSummary(b, tr, isWin68)}
-                        </small>
-                      </span>
-                      <span className="ak-edit-label">
-                        {tr(b.kind === 'UNKNOWN' ? 'Read only' : 'Edit')}
-                      </span>
-                    </button>
+                        <span className="ak-edit-label">
+                          {tr(b.kind === 'UNKNOWN' ? 'Read only' : 'Edit')}
+                        </span>
+                      </button>
+                      {b.kind !== 'UNKNOWN' && (
+                        <button
+                          type="button"
+                          className="ak-quick-delete"
+                          disabled={busy}
+                          title={tr('Remove binding')}
+                          aria-label={tr('Remove {keys} binding', {
+                            keys: b.keys.map(label).join(' + ')
+                          })}
+                          onClick={e => {
+                            e.stopPropagation();
+                            removeBindingById(b.id);
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -1375,7 +1483,10 @@ export default function AdvancedKeysPage({
                 {tr('Cancel')}
               </button>
               {view === 'edit' && editingId && (
-                <button className="secondary-button ak-delete" onClick={() => setRemoveOpen(true)}>
+                <button
+                  className="secondary-button ak-delete"
+                  onClick={() => removeBindingById(editingId)}
+                >
                   <Trash2 size={15} />
                   {tr('Delete')}
                 </button>
@@ -1385,6 +1496,7 @@ export default function AdvancedKeysPage({
                 disabled={busy || (view === 'assign' && !ready)}
                 onClick={() => {
                   if (view === 'assign') {
+                    captureScrollPosition();
                     setDraft(newAdvanced(kind, assignedKeys, model));
                     setView('edit');
                   } else {
@@ -1803,8 +1915,9 @@ export default function AdvancedKeysPage({
               <button
                 className="apply-button"
                 onClick={() => {
-                  onChange(bindings.filter(b => b.id !== editingId));
-                  cancel();
+                  if (editingId) {
+                    removeBindingById(editingId);
+                  }
                 }}
               >
                 {tr('Remove binding')}

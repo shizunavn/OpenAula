@@ -29,7 +29,12 @@ function SwitchSelectorBoard({
                 type="button"
                 className={`switch-board-key ${selectedKeys.has(key.id) ? 'is-selected' : ''}`}
                 style={keyUnits(key.width ?? 1)}
-                onClick={() => onToggleKey(key.id)}
+                onClick={event => {
+                  if (event.detail > 0) {
+                    event.currentTarget.blur();
+                  }
+                  onToggleKey(key.id);
+                }}
                 aria-label={key.label}
               >
                 {switchImagesByKey[key.id] ? (
