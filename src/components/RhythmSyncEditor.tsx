@@ -11,6 +11,7 @@ import {
 import Hero68Preview from './Hero68Preview';
 import RgbColorPicker from './RgbColorPicker';
 import { RgbPreviewPanel, RgbToolbarSlot } from './RgbWorkspace';
+import { UndoRedoButtons, useUndoRedoState } from '../app/components/UndoRedoButtons';
 import {
   defaultRhythm,
   validateRhythm,
@@ -293,6 +294,38 @@ export default function RhythmSyncEditor({
     config.sideMode === 500 ||
     !!status?.supportedRhythmSideModes?.includes(config.sideMode);
   const keySupported = isWin68 || (status?.supportedRhythmModes?.includes(config.keyMode) ?? true);
+
+  function applyRhythmConfiguration(next: RhythmConfiguration) {
+    const validated = validateRhythm(next);
+    current.current = validated;
+    setError(null);
+    setConfig(validated);
+    if (xsydLive) {
+      updateXsydRhythmConfig(validated);
+    }
+    if (serviceLive && session && !demo) {
+      if (!(status?.supportedRhythmModes?.includes(validated.keyMode) ?? true)) {
+        setError(tr('Update the background app to use this rhythm mode.'));
+        return;
+      }
+      if (
+        !isWin68 &&
+        validated.sideMode !== 500 &&
+        !status?.supportedRhythmSideModes?.includes(validated.sideMode)
+      ) {
+        setError(
+          tr(
+            'This firmware does not support live side rhythm. Keys keep playing with the last supported settings.'
+          )
+        );
+        return;
+      }
+      queue.current?.stage(validated);
+    }
+  }
+
+  const rhythmHistory = useUndoRedoState(config, applyRhythmConfiguration, session ?? 'local');
+
   // Rejoin the service's current configuration. Merely opening this editor never
   // writes the old local draft or restarts audio capture.
   useEffect(() => {
@@ -403,35 +436,10 @@ export default function RhythmSyncEditor({
     []
   );
   function change(patch: Partial<RhythmConfiguration>) {
-    const next = validateRhythm({
+    applyRhythmConfiguration({
       ...current.current,
       ...patch
     });
-    current.current = next;
-    setError(null);
-    setConfig(next);
-    if (xsydLive) {
-      updateXsydRhythmConfig(next);
-    }
-    if (serviceLive && session && !demo) {
-      if (!(status?.supportedRhythmModes?.includes(next.keyMode) ?? true)) {
-        setError(tr('Update the background app to use this rhythm mode.'));
-        return;
-      }
-      if (
-        !isWin68 &&
-        next.sideMode !== 500 &&
-        !status?.supportedRhythmSideModes?.includes(next.sideMode)
-      ) {
-        setError(
-          tr(
-            'This firmware does not support live side rhythm. Keys keep playing with the last supported settings.'
-          )
-        );
-        return;
-      }
-      queue.current?.stage(next);
-    }
   }
   async function apply() {
     if (busy) {
@@ -564,6 +572,14 @@ export default function RhythmSyncEditor({
                   ? tr('Simulation')
                   : null}
         </span>
+        <UndoRedoButtons
+          canUndo={rhythmHistory.canUndo}
+          canRedo={rhythmHistory.canRedo}
+          onUndo={rhythmHistory.undo}
+          onRedo={rhythmHistory.redo}
+          disabled={busy || locked}
+          enableShortcuts={visible}
+        />
         {!applied && (
           <button
             type="button"

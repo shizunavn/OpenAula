@@ -15,6 +15,7 @@ import Hero68Preview from './Hero68Preview';
 import RgbColorPicker from './RgbColorPicker';
 import RgbKeyPaintTools from './RgbKeyPaintTools';
 import { RgbPreviewPanel, RgbToolbarSlot, RgbWorkspace } from './RgbWorkspace';
+import { UndoRedoButtons, useUndoRedoState } from '../app/components/UndoRedoButtons';
 import { FirmwareRgbPreview } from '../keyboard/rgbPreview';
 import { XsydFirmwareRgbPreview } from '../keyboard/xsydRgbPreview';
 import { useCustomRgbPlayback } from './useCustomRgbPlayback';
@@ -110,6 +111,10 @@ type RgbSettingsProps = {
   slot?: number;
   onTabChange?: (tab: RgbTab) => void;
   model?: HeroDeviceModelId;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 };
 export default function RgbSettingsPage(props: RgbSettingsProps) {
   const tachyon = useContext(TachyonContext);
@@ -150,7 +155,11 @@ function ActiveRgbSettingsPage({
   onEntered,
   slot = 0,
   onTabChange,
-  model: modelProp
+  model: modelProp,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo
 }: RgbSettingsProps) {
   const { tr } = useI18n();
   const contextModel = useContext(DeviceModelContext);
@@ -213,6 +222,8 @@ function ActiveRgbSettingsPage({
   const playback = useCustomRgbPlayback(value, onChange, onSetup, slot, tab === 'custom');
   const engineRef = useRef<FirmwareRgbPreview | XsydFirmwareRgbPreview | null>(null);
   const replayRef = useRef(replay);
+  const internalEditRef = useRef(false);
+  const mountedRef = useRef(false);
   const releases = useRef<
     {
       at: number;
@@ -272,6 +283,50 @@ function ActiveRgbSettingsPage({
     }
     void xsydDeviceManager.request(buildXsydRgbWriteFrame(nextZone)).catch(() => {});
   }
+
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    if (internalEditRef.current) {
+      internalEditRef.current = false;
+      return;
+    }
+    if (isWin68) {
+      saveXsydSavedRgb(slot, value);
+      pushWin68LiveZone(value[activeZone]);
+    }
+  }, [value]);
+
+  const localHistory = useUndoRedoState(
+    value,
+    next => {
+      onChange(next);
+      if (isWin68) {
+        saveXsydSavedRgb(slot, next);
+        pushWin68LiveZone(next[activeZone]);
+      }
+    },
+    slot
+  );
+  const hasExternalUndoRedo = Boolean(onUndo && onRedo);
+  const effectiveCanUndo = hasExternalUndoRedo ? Boolean(canUndo) : localHistory.canUndo;
+  const effectiveCanRedo = hasExternalUndoRedo ? Boolean(canRedo) : localHistory.canRedo;
+  const handleUndo = () => {
+    if (hasExternalUndoRedo) {
+      onUndo?.();
+    } else {
+      localHistory.undo();
+    }
+  };
+  const handleRedo = () => {
+    if (hasExternalUndoRedo) {
+      onRedo?.();
+    } else {
+      localHistory.redo();
+    }
+  };
 
   function change(patch: Partial<RgbZone>) {
     const nextMix = patch.mix !== undefined ? patch.mix : config.mix;
@@ -334,6 +389,7 @@ function ActiveRgbSettingsPage({
           }
         : {})
     };
+    internalEditRef.current = true;
     onChange(nextProfile);
     if (isWin68) {
       saveXsydSavedRgb(slot, nextProfile);
@@ -381,6 +437,7 @@ function ActiveRgbSettingsPage({
 
   function handleApplySavedPreset(item: SavedRgbPresetItem) {
     const nextProfile = structuredClone(item.profile);
+    internalEditRef.current = true;
     onChange(nextProfile);
     if (isWin68) {
       saveXsydSavedRgb(slot, nextProfile);
@@ -619,10 +676,23 @@ function ActiveRgbSettingsPage({
         onDeleteSavedPreset={handleDeleteSavedPreset}
         savedNotice={savedNotice}
         slot={slot}
+        canUndo={effectiveCanUndo}
+        canRedo={effectiveCanRedo}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        enableUndoShortcuts={!hasExternalUndoRedo}
       />
       {!customMode && !rhythmMode && (
         <>
           <RgbToolbarSlot>
+            <UndoRedoButtons
+              canUndo={effectiveCanUndo}
+              canRedo={effectiveCanRedo}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              disabled={busy || playback.busy}
+              enableShortcuts={!hasExternalUndoRedo}
+            />
             {(status?.enabled || playback.applied || xsydRhythmStats.active) && (
               <button
                 className="apply-button"
@@ -712,6 +782,7 @@ function ActiveRgbSettingsPage({
                           }
                         : {})
                     };
+                    internalEditRef.current = true;
                     onChange(nextProfile);
                     if (isWin68) {
                       saveXsydSavedRgb(slot, nextProfile);

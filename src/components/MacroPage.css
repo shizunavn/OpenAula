@@ -25,6 +25,7 @@
 }
 .macro-heading > div:last-child {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 .macro-page button {

@@ -19,6 +19,10 @@ export interface RgbPageProps {
   setRgb: React.Dispatch<React.SetStateAction<RgbProfile>>;
   setSaveState: React.Dispatch<React.SetStateAction<'idle' | 'sent'>>;
   RgbSettingsPage: React.LazyExoticComponent<RgbSettingsPageComponent>;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 function RgbPage({
@@ -32,7 +36,11 @@ function RgbPage({
   profileBusy,
   setRgb,
   setSaveState,
-  RgbSettingsPage
+  RgbSettingsPage,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo
 }: RgbPageProps) {
   const { tr } = useI18n();
   return (
@@ -51,6 +59,10 @@ function RgbPage({
           setRgb(next);
           setSaveState('idle');
         }}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={onUndo}
+        onRedo={onRedo}
       />
     </Suspense>
   );

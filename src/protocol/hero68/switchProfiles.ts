@@ -113,11 +113,11 @@ export const HERO68_SWITCH_PROFILES = [
 
 /**
  * Additional switch presets present in HERO 68 XS firmware v1.17 (`VA 0x08029D7E` indices 11..16):
- * - `59` (`0x3B`): Lingyun (`灵云轴`, 3.4 mm)
- * - `60` (`0x3C`): Snow God / Xue Shen (`雪神轴`, 3.3 mm, dual light guide, 28±5gf, 85–550Gs)
- * - `37` (`0x25`): Ash Wood (`灰木轴`, 3.4 mm)
- * - `61` (`0x3D`): Nick Magnetic (`尼克磁轴`, 3.4 mm)
- * - `62` (`0x3E`): Ice Jade (`冰玉轴`, 3.4 mm, single light guide, 28±5gf, 80–480Gs)
+ * - `59` (`0x3B`): Lingyun (3.4 mm)
+ * - `60` (`0x3C`): Snow God (3.3 mm, dual light guide, 28±5gf, 85–550Gs)
+ * - `37` (`0x25`): Ash Wood (3.4 mm)
+ * - `61` (`0x3D`): Nick Magnetic (3.4 mm)
+ * - `62` (`0x3E`): Ice Jade (3.4 mm, single light guide, 28±5gf, 80–480Gs)
  * - `76` (`0x4C`): HERO 68 XS Custom (`ID 76`, 3.4 mm)
  */
 export const HERO68_XS_SWITCH_PROFILES = [
@@ -125,7 +125,7 @@ export const HERO68_XS_SWITCH_PROFILES = [
     id: 'switch-60',
     firmwareId: 60,
     xsydFirmwareId: 1,
-    name: 'Snow God (Xue Shen)',
+    name: 'Snow God',
     color: '#f8f8ff',
     travelMm: 3.3
   },

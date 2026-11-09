@@ -29,6 +29,7 @@ import {
   useSharedHallService,
   type GamepadStatus
 } from '../protocol/gamepadService';
+import { UndoRedoButtons, useUndoRedoState } from '../app/components/UndoRedoButtons';
 import { GamepadAccessGateOverlay } from './gamepad/GamepadAccessGateOverlay';
 import { GamepadConfigTab } from './gamepad/GamepadConfigTab';
 import { GamepadSetupTab } from './gamepad/GamepadSetupTab';
@@ -60,6 +61,14 @@ export default function GamepadPage({
 }) {
   const { tr: t } = useI18n();
   const [config, setConfig] = useState(() => loadGamepadDraft(slot));
+  const gamepadHistory = useUndoRedoState(
+    config,
+    next => {
+      restoreFromService.current = false;
+      setConfig(next);
+    },
+    slot
+  );
   const [tab, setTab] = useState<'setup' | 'configuration' | 'tester'>('setup');
   const [selected, setSelected] = useState<string | null>(null);
   const [status, setStatus] = useState<GamepadStatus | null>(null);
@@ -548,6 +557,14 @@ export default function GamepadPage({
             <Gamepad2 size={23} /> Gamepad <small>P{slot + 1}</small>
           </h2>
           <div className="gp-tabs" role="tablist" aria-label="Gamepad">
+            <UndoRedoButtons
+              canUndo={gamepadHistory.canUndo}
+              canRedo={gamepadHistory.canRedo}
+              onUndo={gamepadHistory.undo}
+              onRedo={gamepadHistory.redo}
+              disabled={disabled}
+              enableShortcuts
+            />
             {(['setup', 'configuration', 'tester'] as const).map((id, index) => (
               <button
                 role="tab"

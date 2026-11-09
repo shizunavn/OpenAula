@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { SwitchSelectorBoard } from '../app/components/SwitchSelectorBoard';
 import { SwitchStemMenuIcon } from '../app/components/SwitchStemMenuIcon';
+import { UndoRedoButtons } from '../app/components/UndoRedoButtons';
 import { switchOptionsForModel, type SwitchOption, type SwitchTone } from '../app/switchAssets';
 import { useT } from '../i18n';
 import type { HeroDeviceModelId } from '../keyboard/devices';
@@ -25,6 +26,10 @@ export type SwitchSelectorPageProps = {
   profileBusy: boolean;
   saveState: 'idle' | 'sent';
   onSave: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 };
 export function SwitchSelectorPage({
   model,
@@ -45,7 +50,11 @@ export function SwitchSelectorPage({
   canSave,
   profileBusy,
   saveState,
-  onSave
+  onSave,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo
 }: SwitchSelectorPageProps) {
   const tr = useT();
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
@@ -87,6 +96,16 @@ export function SwitchSelectorPage({
   return (
     <div className="page settings-page switch-selector-page page-enter">
       <div className="switch-page-actions">
+        {onUndo && onRedo && (
+          <UndoRedoButtons
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={onUndo}
+            onRedo={onRedo}
+            disabled={profileBusy}
+            enableShortcuts
+          />
+        )}
         <button className="apply-button" onClick={onSave} disabled={!canSave || profileBusy}>
           {saveState === 'sent' ? tr('Saved') : tr('Save')}
         </button>

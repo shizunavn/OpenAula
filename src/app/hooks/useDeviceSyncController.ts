@@ -1,6 +1,7 @@
 import {
   useEffect,
   useRef,
+  useState,
   type Dispatch,
   type MutableRefObject,
   type SetStateAction
@@ -56,6 +57,7 @@ import {
   saveXsydAdvancedBindings,
   saveXsydRemapChanges,
   saveXsydRgbProfile,
+  saveXsydSavedRgb,
   xsydDeviceManager
 } from '../../protocol/xsyd/device';
 import { rgbService } from '../../protocol/rgbService';
@@ -89,6 +91,16 @@ export type UseDeviceSyncControllerOptions = {
   activeSettingsPage: string;
   activeRgbTab: RgbTab;
   selectedKeys: Set<string>;
+  setSelectedKeys?: Dispatch<SetStateAction<Set<string>>>;
+  actuation?: number;
+  rapidTrigger?: boolean;
+  splitSensitivity?: boolean;
+  rapidSensitivity?: number;
+  pressSensitivity?: number;
+  releaseSensitivity?: number;
+  deadzoneEnabled?: boolean;
+  topDeadzone?: number;
+  bottomDeadzone?: number;
   selectedSwitchId: SwitchTone;
   assignedSwitchesByKey: Record<string, SwitchTone>;
   actuationByKey: Record<string, number>;
@@ -180,6 +192,16 @@ export function useDeviceSyncController({
   activeSettingsPage,
   activeRgbTab,
   selectedKeys,
+  setSelectedKeys,
+  actuation = 1.6,
+  rapidTrigger = false,
+  splitSensitivity = false,
+  rapidSensitivity = 0.65,
+  pressSensitivity = 0.5,
+  releaseSensitivity = 0.55,
+  deadzoneEnabled = true,
+  topDeadzone = 0,
+  bottomDeadzone = 0,
   selectedSwitchId,
   assignedSwitchesByKey,
   actuationByKey,
@@ -254,6 +276,7 @@ export function useDeviceSyncController({
   const isAnyDeviceConnected = () => hero68DeviceManager.connected || xsydDeviceManager.connected;
   function currentProfileDraft(): ProfileDraft {
     return {
+      selectedKeys: Array.from(selectedKeys),
       assignedSwitchesByKey,
       actuationByKey,
       rapidTriggerByKey,
@@ -273,13 +296,252 @@ export function useDeviceSyncController({
       advancedBaseline,
       dirtyKeys: Array.from(dirtyKeys),
       dirtyRemaps: Array.from(dirtyRemaps),
-      remapBaseline: remapBaselineRef.current
+      remapBaseline: remapBaselineRef.current,
+      uiScalarValues: {
+        actuation,
+        rapidTrigger,
+        splitSensitivity,
+        rapidSensitivity,
+        pressSensitivity,
+        releaseSensitivity,
+        deadzoneEnabled,
+        topDeadzone,
+        bottomDeadzone,
+        selectedSwitchId
+      }
     };
   }
   function restoreProfileDraft(draft?: ProfileDraft, keyIds: readonly string[] = modelKeyIds) {
     restoreWorkspaceDraft(draft, keyIds);
     restorePerformanceFromDraft(draft, keyIds);
   }
+  type SlotHistoryEntry = {
+    past: ProfileDraft[];
+    future: ProfileDraft[];
+    committed: ProfileDraft | null;
+    committedFp: string;
+    pendingBeforeBurst: ProfileDraft | null;
+  };
+  const slotHistoriesRef = useRef<Record<ProfileSlot, SlotHistoryEntry>>({
+    0: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null },
+    1: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null },
+    2: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null }
+  });
+  const suppressHistoryRef = useRef(false);
+  const pointerDownRef = useRef(false);
+  const burstTimerRef = useRef<number | null>(null);
+  const [, setHistoryTick] = useState(0);
+
+  function draftEditableFingerprint(draft: ProfileDraft): string {
+    return JSON.stringify({
+      s: draft.assignedSwitchesByKey,
+      a: draft.actuationByKey,
+      rt: draft.rapidTriggerByKey,
+      sp: draft.splitSensitivityByKey,
+      rs: draft.rapidSensitivityByKey,
+      ps: draft.pressSensitivityByKey,
+      rls: draft.releaseSensitivityByKey,
+      dz: draft.deadzoneEnabledByKey,
+      tdz: draft.topDeadzoneByKey,
+      bdz: draft.bottomDeadzoneByKey,
+      rm: draft.remapLayers,
+      ab: draft.advancedBindings,
+      rgb: draft.rgb,
+      dk: draft.dirtyKeys,
+      dr: draft.dirtyRemaps,
+      ui: draft.uiScalarValues
+    });
+  }
+
+  function clearBurstTimer() {
+    if (burstTimerRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(burstTimerRef.current);
+      burstTimerRef.current = null;
+    }
+  }
+
+  function flushPendingBurst(slot: ProfileSlot, latestDraft: ProfileDraft, latestFp: string) {
+    clearBurstTimer();
+    const entry = slotHistoriesRef.current[slot];
+    if (entry.pendingBeforeBurst) {
+      entry.past = [...entry.past.slice(-49), entry.pendingBeforeBurst];
+      entry.pendingBeforeBurst = null;
+    }
+    entry.committed = structuredClone(latestDraft);
+    entry.committedFp = latestFp;
+    setHistoryTick(v => v + 1);
+  }
+
+  function resetSlotHistoryBaseline(slot: ProfileSlot, baselineDraft?: ProfileDraft) {
+    clearBurstTimer();
+    const snap = structuredClone(baselineDraft ?? currentProfileDraft());
+    const entry = slotHistoriesRef.current[slot];
+    entry.past = [];
+    entry.future = [];
+    entry.pendingBeforeBurst = null;
+    entry.committed = snap;
+    entry.committedFp = draftEditableFingerprint(snap);
+    setHistoryTick(v => v + 1);
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const onDown = (event: PointerEvent) => {
+      if (event.target instanceof HTMLInputElement && event.target.type === 'color') {
+        return;
+      }
+      pointerDownRef.current = true;
+    };
+    const onUp = () => {
+      if (!pointerDownRef.current) {
+        return;
+      }
+      pointerDownRef.current = false;
+      const entry = slotHistoriesRef.current[profileSlot];
+      if (entry.pendingBeforeBurst) {
+        clearBurstTimer();
+        burstTimerRef.current = window.setTimeout(() => {
+          const snap = currentProfileDraft();
+          flushPendingBurst(profileSlot, snap, draftEditableFingerprint(snap));
+        }, 120);
+      }
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointercancel', onUp, true);
+    window.addEventListener('blur', onUp);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+      window.removeEventListener('blur', onUp);
+    };
+  });
+
+  useEffect(() => {
+    const draft = currentProfileDraft();
+    const fp = draftEditableFingerprint(draft);
+    const entry = slotHistoriesRef.current[profileSlot];
+    if (suppressHistoryRef.current || entry.committed === null) {
+      suppressHistoryRef.current = false;
+      clearBurstTimer();
+      entry.pendingBeforeBurst = null;
+      entry.committed = structuredClone(draft);
+      entry.committedFp = fp;
+      setHistoryTick(v => v + 1);
+      return;
+    }
+    if (fp === entry.committedFp) {
+      return;
+    }
+    if (!entry.pendingBeforeBurst) {
+      entry.pendingBeforeBurst = entry.committed;
+      entry.future = [];
+      setHistoryTick(v => v + 1);
+    }
+    clearBurstTimer();
+    if (!pointerDownRef.current && typeof window !== 'undefined') {
+      burstTimerRef.current = window.setTimeout(() => {
+        flushPendingBurst(profileSlot, draft, fp);
+      }, 240);
+    }
+  }, [
+    profileSlot,
+    assignedSwitchesByKey,
+    actuationByKey,
+    rapidTriggerByKey,
+    splitSensitivityByKey,
+    rapidSensitivityByKey,
+    pressSensitivityByKey,
+    releaseSensitivityByKey,
+    deadzoneEnabledByKey,
+    topDeadzoneByKey,
+    bottomDeadzoneByKey,
+    remapLayers,
+    rgb,
+    advancedBindings,
+    dirtyKeys,
+    dirtyRemaps,
+    actuation,
+    rapidTrigger,
+    splitSensitivity,
+    rapidSensitivity,
+    pressSensitivity,
+    releaseSensitivity,
+    deadzoneEnabled,
+    topDeadzone,
+    bottomDeadzone,
+    selectedSwitchId
+  ]);
+
+  function applyHistorySnapshot(target: ProfileDraft) {
+    suppressHistoryRef.current = true;
+    const cloned = structuredClone(target);
+    if (setSelectedKeys && cloned.selectedKeys?.length) {
+      setSelectedKeys(new Set(cloned.selectedKeys));
+    }
+    restorePerformanceFromDraft(cloned, modelKeyIds);
+    if (cloned.remapLayers) {
+      setRemapLayers(cloned.remapLayers);
+    }
+    setDirtyRemaps(new Set(cloned.dirtyRemaps ?? []));
+    setAdvancedBindings(cloned.advancedBindings ?? []);
+    if (cloned.rgb) {
+      setRgb(cloned.rgb);
+      if (isWin68HeMaxModel(deviceModel)) {
+        saveXsydSavedRgb(profileSlot, cloned.rgb);
+      }
+    }
+    setSaveState('idle');
+    setDeviceActionError(null);
+  }
+
+  function undoProfileChange() {
+    if (profileBusyRef.current) {
+      return;
+    }
+    const entry = slotHistoriesRef.current[profileSlot];
+    if (entry.pendingBeforeBurst) {
+      const snap = currentProfileDraft();
+      flushPendingBurst(profileSlot, snap, draftEditableFingerprint(snap));
+    }
+    if (entry.past.length === 0 || !entry.committed) {
+      return;
+    }
+    const previous = entry.past[entry.past.length - 1];
+    entry.past = entry.past.slice(0, -1);
+    entry.future = [...entry.future, structuredClone(entry.committed)];
+    const prevClone = structuredClone(previous);
+    entry.committed = prevClone;
+    entry.committedFp = draftEditableFingerprint(prevClone);
+    applyHistorySnapshot(prevClone);
+    setHistoryTick(v => v + 1);
+  }
+
+  function redoProfileChange() {
+    if (profileBusyRef.current) {
+      return;
+    }
+    const entry = slotHistoriesRef.current[profileSlot];
+    if (entry.future.length === 0 || !entry.committed) {
+      return;
+    }
+    const next = entry.future[entry.future.length - 1];
+    entry.future = entry.future.slice(0, -1);
+    entry.past = [...entry.past, structuredClone(entry.committed)];
+    const nextClone = structuredClone(next);
+    entry.committed = nextClone;
+    entry.committedFp = draftEditableFingerprint(nextClone);
+    applyHistorySnapshot(nextClone);
+    setHistoryTick(v => v + 1);
+  }
+
+  const activeSlotHistory = slotHistoriesRef.current[profileSlot];
+  const canUndo =
+    activeSlotHistory.past.length > 0 || activeSlotHistory.pendingBeforeBurst !== null;
+  const canRedo = activeSlotHistory.future.length > 0;
   function buildPersistedSnapshot(): PersistedOpenHeroState {
     return {
       activeRail,
@@ -518,6 +780,7 @@ export function useDeviceSyncController({
     draft?: ProfileDraft,
     targetModel: HeroDeviceModelId = deviceModel
   ) {
+    suppressHistoryRef.current = true;
     setDeviceActionError(null);
     setDeviceReadState('reading');
     setLoadedProfileSlot(null);
@@ -602,6 +865,8 @@ export function useDeviceSyncController({
               })
             )
           );
+          suppressHistoryRef.current = true;
+          resetSlotHistoryBaseline(slot);
           setLoadedProfileSlot(slot);
           setSaveState('idle');
           setDeviceReadState('success');
@@ -679,6 +944,8 @@ export function useDeviceSyncController({
           })
         )
       );
+      suppressHistoryRef.current = true;
+      resetSlotHistoryBaseline(slot);
       setLoadedProfileSlot(slot);
       setSaveState('idle');
       setDeviceReadState('success');
@@ -710,6 +977,7 @@ export function useDeviceSyncController({
       ...previous,
       [profileSlot]: currentProfileDraft()
     }));
+    suppressHistoryRef.current = true;
     const draft = profileDrafts[slot];
     restoreProfileDraft(draft);
     setProfileSlot(slot);
@@ -1044,6 +1312,10 @@ export function useDeviceSyncController({
     exportProfile,
     resetProfileToDefaults,
     discardProfileDraftChanges,
+    canUndo,
+    canRedo,
+    undoProfileChange,
+    redoProfileChange,
     handleSaveAll
   };
 }

@@ -17,6 +17,7 @@ import Hero68Preview from './Hero68Preview';
 import RgbColorPicker from './RgbColorPicker';
 import RgbKeyPaintTools, { RgbKeySelectionTools } from './RgbKeyPaintTools';
 import { RgbPreviewPanel, RgbToolbarSlot } from './RgbWorkspace';
+import { UndoRedoButtons } from '../app/components/UndoRedoButtons';
 import {
   CUSTOM_RGB_DIRECTIONS,
   CUSTOM_RGB_EFFECTS,
@@ -150,6 +151,11 @@ type Props = {
   onDeleteSavedPreset?: (id: string) => void;
   savedNotice?: string | null;
   slot?: number;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  enableUndoShortcuts?: boolean;
 };
 export default function CustomRgbEditor({
   value,
@@ -164,7 +170,12 @@ export default function CustomRgbEditor({
   onApplySavedPreset,
   onDeleteSavedPreset,
   savedNotice,
-  slot = 1
+  slot = 1,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
+  enableUndoShortcuts = false
 }: Props) {
   const { tr } = useI18n();
   const model = useContext(DeviceModelContext);
@@ -486,12 +497,15 @@ export default function CustomRgbEditor({
     });
   }
   useEffect(() => {
-    engineRef.current?.configure(value);
-    if (engineRef.current && !live && !paused) {
-      const nextRendered = engineRef.current.frame();
-      setFrame(nextRendered);
-      if (Object.values(nextRendered.keys).some(c => c !== '#000000')) {
-        publishLightingFrame(nextRendered.keys);
+    if (engineRef.current) {
+      engineRef.current.configure(value);
+      if (!live && !paused) {
+        engineRef.current.advance(Math.max(110, engineRef.current.milliseconds + 110));
+        const nextRendered = engineRef.current.frame();
+        setFrame(nextRendered);
+        if (Object.values(nextRendered.keys).some(c => c !== '#000000')) {
+          publishLightingFrame(nextRendered.keys);
+        }
       }
     }
   }, [value, live, paused]);
@@ -776,6 +790,16 @@ export default function CustomRgbEditor({
                     ? tr('Simulation')
                     : null}
         </span>
+        {onUndo && onRedo && (
+          <UndoRedoButtons
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={onUndo}
+            onRedo={onRedo}
+            disabled={disabled}
+            enableShortcuts={visible && enableUndoShortcuts}
+          />
+        )}
         {!applied && (
           <button
             className="apply-button"

@@ -27,7 +27,7 @@ test('capture preserves the twelve firmware IDs while the retired profile has no
     [60, 62, 59, 37, 61, 76]
   )
   assert.equal(switches.switchProfileId(60), "switch-60")
-  assert.equal(switches.switchProfileLabel("switch-60"), "Snow God (Xue Shen)")
+  assert.equal(switches.switchProfileLabel("switch-60"), "Snow God")
   assert.equal(switches.switchProfileLabel("switch-62"), "Ice Jade")
   assert.equal(switches.switchProfileLabel("switch-59"), "Lingyun")
   assert.equal(switches.switchProfileLabel("switch-37"), "Ash Wood")

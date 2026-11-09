@@ -29,6 +29,7 @@ import {
 } from '../protocol/hero68/advancedPresets';
 import { encodeXsydDksStateRow } from '../protocol/xsyd/advanced';
 import { AppSelect } from '../app/components/AppSelect';
+import { UndoRedoButtons, useUndoRedoState } from '../app/components/UndoRedoButtons';
 import './AdvancedKeysPage.css';
 /**
  * Advanced key binding modes supported by HERO68/HERO84 and WIN 68 HE MAX firmware (up to ADVANCED_LIMIT bindings per profile):
@@ -1028,6 +1029,11 @@ export default function AdvancedKeysPage({
   const [error, setError] = useState('');
   const [removeOpen, setRemoveOpen] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
+  const draftHistory = useUndoRedoState<AdvancedBinding | null>(
+    draft,
+    next => setDraft(next),
+    `${view}:${editingId ?? kind}:${draft?.keys.join(',') ?? ''}`
+  );
   useEffect(() => {
     if (error) {
       page.current?.querySelector('[role="alert"]')?.scrollIntoView({
@@ -1303,22 +1309,7 @@ export default function AdvancedKeysPage({
           {error}
         </p>
       )}
-      {view === 'overview' && notice && (pending || undoBindings !== null) && (
-        <div className="ak-draft-notice" role="status">
-          <span>{notice}</span>
-          {undoBindings !== null && (
-            <button
-              type="button"
-              className="secondary-button ak-undo-btn"
-              disabled={busy}
-              onClick={handleUndoDelete}
-            >
-              <RotateCcw size={14} />
-              {tr('Undo')}
-            </button>
-          )}
-        </div>
-      )}
+
       {view === 'overview' ? (
         <>
           <div className="ak-page-heading">
@@ -1400,13 +1391,17 @@ export default function AdvancedKeysPage({
                       className="ak-binding-row"
                       onMouseEnter={() => setHovered(b.keys[0])}
                       onMouseLeave={() => setHovered(null)}
+                      onClick={() => assign(b.keys[0])}
                     >
                       <button
                         type="button"
                         className="ak-binding-main"
                         onFocus={() => setHovered(b.keys[0])}
                         onBlur={() => setHovered(null)}
-                        onClick={() => assign(b.keys[0])}
+                        onClick={e => {
+                          e.stopPropagation();
+                          assign(b.keys[0]);
+                        }}
                       >
                         <AdvancedKeyIcon kind={b.kind} />
                         <span>
@@ -1422,27 +1417,37 @@ export default function AdvancedKeysPage({
                             {bindingSummary(b, tr, isWin68)}
                           </small>
                         </span>
-                        <span className="ak-edit-label">
-                          {tr(b.kind === 'UNKNOWN' ? 'Read only' : 'Edit')}
-                        </span>
                       </button>
-                      {b.kind !== 'UNKNOWN' && (
+                      <div className="ak-binding-actions">
+                        {b.kind !== 'UNKNOWN' && (
+                          <button
+                            type="button"
+                            className="ak-inline-delete"
+                            disabled={busy}
+                            title={tr('Remove binding')}
+                            aria-label={tr('Remove {keys} binding', {
+                              keys: b.keys.map(label).join(' + ')
+                            })}
+                            onClick={e => {
+                              e.stopPropagation();
+                              removeBindingById(b.id);
+                            }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className="ak-quick-delete"
+                          className="ak-edit-label"
                           disabled={busy}
-                          title={tr('Remove binding')}
-                          aria-label={tr('Remove {keys} binding', {
-                            keys: b.keys.map(label).join(' + ')
-                          })}
                           onClick={e => {
                             e.stopPropagation();
-                            removeBindingById(b.id);
+                            assign(b.keys[0]);
                           }}
                         >
-                          <Trash2 size={15} />
+                          {tr(b.kind === 'UNKNOWN' ? 'Read only' : 'Edit')}
                         </button>
-                      )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1479,6 +1484,15 @@ export default function AdvancedKeysPage({
               ]}
             />
             <div>
+              {view === 'edit' && (
+                <UndoRedoButtons
+                  canUndo={draftHistory.canUndo}
+                  canRedo={draftHistory.canRedo}
+                  onUndo={draftHistory.undo}
+                  onRedo={draftHistory.redo}
+                  disabled={busy}
+                />
+              )}
               <button className="secondary-button" onClick={cancel}>
                 {tr('Cancel')}
               </button>

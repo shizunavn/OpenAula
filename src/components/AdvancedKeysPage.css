@@ -83,7 +83,7 @@
 }
 .ak-mode-list > button,
 .ak-binding-list > button,
-.ak-binding-row > .ak-binding-main {
+.ak-binding-row {
   display: flex;
   align-items: center;
   gap: 15px;
@@ -101,7 +101,7 @@
 }
 .ak-mode-list > button:hover,
 .ak-binding-list > button:hover,
-.ak-binding-row > .ak-binding-main:hover {
+.ak-binding-row:hover {
   background: #363c3f;
   border-color: #5c6569;
 }
@@ -184,29 +184,42 @@
   margin-top: 20px;
 }
 .ak-binding-row {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
+  justify-content: space-between;
 }
 .ak-binding-row > .ak-binding-main {
+  display: flex;
+  align-items: center;
+  gap: 15px;
   flex: 1;
   min-width: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
 }
-.ak-binding-list button .ak-edit-label {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--ak-muted);
-  padding-left: 8px;
-  flex-shrink: 0;
+.ak-binding-row > .ak-binding-main > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
-.ak-quick-delete {
+.ak-binding-actions {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 42px;
+  gap: 6px;
+  margin-left: 12px;
   flex-shrink: 0;
-  border-radius: 7px;
-  background: var(--ak-row);
+}
+.ak-inline-delete {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
   border: 1px solid transparent;
   color: #9aa7ae;
   cursor: pointer;
@@ -215,15 +228,29 @@
     border-color 0.12s,
     color 0.12s;
 }
-.ak-quick-delete svg {
+.ak-binding-list .ak-inline-delete svg {
   width: 16px;
   height: 16px;
   color: currentColor;
 }
-.ak-quick-delete:hover:not(:disabled) {
-  background: #422b2b;
-  border-color: #824945;
+.ak-inline-delete:hover:not(:disabled) {
+  background: rgba(235, 106, 94, 0.15);
+  border-color: rgba(235, 106, 94, 0.45);
   color: #ffb4ab;
+}
+.ak-edit-label {
+  background: none;
+  border: 0;
+  padding: 4px 6px;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ak-muted);
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.ak-binding-row:hover .ak-edit-label {
+  color: #e6eef2;
 }
 .ak-mode-list > button.is-unsupported {
   opacity: 0.62;

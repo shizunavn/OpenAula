@@ -31,6 +31,7 @@ import { RailItem } from './RailItem';
 import { RapidTriggerMenuIcon } from './RapidTriggerMenuIcon';
 import { SidebarItem } from './SidebarItem';
 import { SwitchStemMenuIcon } from './SwitchStemMenuIcon';
+import { UndoRedoButtons } from './UndoRedoButtons';
 
 export type AppShellProps = {
   activeRail: 'keyboard' | 'settings' | 'help';
@@ -52,6 +53,10 @@ export type AppShellProps = {
   canSaveAll: boolean;
   saveState: 'idle' | 'sent';
   onSaveAll: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
   children: ReactNode;
 };
 
@@ -75,6 +80,10 @@ export function AppShell({
   canSaveAll,
   saveState,
   onSaveAll,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
   children
 }: AppShellProps) {
   const tr = useT();
@@ -322,17 +331,29 @@ export function AppShell({
               ) : showKeyboardArea && activePage === 'macros' ? (
                 <span className="profile-status">{tr('Local + HERO68 macro library')}</span>
               ) : (
-                <button
-                  className="apply-button"
-                  onClick={onSaveAll}
-                  disabled={!deviceConnected || profileBusy || !canSaveAll}
-                >
-                  {profileBusy
-                    ? tr('Syncing…')
-                    : saveState === 'sent'
-                      ? tr('Saved to profile {slot}', { slot: profileSlot })
-                      : tr('Save to profile {slot}', { slot: profileSlot })}
-                </button>
+                <>
+                  {showKeyboardArea && activePage !== 'stream' && onUndo && onRedo && (
+                    <UndoRedoButtons
+                      canUndo={canUndo}
+                      canRedo={canRedo}
+                      onUndo={onUndo}
+                      onRedo={onRedo}
+                      disabled={profileBusy}
+                      enableShortcuts
+                    />
+                  )}
+                  <button
+                    className="apply-button"
+                    onClick={onSaveAll}
+                    disabled={!deviceConnected || profileBusy || !canSaveAll}
+                  >
+                    {profileBusy
+                      ? tr('Syncing…')
+                      : saveState === 'sent'
+                        ? tr('Saved to profile {slot}', { slot: profileSlot })
+                        : tr('Save to profile {slot}', { slot: profileSlot })}
+                  </button>
+                </>
               )}
             </div>
           </header>

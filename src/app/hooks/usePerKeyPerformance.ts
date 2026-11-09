@@ -449,23 +449,60 @@ export function usePerKeyPerformance({
     draft: ProfileDraft | undefined,
     keyIds: readonly string[] = modelKeyIds
   ) {
-    setAssignedSwitchesByKey(
-      mergePerKeyState(
-        draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined,
-        'white' as SwitchTone,
-        keyIds
-      )
+    const nextSwitches = mergePerKeyState(
+      draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined,
+      'white' as SwitchTone,
+      keyIds
     );
-    setActuationByKey(mergePerKeyState(draft?.actuationByKey, 1.6, keyIds));
-    setRapidTriggerByKey(mergePerKeyState(draft?.rapidTriggerByKey, false, keyIds));
-    setSplitSensitivityByKey(mergePerKeyState(draft?.splitSensitivityByKey, false, keyIds));
-    setRapidSensitivityByKey(mergePerKeyState(draft?.rapidSensitivityByKey, 0.65, keyIds));
-    setPressSensitivityByKey(mergePerKeyState(draft?.pressSensitivityByKey, 0.5, keyIds));
-    setReleaseSensitivityByKey(mergePerKeyState(draft?.releaseSensitivityByKey, 0.55, keyIds));
-    setDeadzoneEnabledByKey(mergePerKeyState(draft?.deadzoneEnabledByKey, true, keyIds));
-    setTopDeadzoneByKey(mergePerKeyState(draft?.topDeadzoneByKey, 0, keyIds));
-    setBottomDeadzoneByKey(mergePerKeyState(draft?.bottomDeadzoneByKey, 0, keyIds));
+    const nextActuation = mergePerKeyState(draft?.actuationByKey, 1.6, keyIds);
+    const nextRapidTrigger = mergePerKeyState(draft?.rapidTriggerByKey, false, keyIds);
+    const nextSplitSensitivity = mergePerKeyState(draft?.splitSensitivityByKey, false, keyIds);
+    const nextRapidSensitivity = mergePerKeyState(draft?.rapidSensitivityByKey, 0.65, keyIds);
+    const nextPressSensitivity = mergePerKeyState(draft?.pressSensitivityByKey, 0.5, keyIds);
+    const nextReleaseSensitivity = mergePerKeyState(draft?.releaseSensitivityByKey, 0.55, keyIds);
+    const nextDeadzoneEnabled = mergePerKeyState(draft?.deadzoneEnabledByKey, true, keyIds);
+    const nextTopDeadzone = mergePerKeyState(draft?.topDeadzoneByKey, 0, keyIds);
+    const nextBottomDeadzone = mergePerKeyState(draft?.bottomDeadzoneByKey, 0, keyIds);
+
+    setAssignedSwitchesByKey(nextSwitches);
+    setActuationByKey(nextActuation);
+    setRapidTriggerByKey(nextRapidTrigger);
+    setSplitSensitivityByKey(nextSplitSensitivity);
+    setRapidSensitivityByKey(nextRapidSensitivity);
+    setPressSensitivityByKey(nextPressSensitivity);
+    setReleaseSensitivityByKey(nextReleaseSensitivity);
+    setDeadzoneEnabledByKey(nextDeadzoneEnabled);
+    setTopDeadzoneByKey(nextTopDeadzone);
+    setBottomDeadzoneByKey(nextBottomDeadzone);
     setDirtyKeys(new Set(draft?.dirtyKeys ?? []));
+
+    const refKey =
+      Array.from(selectedKeys)[0] ?? draft?.dirtyKeys?.[draft.dirtyKeys.length - 1] ?? keyIds[0];
+    if (draft?.uiScalarValues) {
+      setActuation(draft.uiScalarValues.actuation);
+      setRapidTrigger(draft.uiScalarValues.rapidTrigger);
+      setSplitSensitivity(draft.uiScalarValues.splitSensitivity);
+      setRapidSensitivity(draft.uiScalarValues.rapidSensitivity);
+      setPressSensitivity(draft.uiScalarValues.pressSensitivity);
+      setReleaseSensitivity(draft.uiScalarValues.releaseSensitivity);
+      setDeadzoneEnabled(draft.uiScalarValues.deadzoneEnabled);
+      setTopDeadzone(draft.uiScalarValues.topDeadzone);
+      setBottomDeadzone(draft.uiScalarValues.bottomDeadzone);
+      setSelectedSwitchId(normalizeSwitchProfileId(draft.uiScalarValues.selectedSwitchId));
+    } else if (refKey) {
+      setActuation(nextActuation[refKey] ?? 1.6);
+      setRapidTrigger(nextRapidTrigger[refKey] ?? false);
+      setSplitSensitivity(nextSplitSensitivity[refKey] ?? false);
+      setRapidSensitivity(nextRapidSensitivity[refKey] ?? 0.65);
+      setPressSensitivity(nextPressSensitivity[refKey] ?? 0.5);
+      setReleaseSensitivity(nextReleaseSensitivity[refKey] ?? 0.55);
+      setDeadzoneEnabled(nextDeadzoneEnabled[refKey] ?? true);
+      setTopDeadzone(nextTopDeadzone[refKey] ?? 0);
+      setBottomDeadzone(nextBottomDeadzone[refKey] ?? 0);
+      if (nextSwitches[refKey]) {
+        setSelectedSwitchId(normalizeSwitchProfileId(nextSwitches[refKey]));
+      }
+    }
   }
   function applyHydratedPerformance(
     hydrated: Map<string, HydratedKeySettings>,

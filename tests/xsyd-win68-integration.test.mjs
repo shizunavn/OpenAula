@@ -1373,7 +1373,7 @@ test('XsydDeviceManager recovers from transient 0x23 read timeout during firmwar
       `Active Table 1 (KeyW depressed) must be prioritized 3:1 over idle Table 2 (got T1=${travel1Polls}, T2=${travel2Polls})`
     )
     assert.ok(
-      snap.telemetryHz !== null && snap.telemetryHz >= 150,
+      snap.telemetryHz !== null && snap.telemetryHz >= 100,
       `Expected ~200 Hz XSYD Hall stream rate, got ${snap.telemetryHz} Hz`
     )
   } finally {

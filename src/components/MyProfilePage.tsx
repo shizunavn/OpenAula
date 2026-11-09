@@ -116,23 +116,6 @@ export default function MyProfilePage({
         </div>
       </div>
 
-      {notice && (
-        <div className="profile-reset-notice" role="status">
-          <span>{notice}</span>
-          {undoReset && (
-            <button
-              type="button"
-              className="secondary-button profile-undo-button"
-              disabled={busy}
-              onClick={handleUndoReset}
-            >
-              <Undo2 size={14} />
-              {tr('Undo')}
-            </button>
-          )}
-        </div>
-      )}
-
       <article className="profile-detail settings-card">
         <div className={`profile-detail-icon profile-accent-${slot}`}>
           <Keyboard size={32} />

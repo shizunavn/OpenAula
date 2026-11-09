@@ -55,6 +55,7 @@ export type ProfileDraft = Pick<
   | 'topDeadzoneByKey'
   | 'bottomDeadzoneByKey'
   | 'remapLayers'
+  | 'selectedKeys'
 > & {
   advancedBindings?: AdvancedBinding[];
   advancedBaseline?: AdvancedBinding[];
@@ -65,6 +66,18 @@ export type ProfileDraft = Pick<
   rgbBaseline?: RgbProfile;
   rgbDirty?: RgbDirty;
   rgbFormat?: 1;
+  uiScalarValues?: {
+    actuation: number;
+    rapidTrigger: boolean;
+    splitSensitivity: boolean;
+    rapidSensitivity: number;
+    pressSensitivity: number;
+    releaseSensitivity: number;
+    deadzoneEnabled: boolean;
+    topDeadzone: number;
+    bottomDeadzone: number;
+    selectedSwitchId: string;
+  };
 };
 export function loadOpenHeroState(): PersistedOpenHeroState | null {
   if (typeof window === 'undefined') {

@@ -464,8 +464,47 @@
 }
 .topbar-actions {
   display: flex;
-  gap: 4px;
+  gap: 8px;
   align-items: center;
+}
+.woot-undo-redo-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.woot-history-button {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #cfd6db;
+  cursor: pointer;
+  transition:
+    background 130ms ease,
+    color 130ms ease,
+    border-color 130ms ease,
+    opacity 130ms ease;
+}
+.woot-history-button svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+.woot-history-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.075);
+  color: #ffffff;
+}
+.woot-history-button:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+.woot-history-button:disabled {
+  color: #5d656b;
+  opacity: 0.45;
+  cursor: default;
 }
 .apply-button,
 .secondary-button,

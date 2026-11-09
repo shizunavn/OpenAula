@@ -145,6 +145,16 @@ function App() {
     activeSettingsPage: ui.activeSettingsPage,
     activeRgbTab: ui.activeRgbTab,
     selectedKeys: selection.selectedKeys,
+    setSelectedKeys: selection.setSelectedKeys,
+    actuation: perf.actuation,
+    rapidTrigger: perf.rapidTrigger,
+    splitSensitivity: perf.splitSensitivity,
+    rapidSensitivity: perf.rapidSensitivity,
+    pressSensitivity: perf.pressSensitivity,
+    releaseSensitivity: perf.releaseSensitivity,
+    deadzoneEnabled: perf.deadzoneEnabled,
+    topDeadzone: perf.topDeadzone,
+    bottomDeadzone: perf.bottomDeadzone,
     selectedSwitchId: perf.selectedSwitchId,
     assignedSwitchesByKey: perf.assignedSwitchesByKey,
     actuationByKey: perf.actuationByKey,
@@ -326,6 +336,10 @@ function App() {
               canSaveAll={canSaveAll}
               saveState={workspace.saveState}
               onSaveAll={() => void sync.handleSaveAll()}
+              canUndo={sync.canUndo}
+              canRedo={sync.canRedo}
+              onUndo={sync.undoProfileChange}
+              onRedo={sync.redoProfileChange}
             >
               {ui.activeRail === 'keyboard' ? (
                 ui.activePage === 'profile' ? (
@@ -575,6 +589,10 @@ function App() {
                     setRgb={workspace.setRgb}
                     setSaveState={workspace.setSaveState}
                     RgbSettingsPage={RgbSettingsPage}
+                    canUndo={sync.canUndo}
+                    canRedo={sync.canRedo}
+                    onUndo={sync.undoProfileChange}
+                    onRedo={sync.redoProfileChange}
                   />
                 ) : (
                   <div className="placeholder-page page-enter">
@@ -632,6 +650,10 @@ function App() {
                     profileBusy={workspace.profileBusy}
                     saveState={workspace.saveState}
                     onSave={() => void sync.handleSaveAll()}
+                    canUndo={sync.canUndo}
+                    canRedo={sync.canRedo}
+                    onUndo={sync.undoProfileChange}
+                    onRedo={sync.redoProfileChange}
                   />
                 ) : ui.activeSettingsPage === 'background-service' ? (
                   <BackgroundServicePage

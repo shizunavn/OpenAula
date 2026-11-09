@@ -33,6 +33,7 @@ import {
 import { syncHero68MacroLibrary } from '../protocol/hero68/macroDevice';
 import { hero68DeviceManager, useHero68Device } from '../protocol/hero68/webhid';
 import { AppSelect } from '../app/components/AppSelect';
+import { UndoRedoButtons, useUndoRedoState } from '../app/components/UndoRedoButtons';
 import './MacroPage.css';
 import { useI18n } from '../i18n';
 import { BRAND } from '../brand';
@@ -103,6 +104,18 @@ export default function MacroPage() {
   const [useRecordedDelay, setUseRecordedDelay] = useState(true);
   const [switchTarget, setSwitchTarget] = useState<MacroDefinition | null>(null);
   const [undoDelete, setUndoDelete] = useState<MacroDefinition | null>(null);
+  const macroStateValue = useMemo(() => ({ macros, draft }), [macros, draft]);
+  const macroHistory = useUndoRedoState(macroStateValue, next => {
+    try {
+      saveMacroLibrary(next.macros);
+      setMacros(next.macros);
+      setDraft(next.draft);
+      setNotice('');
+      setError('');
+    } catch {
+      /* ignore storage errors */
+    }
+  });
   const [deviceSaving, setDeviceSaving] = useState(false);
   const [deviceSynced, setDeviceSynced] = useState(false);
   const device = useHero68Device();
@@ -536,6 +549,14 @@ export default function MacroPage() {
           <p>{tr('A sequence of actions, ready when you need it.')}</p>
         </div>
         <div>
+          <UndoRedoButtons
+            canUndo={macroHistory.canUndo}
+            canRedo={macroHistory.canRedo}
+            onUndo={macroHistory.undo}
+            onRedo={macroHistory.redo}
+            disabled={locked}
+            enableShortcuts
+          />
           <input
             ref={importInput}
             type="file"
@@ -574,27 +595,7 @@ export default function MacroPage() {
           {tr(error)}
         </p>
       )}
-      {notice && (
-        <p className="macro-message" role="status">
-          {tr(notice)}
-          {undoDelete && (
-            <button
-              onClick={() => {
-                try {
-                  store([...macros, undoDelete]);
-                  setDraft(undoDelete);
-                  setUndoDelete(null);
-                  setNotice('Macro restored.');
-                } catch {
-                  setError('Could not restore the macro. Check browser storage.');
-                }
-              }}
-            >
-              {tr('Undo delete')}
-            </button>
-          )}
-        </p>
-      )}
+
       <div className="macro-workspace">
         <aside className="macro-library">
           <div className="macro-section-title">

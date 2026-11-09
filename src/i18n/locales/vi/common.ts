@@ -507,6 +507,8 @@ export const VI_COMMON: Record<string, string> = {
   'Changes apply automatically': 'Thay đổi được áp dụng tự động',
   'Clear all': 'Xóa tất cả',
   Undo: 'Hoàn tác',
+  Redo: 'Làm lại',
+  'Undo and Redo': 'Hoàn tác và Làm lại',
   'Removed {keys} from your profile draft. Save the profile to apply it to the keyboard.':
     'Đã xóa {keys} khỏi bản nháp cấu hình. Lưu cấu hình để áp dụng xuống bàn phím.',
   'Cleared all Advanced Keys from your profile draft. Save the profile to apply it to the keyboard.':

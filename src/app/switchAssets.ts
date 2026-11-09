@@ -70,11 +70,11 @@ const HERO68_XS_SWITCH_IDS = new Set<number>(
 );
 
 const SWITCH_NOTES: Partial<Record<SwitchTone, string>> = {
-  'switch-60': 'ID 60 · 3.3 mm · 28±5 gf · 85–550 Gs · Dual light guide (雪神轴)',
-  'switch-62': 'ID 62 · 3.4 mm · 28±5 gf · 80–480 Gs · Single light guide (冰玉轴)',
-  'switch-59': 'ID 59 · 3.4 mm · Lingyun Magnetic (灵云轴)',
-  'switch-37': 'ID 37 · 3.4 mm · Ash Wood Magnetic (灰木轴)',
-  'switch-61': 'ID 61 · 3.4 mm · Nick Magnetic (尼克磁轴)',
+  'switch-60': 'ID 60 · 3.3 mm · 28±5 gf · 85–550 Gs · Dual light guide',
+  'switch-62': 'ID 62 · 3.4 mm · 28±5 gf · 80–480 Gs · Single light guide',
+  'switch-59': 'ID 59 · 3.4 mm · Lingyun Magnetic',
+  'switch-37': 'ID 37 · 3.4 mm · Ash Wood Magnetic',
+  'switch-61': 'ID 61 · 3.4 mm · Nick Magnetic',
   'switch-76': 'ID 76 · 3.4 mm · HERO 68 XS v1.17 preset'
 };
 

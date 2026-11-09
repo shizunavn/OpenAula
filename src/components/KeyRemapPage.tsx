@@ -485,28 +485,6 @@ export default function KeyRemapPage({
             ))}
           </div>
           <p className="remap-preset-hint">{tr('Presets apply to the selected layer.')}</p>
-          {presetNotice && (
-            <div className="remap-preset-notice" role="status">
-              <p>{presetNotice}</p>
-              {presetUndo && (
-                <button
-                  className="secondary-button"
-                  disabled={busy}
-                  onClick={() => {
-                    for (const [key, value] of Object.entries(presetUndo.keys)) {
-                      if (layers[presetUndo.layer][key] === presetUndo.applied[key]) {
-                        onAssign(presetUndo.layer, key, value);
-                      }
-                    }
-                    setPresetUndo(null);
-                    setPresetNotice(tr('Preset undone.'));
-                  }}
-                >
-                  {tr('Undo preset')}
-                </button>
-              )}
-            </div>
-          )}
         </aside>
         <article className="remap-picker settings-card">
           <div className="remap-target">
