@@ -106,6 +106,18 @@ body {
   overflow: hidden;
   color: var(--text-1);
   font-feature-settings: 'kern';
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input[type='text'],
+input[type='number'],
+input[type='search'],
+input[type='password'],
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 button,
 input,

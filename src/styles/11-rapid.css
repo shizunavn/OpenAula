@@ -20,7 +20,13 @@
 }
 
 .rapid-selection-instruction {
+  user-select: none;
+  -webkit-user-select: none;
   color: #c3c9cd;
+  transition: color 150ms ease;
+}
+.rapid-selection-instruction:hover {
+  color: var(--brand, #ffd45c);
 }
 
 .rapid-heading-row {

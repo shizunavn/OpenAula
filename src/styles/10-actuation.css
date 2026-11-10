@@ -45,10 +45,14 @@
 }
 
 .actuation-selection-instruction {
+  user-select: none;
+  -webkit-user-select: none;
   color: #c3c9cd;
 }
 
 .actuation-page .actuation-selection-instruction {
+  user-select: none;
+  -webkit-user-select: none;
   min-height: 36px;
   padding: 10px 0 6px;
   justify-content: center;

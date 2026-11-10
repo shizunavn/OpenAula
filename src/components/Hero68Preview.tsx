@@ -398,6 +398,9 @@ export default function Hero68Preview({
     const stageEl = previewEl?.closest<HTMLElement>('.keyboard-stage');
     if (!stageEl || !canDragSelect) return;
 
+    const pageEl = stageEl.closest<HTMLElement>('.page, .workspace');
+    const instructionEl = pageEl?.querySelector<HTMLElement>('.selection-instruction') ?? null;
+
     const onStageDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
       if (previewEl && previewEl.contains(event.target as Node | null)) {
@@ -412,8 +415,22 @@ export default function Hero68Preview({
       );
     };
 
+    const onInstructionDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      startDragSessionFromEvent(
+        event.pointerId,
+        event.clientX,
+        event.clientY,
+        event.target as HTMLElement | null
+      );
+    };
+
     stageEl.addEventListener('pointerdown', onStageDown);
-    return () => stageEl.removeEventListener('pointerdown', onStageDown);
+    instructionEl?.addEventListener('pointerdown', onInstructionDown);
+    return () => {
+      stageEl.removeEventListener('pointerdown', onStageDown);
+      instructionEl?.removeEventListener('pointerdown', onInstructionDown);
+    };
   }, [canDragSelect, model]);
 
   useEffect(() => {

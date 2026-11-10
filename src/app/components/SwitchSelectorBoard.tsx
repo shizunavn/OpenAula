@@ -224,6 +224,11 @@ function SwitchSelectorBoard({
     const stageEl = wrapEl?.closest<HTMLElement>('.switch-selector-stage');
     if (!stageEl) return;
 
+    const pageEl = stageEl.closest<HTMLElement>('.page, .switch-selector-page');
+    const instructionEl =
+      pageEl?.querySelector<HTMLElement>('.selection-instruction, .switch-selection-instruction') ??
+      null;
+
     const onStageDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
       if (wrapEl && wrapEl.contains(event.target as Node | null)) return;
@@ -235,8 +240,22 @@ function SwitchSelectorBoard({
       );
     };
 
+    const onInstructionDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      startSession(
+        event.pointerId,
+        event.clientX,
+        event.clientY,
+        event.target as HTMLElement | null
+      );
+    };
+
     stageEl.addEventListener('pointerdown', onStageDown);
-    return () => stageEl.removeEventListener('pointerdown', onStageDown);
+    instructionEl?.addEventListener('pointerdown', onInstructionDown);
+    return () => {
+      stageEl.removeEventListener('pointerdown', onStageDown);
+      instructionEl?.removeEventListener('pointerdown', onInstructionDown);
+    };
   }, [model]);
 
   return (

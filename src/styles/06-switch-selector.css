@@ -136,6 +136,8 @@
 }
 
 .switch-selection-instruction {
+  user-select: none;
+  -webkit-user-select: none;
   margin: 14px 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
