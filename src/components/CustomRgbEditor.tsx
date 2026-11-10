@@ -1001,6 +1001,7 @@ export default function CustomRgbEditor({
             showAdvancedIcons={false}
             selectedKeys={selectable ? selected : new Set()}
             onToggleKey={toggle}
+            onSelectKeys={setSelected}
             lightingFrame={frame.keys}
             lightingSource="local"
             selectionEnabled={selectable}

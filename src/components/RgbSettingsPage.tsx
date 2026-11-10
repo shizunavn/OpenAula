@@ -797,6 +797,7 @@ function ActiveRgbSettingsPage({
               showAdvancedIcons={false}
               selectedKeys={perKey ? selected : new Set()}
               onToggleKey={toggle}
+              onSelectKeys={setSelected}
               lightingFrame={frame.keys}
               lightingSource="local"
               selectionEnabled={perKey}

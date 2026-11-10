@@ -18,6 +18,8 @@ import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import AdvancedKeyIcon from './AdvancedKeyIcon';
 import { TachyonContext } from '../app/TachyonContext';
 import { DeviceModelContext } from '../app/DeviceModelContext';
+import { useI18n } from '../i18n';
+
 const tachyonLightingFrames = Object.fromEntries(
   (['hero68', 'hero68Xs', 'hero84', 'win68HeMax', 'win68'] as const).map(model => [
     model,
@@ -28,6 +30,7 @@ const tachyonLightingFrames = Object.fromEntries(
     )
   ])
 ) as Record<HeroDeviceModelId, LightingFrame>;
+
 const WOOTILITY_MAX_FONT_PX = 12.3199;
 const HERO68_DESIGN_WIDTH_EM = 64.05;
 const HERO68_DESIGN_HEIGHT_EM = 21.35;
@@ -36,6 +39,8 @@ const HERO68_ROWS = 5;
 const HERO_ROW_PITCH_EM = 3.8962;
 const HERO68_MIN_FONT_PX = 7.4;
 const HALL_STREAM_NOISE_FLOOR_MM = 0.05;
+const DRAG_THRESHOLD_PX = 5;
+
 function fitKeyboardFontSize(
   width: number,
   height: number,
@@ -50,11 +55,13 @@ function fitKeyboardFontSize(
   const minimum = Math.min(HERO68_MIN_FONT_PX, widthScale, heightScale);
   return Math.max(minimum, Math.round(fitted * 100) / 100);
 }
+
 export type Hero68PreviewProps = {
   model?: HeroDeviceModelId;
   selectedKeys: Set<string>;
   highlightedKeys?: ReadonlySet<string>;
   onToggleKey: (keyId: string) => void;
+  onSelectKeys?: (nextKeys: Set<string>) => void;
   onDropKey?: (keyId: string, event: React.DragEvent<HTMLButtonElement>) => void;
   onDragOverKey?: (keyId: string, event: React.DragEvent<HTMLButtonElement>) => void;
   onDragLeaveKey?: (keyId: string) => void;
@@ -108,11 +115,13 @@ export type Hero68PreviewProps = {
   maxFontPx?: number;
   onWidthChange?: (width: number) => void;
 };
+
 export default function Hero68Preview({
   model: modelProp,
   selectedKeys,
   highlightedKeys,
   onToggleKey,
+  onSelectKeys,
   onDropKey,
   onDragOverKey,
   onDragLeaveKey,
@@ -137,11 +146,11 @@ export default function Hero68Preview({
   maxFontPx = WOOTILITY_MAX_FONT_PX,
   onWidthChange
 }: Hero68PreviewProps) {
+  const { tr } = useI18n();
   const contextModel = useContext(DeviceModelContext);
   const model = modelProp ?? contextModel;
   const keyboard = useMemo(() => heroLayout(model), [model]);
   const baseDemoLighting = useMemo(() => keyboard.makeDemoLighting(), [keyboard]);
-  // Model-aware lookups: the HERO84 has keys the HERO68 table does not.
   const keyLabelById = useMemo(
     () => new Map(keyboard.rows.flat().map(key => [key.id, key.label])),
     [keyboard]
@@ -185,6 +194,7 @@ export default function Hero68Preview({
     }
     return result;
   }, [advancedByKey, keyLabelById, keyTooltips]);
+
   const [lighting, setLighting] = useState<LightingFrame>(() => baseDemoLighting);
   useEffect(() => {
     setLighting(previous => ({
@@ -192,9 +202,35 @@ export default function Hero68Preview({
       ...previous
     }));
   }, [baseDemoLighting]);
+
   const previewRef = useRef<HTMLDivElement>(null);
+  const caseRef = useRef<HTMLDivElement>(null);
   const tooltipTimerRef = useRef<number | null>(null);
+  const selectedKeysRef = useRef<Set<string>>(selectedKeys);
+  selectedKeysRef.current = selectedKeys;
+
   const [keyboardFontSize, setKeyboardFontSize] = useState(maxFontPx);
+  const [dragSelectionMode, setDragSelectionMode] = useState<'box' | 'swipe'>('box');
+  const [marqueeRect, setMarqueeRect] = useState<null | {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  }>(null);
+
+  const dragSessionRef = useRef<null | {
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    isDragging: boolean;
+    mode: 'box' | 'swipe';
+    deselect: boolean;
+    baseSelection: Set<string>;
+    liveSelection: Set<string>;
+    keyRects: { id: string; left: number; top: number; right: number; bottom: number }[];
+  }>(null);
+  const suppressNextClickRef = useRef(false);
+
   const [keyTooltip, setKeyTooltip] = useState<null | {
     keyId: string;
     title: string;
@@ -204,13 +240,18 @@ export default function Hero68Preview({
     top: number;
     placement: 'above' | 'below';
   }>(null);
+
   const clearTooltipTimer = () => {
     if (tooltipTimerRef.current !== null) {
       window.clearTimeout(tooltipTimerRef.current);
       tooltipTimerRef.current = null;
     }
   };
+
   const showKeyTooltip = (keyId: string, target: HTMLButtonElement, immediate = false) => {
+    if (dragSessionRef.current?.isDragging) {
+      return;
+    }
     const tooltip = previewTooltips[keyId];
     if (!tooltip) {
       return;
@@ -236,10 +277,184 @@ export default function Hero68Preview({
       tooltipTimerRef.current = window.setTimeout(show, 170);
     }
   };
+
   const hideKeyTooltip = () => {
     clearTooltipTimer();
     setKeyTooltip(null);
   };
+
+  const commitBatchSelection = (nextSet: Set<string>, prevSet: Set<string>) => {
+    let changed = nextSet.size !== prevSet.size;
+    if (!changed) {
+      for (const id of nextSet) {
+        if (!prevSet.has(id)) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed) return;
+
+    if (onSelectKeys) {
+      onSelectKeys(new Set(nextSet));
+      return;
+    }
+    for (const id of nextSet) {
+      if (!prevSet.has(id)) {
+        onToggleKey(id);
+      }
+    }
+    for (const id of prevSet) {
+      if (!nextSet.has(id)) {
+        onToggleKey(id);
+      }
+    }
+  };
+
+  const canDragSelect =
+    selectionEnabled && overlayMode !== 'stream' && (!draggableKeys || draggableKeys.size === 0);
+
+  const handleStagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!canDragSelect || event.button !== 0) {
+      return;
+    }
+    const targetEl = event.target as HTMLElement | null;
+    if (targetEl?.closest('.hero-drag-mode-bar')) {
+      return;
+    }
+    const caseEl = caseRef.current;
+    if (!caseEl) return;
+
+    const keyButtons = Array.from(
+      caseEl.querySelectorAll<HTMLButtonElement>('button.hero-key[data-key-id]')
+    );
+    const keyRects = keyButtons.map(btn => {
+      const r = btn.getBoundingClientRect();
+      return {
+        id: btn.dataset.keyId!,
+        left: r.left,
+        top: r.top,
+        right: r.right,
+        bottom: r.bottom
+      };
+    });
+
+    const startKeyBtn = targetEl?.closest<HTMLButtonElement>('button.hero-key[data-key-id]');
+    const startKeyId = startKeyBtn?.dataset.keyId ?? null;
+    const effectiveMode: 'box' | 'swipe' = event.shiftKey ? 'swipe' : dragSelectionMode;
+    const startKeySelected = Boolean(startKeyId && selectedKeysRef.current.has(startKeyId));
+    const allCurrentlySelected =
+      keyRects.length > 0 && selectedKeysRef.current.size >= keyRects.length;
+    const deselect =
+      event.altKey ||
+      (effectiveMode === 'swipe' && startKeySelected) ||
+      (effectiveMode === 'box' && (allCurrentlySelected || (startKeySelected && event.ctrlKey)));
+
+    dragSessionRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      isDragging: false,
+      mode: effectiveMode,
+      deselect,
+      baseSelection: new Set(selectedKeysRef.current),
+      liveSelection: new Set(selectedKeysRef.current),
+      keyRects
+    };
+  };
+
+  useEffect(() => {
+    const handleWindowPointerMove = (event: PointerEvent) => {
+      const session = dragSessionRef.current;
+      if (!session || event.pointerId !== session.pointerId) return;
+
+      const dx = event.clientX - session.startClientX;
+      const dy = event.clientY - session.startClientY;
+      if (!session.isDragging) {
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) {
+          return;
+        }
+        session.isDragging = true;
+        suppressNextClickRef.current = true;
+        hideKeyTooltip();
+      }
+
+      if (session.mode === 'box') {
+        const minX = Math.min(session.startClientX, event.clientX);
+        const maxX = Math.max(session.startClientX, event.clientX);
+        const minY = Math.min(session.startClientY, event.clientY);
+        const maxY = Math.max(session.startClientY, event.clientY);
+
+        setMarqueeRect({
+          left: minX,
+          top: minY,
+          width: Math.max(1, maxX - minX),
+          height: Math.max(1, maxY - minY)
+        });
+
+        const nextSelection = new Set(session.baseSelection);
+        for (const k of session.keyRects) {
+          const intersects = k.left <= maxX && k.right >= minX && k.top <= maxY && k.bottom >= minY;
+          if (intersects) {
+            if (session.deselect) {
+              nextSelection.delete(k.id);
+            } else {
+              nextSelection.add(k.id);
+            }
+          }
+        }
+        commitBatchSelection(nextSelection, session.liveSelection);
+        session.liveSelection = nextSelection;
+      } else {
+        // Swipe / paint mode: hit-test key under pointer (and start point)
+        const nextSelection = new Set(session.liveSelection);
+        for (const k of session.keyRects) {
+          const hitCurrent =
+            event.clientX >= k.left &&
+            event.clientX <= k.right &&
+            event.clientY >= k.top &&
+            event.clientY <= k.bottom;
+          const hitStart =
+            session.startClientX >= k.left &&
+            session.startClientX <= k.right &&
+            session.startClientY >= k.top &&
+            session.startClientY <= k.bottom;
+          if (hitCurrent || hitStart) {
+            if (session.deselect) {
+              nextSelection.delete(k.id);
+            } else {
+              nextSelection.add(k.id);
+            }
+          }
+        }
+        commitBatchSelection(nextSelection, session.liveSelection);
+        session.liveSelection = nextSelection;
+      }
+    };
+
+    const handleWindowPointerUp = (event: PointerEvent) => {
+      const session = dragSessionRef.current;
+      if (!session || event.pointerId !== session.pointerId) return;
+      const wasDragging = session.isDragging;
+      dragSessionRef.current = null;
+      if (wasDragging) {
+        setMarqueeRect(null);
+        window.setTimeout(() => {
+          suppressNextClickRef.current = false;
+        }, 60);
+      }
+    };
+
+    window.addEventListener('pointermove', handleWindowPointerMove);
+    window.addEventListener('pointerup', handleWindowPointerUp);
+    window.addEventListener('pointercancel', handleWindowPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerup', handleWindowPointerUp);
+      window.removeEventListener('pointercancel', handleWindowPointerUp);
+    };
+  });
+
   const rows = keyboard.rows.length;
   useLayoutEffect(() => {
     const preview = previewRef.current;
@@ -262,6 +477,7 @@ export default function Hero68Preview({
     observer.observe(container);
     return () => observer.disconnect();
   }, [maxFontPx, rows]);
+
   useLayoutEffect(() => {
     const keyboardEl = previewRef.current?.querySelector<HTMLElement>('.hero68-case');
     const layoutEl = previewRef.current?.querySelector<HTMLElement>('.hero68-layout');
@@ -281,7 +497,6 @@ export default function Hero68Preview({
         onWidthChange(measured);
       }
     };
-    // Use layout pixels: getBoundingClientRect includes the app's CSS zoom.
     measureCaseWidth();
     const observer = new ResizeObserver(([entry]) => {
       measureCaseWidth(entry?.borderBoxSize?.[0]?.inlineSize);
@@ -289,12 +504,12 @@ export default function Hero68Preview({
     observer.observe(keyboardEl);
     return () => observer.disconnect();
   }, [onWidthChange, model]);
+
   useEffect(
     () =>
       lightingFrame || tachyon
         ? undefined
         : subscribeLightingFrame(frame => {
-            // Realtime-ready: protocol can publish only the LEDs that changed.
             setLighting(previous => ({
               ...previous,
               ...frame
@@ -315,19 +530,21 @@ export default function Hero68Preview({
       window.removeEventListener('scroll', dismiss, true);
     };
   }, [keyTooltip]);
+
   return (
     <>
       <div
         ref={previewRef}
-        className={`hero68-preview-wrap is-${model} ${model === 'hero68Xs' ? 'is-hero68' : ''}`}
+        className={`hero68-preview-wrap is-${model} ${model === 'hero68Xs' ? 'is-hero68' : ''} ${marqueeRect ? 'is-marquee-dragging' : ''}`}
         aria-label={`${keyboard.model.label} RGB preview`}
+        onPointerDown={handleStagePointerDown}
         style={
           {
             '--keyboard-font-size': `${keyboardFontSize}px`
           } as React.CSSProperties
         }
       >
-        <div className="hero68-case">
+        <div ref={caseRef} className="hero68-case">
           <div className="hero68-layout" dir="ltr">
             {keyboard.rows.map((row, rowIndex) => (
               <div className="hero68-row" key={rowIndex}>
@@ -407,6 +624,7 @@ export default function Hero68Preview({
                       >
                         <button
                           type="button"
+                          data-key-id={key.id}
                           aria-label={keyLabels?.[key.id] ?? key.label}
                           aria-description={advanced ? previewTooltips[key.id]?.title : undefined}
                           className={`hero-key ${keyClassNames?.[key.id] ?? ''} ${highlightedKeys?.has(key.id) ? 'is-preset-highlighted' : ''} ${advanced ? 'has-advanced-binding' : ''} ${overlayMode === 'rapid' && rapidPreviewValues[key.id]?.active && rapidPreviewValues[key.id]?.secondary ? 'has-split-rapid' : ''} ${selected ? 'is-selected' : ''} ${overlayMode !== 'none' ? 'has-overlay' : ''} ${showActuationOverlay ? 'is-actuation-overlay' : ''} ${showRapidOverlay && rapidPreview?.active ? 'has-rapid-overlay' : ''} ${rapidDisabled || deadzoneDisabled ? 'is-feature-disabled' : ''} ${showDeadzoneOverlay && deadzonePreview?.active ? 'has-deadzone-overlay' : ''} ${showStreamOverlay ? 'is-stream-key' : ''} ${showStreamState ? 'has-stream-overlay' : ''} ${showStreamState && streamPreview?.releaseInferred ? 'has-stream-inferred-release' : ''}`}
@@ -418,6 +636,11 @@ export default function Hero68Preview({
                             } as React.CSSProperties
                           }
                           onClick={event => {
+                            if (suppressNextClickRef.current) {
+                              suppressNextClickRef.current = false;
+                              event.preventDefault();
+                              return;
+                            }
                             if (event.detail > 0) {
                               event.currentTarget.blur();
                             }
@@ -532,6 +755,22 @@ export default function Hero68Preview({
           <div className="hero68-badge">{keyboard.model.name.toUpperCase()}</div>
         </div>
       </div>
+      {marqueeRect &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="hero-marquee-selection"
+            aria-hidden="true"
+            style={{
+              position: 'fixed',
+              left: `${marqueeRect.left}px`,
+              top: `${marqueeRect.top}px`,
+              width: `${marqueeRect.width}px`,
+              height: `${marqueeRect.height}px`
+            }}
+          />,
+          document.body
+        )}
       {keyTooltip &&
         typeof document !== 'undefined' &&
         createPortal(

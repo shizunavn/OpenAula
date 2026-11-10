@@ -14,6 +14,7 @@ export interface RapidPageProps {
   advancedBindings: AdvancedBinding[];
   selectedKeys: Set<string>;
   toggleKey: (keyId: string) => void;
+  onSelectKeys?: (nextKeys: Set<string>) => void;
   quickPreviewMode: 'none' | 'actuation' | 'rapid' | 'deadzone';
   rapidPreviewByKey: Record<
     string,
@@ -70,6 +71,7 @@ function RapidPage({
   advancedBindings,
   selectedKeys,
   toggleKey,
+  onSelectKeys,
   quickPreviewMode,
   rapidPreviewByKey,
   deadzonePreviewByKey,
@@ -119,6 +121,7 @@ function RapidPage({
           advancedBindings={advancedBindings}
           selectedKeys={selectedKeys}
           onToggleKey={toggleKey}
+          onSelectKeys={onSelectKeys}
           overlayMode={quickPreviewMode === 'deadzone' ? 'deadzone' : 'rapid'}
           rapidPreviewValues={rapidPreviewByKey}
           deadzonePreviewValues={deadzonePreviewByKey}

@@ -5,7 +5,7 @@ import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import type { HeroDeviceModelId } from '../keyboard/devices';
 import { isXsPrecisionModel, rapidTriggerValuesForModel } from '../app/helpers';
 import type { SwitchOption } from '../app/switchAssets';
-import { SwitchStemMenuIcon } from '../app/components/SwitchStemMenuIcon';
+import { SwitchSimPreview } from '../app/components/SwitchSimPreview';
 import { Toggle } from '../app/components/Toggle';
 import { RangeControl } from '../app/components/RangeControl';
 import { VerticalRangeControl } from '../app/components/VerticalRangeControl';
@@ -14,6 +14,7 @@ export interface QuickSettingsPageProps {
   advancedBindings: AdvancedBinding[];
   selectedKeys: Set<string>;
   toggleKey: (keyId: string) => void;
+  onSelectKeys?: (nextKeys: Set<string>) => void;
   quickPreviewMode: 'none' | 'actuation' | 'rapid' | 'deadzone';
   actuationByKey: Record<string, number>;
   rapidPreviewByKey: Record<
@@ -79,6 +80,7 @@ function QuickSettingsPage({
   advancedBindings,
   selectedKeys,
   toggleKey,
+  onSelectKeys,
   quickPreviewMode,
   actuationByKey,
   rapidPreviewByKey,
@@ -137,6 +139,7 @@ function QuickSettingsPage({
           advancedBindings={advancedBindings}
           selectedKeys={selectedKeys}
           onToggleKey={toggleKey}
+          onSelectKeys={onSelectKeys}
           overlayMode={quickPreviewMode}
           actuationValues={actuationByKey}
           rapidPreviewValues={rapidPreviewByKey}
@@ -191,15 +194,23 @@ function QuickSettingsPage({
           </div>
           <div className="actuation-visual with-switch-preview">
             <div
-              className={`selected-switch-preview ${switchProfileMixed ? 'is-mixed' : ''}`}
+              className={`selected-switch-preview ${switchProfileMixed || (hasSelection && actuationMixed) ? 'is-mixed' : ''}`}
               aria-hidden="true"
             >
-              {selectedSwitch.front ? (
-                <img src={selectedSwitch.front} alt="" />
-              ) : (
-                <SwitchStemMenuIcon />
-              )}
-              <span>{switchProfileMixed ? tr('Mixed switch profiles') : selectedSwitch.name}</span>
+              <SwitchSimPreview
+                selectedSwitch={selectedSwitch}
+                switchProfileMixed={switchProfileMixed}
+                hasSelection={hasSelection}
+                actuation={actuation}
+                actuationMixed={actuationMixed}
+                deadzoneEnabled={deadzoneEnabled}
+                deadzoneEnabledMixed={deadzoneEnabledMixed}
+                topDeadzone={topDeadzone}
+                topDeadzoneMixed={topDeadzoneMixed}
+                bottomDeadzone={bottomDeadzone}
+                bottomDeadzoneMixed={bottomDeadzoneMixed}
+                showSwitchName
+              />
             </div>
             <VerticalRangeControl
               value={actuation}

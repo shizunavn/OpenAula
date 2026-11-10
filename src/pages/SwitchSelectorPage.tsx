@@ -12,6 +12,7 @@ export type SwitchSelectorPageProps = {
   hasSelection: boolean;
   allSelected: boolean;
   onToggleKey: (keyId: string) => void;
+  onSelectKeys?: (nextKeys: Set<string>) => void;
   onSelectAll: () => void;
   onDiscardSelection: () => void;
   switchPreviewByKey: Record<string, string>;
@@ -37,6 +38,7 @@ export function SwitchSelectorPage({
   hasSelection,
   allSelected,
   onToggleKey,
+  onSelectKeys,
   onSelectAll,
   onDiscardSelection,
   switchPreviewByKey,
@@ -116,6 +118,7 @@ export function SwitchSelectorPage({
           model={model}
           selectedKeys={selectedKeys}
           onToggleKey={onToggleKey}
+          onSelectKeys={onSelectKeys}
           switchImagesByKey={switchPreviewByKey}
         />
       </section>

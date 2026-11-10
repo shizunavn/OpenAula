@@ -430,6 +430,7 @@ function App() {
                     advancedBindings={workspace.advancedBindings}
                     selectedKeys={selection.selectedKeys}
                     toggleKey={selection.toggleKey}
+                    onSelectKeys={selection.setSelectedKeys}
                     actuationByKey={perf.actuationByKey}
                     hallStreamPreviewByKey={hallVm.hallStreamPreviewByKey}
                     setActuationPreviewWidth={ui.setActuationPreviewWidth}
@@ -451,6 +452,14 @@ function App() {
                     actuationHallTravelPercent={hallVm.actuationHallTravelPercent}
                     actuationHallThresholdPercent={hallVm.actuationHallThresholdPercent}
                     actuationHallThresholdMm={hallVm.actuationHallThresholdMm}
+                    rapidTrigger={perf.rapidTrigger}
+                    splitSensitivity={perf.splitSensitivity}
+                    rapidSensitivity={perf.rapidSensitivity}
+                    pressSensitivity={perf.pressSensitivity}
+                    releaseSensitivity={perf.releaseSensitivity}
+                    deadzoneEnabled={perf.deadzoneEnabled}
+                    topDeadzone={perf.topDeadzone}
+                    bottomDeadzone={perf.bottomDeadzone}
                   />
                 ) : ui.activePage === 'rapid' ? (
                   <RapidPage
@@ -458,6 +467,7 @@ function App() {
                     advancedBindings={workspace.advancedBindings}
                     selectedKeys={selection.selectedKeys}
                     toggleKey={selection.toggleKey}
+                    onSelectKeys={selection.setSelectedKeys}
                     quickPreviewMode={ui.quickPreviewMode}
                     rapidPreviewByKey={perf.rapidPreviewByKey}
                     deadzonePreviewByKey={perf.deadzonePreviewByKey}
@@ -501,6 +511,7 @@ function App() {
                     advancedBindings={workspace.advancedBindings}
                     selectedKeys={selection.selectedKeys}
                     toggleKey={selection.toggleKey}
+                    onSelectKeys={selection.setSelectedKeys}
                     quickPreviewMode={ui.quickPreviewMode}
                     actuationByKey={perf.actuationByKey}
                     rapidPreviewByKey={perf.rapidPreviewByKey}
@@ -631,6 +642,7 @@ function App() {
                     hasSelection={selection.hasSelection}
                     allSelected={selection.allSelected}
                     onToggleKey={selection.toggleKey}
+                    onSelectKeys={selection.setSelectedKeys}
                     onSelectAll={selection.selectAll}
                     onDiscardSelection={selection.discardSelection}
                     switchPreviewByKey={perf.switchPreviewByKey}

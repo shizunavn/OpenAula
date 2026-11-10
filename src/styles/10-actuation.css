@@ -1009,3 +1009,62 @@
     display: none;
   }
 }
+
+/* ======================= SWITCH TRAVEL SIMULATOR ======================= */
+.actuation-switch-image-wrap canvas.switch-sim-canvas,
+.selected-switch-preview canvas.switch-sim-canvas {
+  display: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.actuation-switch-image-wrap canvas.switch-sim-canvas.is-ready,
+.selected-switch-preview canvas.switch-sim-canvas.is-ready {
+  display: block;
+}
+
+.actuation-switch-image-wrap canvas.switch-sim-canvas {
+  width: 138px;
+  height: 138px;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.26));
+}
+
+.actuation-editor-woot-body .actuation-switch-image-wrap canvas.switch-sim-canvas {
+  width: 148px;
+  height: 148px;
+}
+
+.actuation-page .actuation-switch-image-wrap canvas.switch-sim-canvas {
+  width: 100%;
+  max-width: 108px;
+  height: 120px;
+  object-fit: contain;
+}
+
+.selected-switch-preview canvas.switch-sim-canvas {
+  width: 136px;
+  height: 136px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.18));
+}
+
+.selected-switch-preview.is-mixed canvas.switch-sim-canvas,
+.selected-switch-preview canvas.switch-sim-canvas.is-mixed {
+  opacity: 0.55;
+  filter: grayscale(0.35) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.18));
+}
+
+@media (max-width: 760px) {
+  .selected-switch-preview canvas.switch-sim-canvas {
+    width: 116px;
+    height: 116px;
+  }
+}
+
+@container actuationpage (max-width: 500px) {
+  .actuation-switch-image-wrap canvas.switch-sim-canvas {
+    width: 116px;
+    height: 116px;
+  }
+}

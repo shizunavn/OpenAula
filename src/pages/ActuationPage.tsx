@@ -8,7 +8,7 @@ import type { HeroDeviceModelId } from '../keyboard/devices';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import { hallKeyLabel, isXsPrecisionModel } from '../app/helpers';
 import type { SwitchOption } from '../app/switchAssets';
-import { SwitchStemMenuIcon } from '../app/components/SwitchStemMenuIcon';
+import { SwitchSimPreview } from '../app/components/SwitchSimPreview';
 import { Toggle } from '../app/components/Toggle';
 import { VerticalRangeControl } from '../app/components/VerticalRangeControl';
 export interface ActuationPageProps {
@@ -17,6 +17,7 @@ export interface ActuationPageProps {
   advancedBindings: AdvancedBinding[];
   selectedKeys: Set<string>;
   toggleKey: (keyId: string) => void;
+  onSelectKeys?: (nextKeys: Set<string>) => void;
   actuationByKey: Record<string, number>;
   hallStreamPreviewByKey: Record<
     string,
@@ -46,6 +47,14 @@ export interface ActuationPageProps {
   actuationHallTravelPercent: number;
   actuationHallThresholdPercent: number;
   actuationHallThresholdMm: number;
+  rapidTrigger?: boolean;
+  splitSensitivity?: boolean;
+  rapidSensitivity?: number;
+  pressSensitivity?: number;
+  releaseSensitivity?: number;
+  deadzoneEnabled?: boolean;
+  topDeadzone?: number;
+  bottomDeadzone?: number;
 }
 function ActuationPage({
   model,
@@ -53,6 +62,7 @@ function ActuationPage({
   advancedBindings,
   selectedKeys,
   toggleKey,
+  onSelectKeys,
   actuationByKey,
   hallStreamPreviewByKey,
   setActuationPreviewWidth,
@@ -97,6 +107,7 @@ function ActuationPage({
           advancedBindings={advancedBindings}
           selectedKeys={selectedKeys}
           onToggleKey={toggleKey}
+          onSelectKeys={onSelectKeys}
           overlayMode="actuation"
           actuationValues={actuationByKey}
           streamPreviewValues={hallStreamPreviewByKey}
@@ -178,13 +189,19 @@ function ActuationPage({
           </div>
 
           <div className="actuation-editor-body actuation-editor-woot-body">
-            <div className={`actuation-switch-preview ${switchProfileMixed ? 'is-mixed' : ''}`}>
+            <div
+              className={`actuation-switch-preview ${switchProfileMixed || (hasSelection && actuationMixed) ? 'is-mixed' : ''}`}
+            >
               <div className="actuation-switch-image-wrap">
-                {selectedSwitch.front ? (
-                  <img src={selectedSwitch.front} alt={`${selectedSwitch.name} switch`} />
-                ) : (
-                  <SwitchStemMenuIcon />
-                )}
+                <SwitchSimPreview
+                  selectedSwitch={selectedSwitch}
+                  switchProfileMixed={switchProfileMixed}
+                  hasSelection={hasSelection}
+                  actuation={actuation}
+                  actuationMixed={actuationMixed}
+                  externalTravelMm={hallStream.active ? actuationHallTravelMm : undefined}
+                  externalActive={hallStream.active}
+                />
               </div>
             </div>
 

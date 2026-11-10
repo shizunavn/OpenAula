@@ -190,5 +190,26 @@ export const VI_PERFORMANCE: Record<string, string> = {
   'Recovering Hall telemetry…': 'Đang phục hồi dữ liệu Hall…',
   'HERO68 send timed out (command={command}, zone={zone})':
     'HERO68 không nhận được lệnh kịp thời (lệnh={command}, vùng={zone})',
-  'Press a key': 'Nhấn một phím'
+  'Press a key': 'Nhấn một phím',
+  'Switch travel simulator': 'Giả lập hành trình switch',
+  'Click and hold to press, or drag vertically to scrub travel':
+    'Nhấn giữ để bấm phím, hoặc kéo dọc để thử hành trình',
+  'Test press': 'Nhấn',
+  'Hold the switch pressed down (drag the switch to adjust held depth)':
+    'Giữ switch ở trạng thái nhấn (kéo dọc trên switch để chỉnh độ sâu giữ)',
+  'Drag selection mode': 'Chế độ kéo chọn phím',
+  'Box drag': 'Kéo khung',
+  'Swipe keys': 'Lướt phím',
+  'Hold and drag a box to select multiple keys (Alt to deselect)':
+    'Nhấn giữ và kéo khung chữ nhật để chọn nhiều phím (giữ Alt để bỏ chọn)',
+  'Hold and swipe across keys to select or deselect':
+    'Nhấn giữ và lướt chuột qua các phím để chọn hoặc bỏ chọn',
+  'Auto sim': 'Tự động',
+  'SIMULATED SWITCH': 'SWITCH GIẢ LẬP',
+  SIMULATING: 'GIẢ LẬP',
+  'Travel simulation': 'Giả lập hành trình',
+  'Press or drag the switch on the left to simulate key travel and actuation.':
+    'Nhấn giữ hoặc kéo dọc switch bên trái để giả lập hành trình và điểm nhận phím.',
+  'Connect HERO68 for live Hall telemetry, or press/drag the switch preview to simulate travel.':
+    'Kết nối HERO68 để đọc Hall thực tế, hoặc nhấn/kéo switch xem trước để giả lập hành trình.'
 };
