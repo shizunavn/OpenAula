@@ -510,7 +510,7 @@
 .rapid-selection-instruction.is-highlighted,
 .switch-selection-instruction:hover,
 .switch-selection-instruction.is-highlighted,
-.quick-page:has(.setting-card:hover) .selection-instruction,
+.quick-page:has(.setting-card:not(.tachyon-card):hover) .selection-instruction,
 .rapid-page:has(.setting-card:hover) .selection-instruction,
 .actuation-page:has(.setting-card:hover) .selection-instruction {
   color: var(--brand, #ffd45c);

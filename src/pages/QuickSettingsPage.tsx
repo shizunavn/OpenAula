@@ -375,7 +375,10 @@ function QuickSettingsPage({
           </div>
         </article>
 
-        <article className="setting-card tachyon-card">
+        <article
+          className="setting-card tachyon-card"
+          onMouseEnter={() => setQuickPreviewMode('none')}
+        >
           <div className="tachyon-card-inner">
             <div>
               <div className="card-head with-toggle compact-head tachyon-head-inline">
