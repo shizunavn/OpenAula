@@ -66,6 +66,7 @@
   transition: color 150ms ease;
 }
 
+.actuation-page .actuation-selection-instruction.has-selection,
 .actuation-page .actuation-selection-instruction:hover,
 .actuation-page .actuation-selection-instruction.is-highlighted,
 .actuation-page:has(.setting-card:hover) .actuation-selection-instruction {

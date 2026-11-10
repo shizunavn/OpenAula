@@ -131,7 +131,7 @@ function RapidPage({
       </section>
 
       <div
-        className={`selection-instruction rapid-selection-instruction ${cardHovered ? 'is-highlighted' : ''}`}
+        className={`selection-instruction rapid-selection-instruction ${hasSelection ? 'has-selection' : ''} ${cardHovered ? 'is-highlighted' : ''}`}
       >
         {hasSelection
           ? tr(

@@ -118,7 +118,7 @@ function ActuationPage({
       </section>
 
       <div
-        className={`selection-instruction actuation-selection-instruction ${cardHovered ? 'is-highlighted' : ''}`}
+        className={`selection-instruction actuation-selection-instruction ${hasSelection ? 'has-selection' : ''} ${cardHovered ? 'is-highlighted' : ''}`}
       >
         {hasSelection
           ? tr(

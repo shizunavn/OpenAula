@@ -146,6 +146,7 @@
   transition: color 150ms ease;
 }
 
+.switch-selection-instruction.has-selection,
 .switch-selection-instruction:hover,
 .switch-selection-instruction.is-highlighted {
   color: var(--brand, #ffd45c);

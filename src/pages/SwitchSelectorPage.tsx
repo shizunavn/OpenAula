@@ -124,7 +124,9 @@ export function SwitchSelectorPage({
         />
       </section>
 
-      <div className="selection-instruction switch-selection-instruction">
+      <div
+        className={`selection-instruction switch-selection-instruction ${hasSelection ? 'has-selection' : ''}`}
+      >
         {hasSelection
           ? tr(selectedKeys.size === 1 ? '{count} KEY SELECTED' : '{count} KEYS SELECTED', {
               count: selectedKeys.size

@@ -502,6 +502,10 @@
   transition: color 150ms ease;
 }
 
+.selection-instruction.has-selection,
+.actuation-selection-instruction.has-selection,
+.rapid-selection-instruction.has-selection,
+.switch-selection-instruction.has-selection,
 .selection-instruction:hover,
 .selection-instruction.is-highlighted,
 .actuation-selection-instruction:hover,

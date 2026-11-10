@@ -26,6 +26,8 @@
   cursor: pointer;
   transition: color 150ms ease;
 }
+.rapid-selection-instruction.has-selection,
+.rapid-page .rapid-selection-instruction.has-selection,
 .rapid-selection-instruction:hover,
 .rapid-selection-instruction.is-highlighted,
 .rapid-page .rapid-selection-instruction:hover,

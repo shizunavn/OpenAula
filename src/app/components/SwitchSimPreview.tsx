@@ -45,54 +45,18 @@ export function SwitchSimPreview({
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const maxTravel = selectedSwitch.travelMm ?? TRAVEL;
+  // Switch travel limit (mm) — at least reference TRAVEL (3.4mm)
+  const maxTravel = Math.max(TRAVEL, selectedSwitch.travelMm ?? TRAVEL);
 
-  // Track which slider (actuation, topDeadzone, or bottomDeadzone) was most recently adjusted,
-  // and keep the switch stem held at that position after the slider is released.
-  const activeTargetSourceRef = useRef<'actuation' | 'topDeadzone' | 'bottomDeadzone'>('actuation');
-  const prevValuesRef = useRef({
-    actuation,
-    topDeadzone,
-    bottomDeadzone
-  });
-
-  if (prevValuesRef.current.actuation !== actuation) {
-    prevValuesRef.current.actuation = actuation;
-    activeTargetSourceRef.current = 'actuation';
-  } else if (prevValuesRef.current.topDeadzone !== topDeadzone) {
-    prevValuesRef.current.topDeadzone = topDeadzone;
-    activeTargetSourceRef.current = 'topDeadzone';
-  } else if (prevValuesRef.current.bottomDeadzone !== bottomDeadzone) {
-    prevValuesRef.current.bottomDeadzone = bottomDeadzone;
-    activeTargetSourceRef.current = 'bottomDeadzone';
-  }
-
-  // Compute target travel (mm) to hold based on current selection & mixed states
+  // Compute target travel (mm) to hold based on selection & actuation
   let heldTargetMm = -1;
   if (externalActive && typeof externalTravelMm === 'number') {
     heldTargetMm = externalTravelMm <= 0.005 ? -1 : Math.min(maxTravel, externalTravelMm);
-  } else if (!hasSelection) {
+  } else if (!hasSelection || actuationMixed) {
     heldTargetMm = -1;
-  } else if (activeTargetSourceRef.current === 'topDeadzone') {
-    if (!deadzoneEnabled || deadzoneEnabledMixed || topDeadzoneMixed) {
-      heldTargetMm = -1;
-    } else {
-      heldTargetMm = topDeadzone <= 0.005 ? -1 : Math.min(maxTravel, topDeadzone);
-    }
-  } else if (activeTargetSourceRef.current === 'bottomDeadzone') {
-    if (!deadzoneEnabled || deadzoneEnabledMixed || bottomDeadzoneMixed) {
-      heldTargetMm = -1;
-    } else {
-      const botDepth = Math.max(0, maxTravel - bottomDeadzone);
-      heldTargetMm = botDepth <= 0.005 ? -1 : Math.min(maxTravel, botDepth);
-    }
   } else {
-    // 'actuation'
-    if (actuationMixed) {
-      heldTargetMm = -1;
-    } else {
-      heldTargetMm = actuation <= 0.005 ? -1 : Math.min(maxTravel, actuation);
-    }
+    // Actuation Point preview
+    heldTargetMm = actuation <= 0.005 ? -1 : Math.min(maxTravel, actuation);
   }
 
   const targetRef = useRef({ heldTargetMm, maxTravel });
