@@ -22,9 +22,13 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
   const [rgb, setRgb] = useState<RgbProfile>(() =>
     restoreStoredRgb(initialDraft?.rgb, initialDraft?.rgbFormat)
   );
-  const [rgbBaseline, setRgbBaseline] = useState<RgbProfile>(() =>
-    restoreStoredRgb(initialDraft?.rgbBaseline, initialDraft?.rgbFormat)
-  );
+  const [rgbBaseline, setRgbBaseline] = useState<RgbProfile>(() => {
+    const base = restoreStoredRgb(initialDraft?.rgbBaseline, initialDraft?.rgbFormat);
+    if (!base.custom && initialDraft?.rgb?.custom) {
+      base.custom = structuredClone(initialDraft.rgb.custom);
+    }
+    return base;
+  });
   const [rgbHydratedSlot, setRgbHydratedSlot] = useState<ProfileSlot | null>(null);
   const rgbDirty = rgbChanges(rgb, rgbBaseline, modelKeyIds);
   const rgbPending = rgbDirtyCount(rgbDirty);
@@ -187,8 +191,13 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
     setAdvancedBaseline(draft?.advancedBaseline ?? []);
     setAdvancedHydratedSlot(null);
     setAdvancedReadError(null);
-    setRgb(restoreStoredRgb(draft?.rgb, draft?.rgbFormat));
-    setRgbBaseline(restoreStoredRgb(draft?.rgbBaseline, draft?.rgbFormat));
+    const restoredRgb = restoreStoredRgb(draft?.rgb, draft?.rgbFormat);
+    const restoredBaseline = restoreStoredRgb(draft?.rgbBaseline, draft?.rgbFormat);
+    if (!restoredBaseline.custom && restoredRgb.custom) {
+      restoredBaseline.custom = structuredClone(restoredRgb.custom);
+    }
+    setRgb(restoredRgb);
+    setRgbBaseline(restoredBaseline);
     setRgbHydratedSlot(null);
     remapBaselineRef.current = draft?.remapBaseline ?? defaultRemapLayers(keyIds);
     setRemapLayers(draft?.remapLayers ?? defaultRemapLayers(keyIds));

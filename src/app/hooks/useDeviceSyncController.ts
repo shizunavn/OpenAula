@@ -904,7 +904,10 @@ export function useDeviceSyncController({
       } catch (error) {
         setAdvancedReadError(error instanceof Error ? error.message : String(error));
       }
-      setRgbBaseline(freshRgb);
+      const baselineRgb = draft?.rgb?.custom
+        ? { ...freshRgb, custom: structuredClone(draft.rgb.custom) }
+        : freshRgb;
+      setRgbBaseline(baselineRgb);
       setRgb(mergeRgb(freshRgb, draft?.rgb, draft?.rgbDirty));
       setRgbHydratedSlot(slot);
       remapBaselineRef.current = structuredClone(mappings);

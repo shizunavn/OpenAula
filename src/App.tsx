@@ -282,8 +282,9 @@ function App() {
   ]);
   const deviceConnected = deviceConnectionState === 'connected';
   const customRgbPending =
+    isWin68HeMaxModel(deviceModel) &&
     JSON.stringify(workspace.rgb.custom ?? null) !==
-    JSON.stringify(workspace.rgbBaseline.custom ?? null);
+      JSON.stringify(workspace.rgbBaseline.custom ?? null);
   const canSaveAll =
     deviceConnected &&
     workspace.loadedProfileSlot === workspace.profileSlot &&
