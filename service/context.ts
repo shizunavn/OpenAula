@@ -18,12 +18,15 @@ import {
   validTachyonSnapshot,
   type TachyonLightingSnapshot,
 } from '../src/protocol/hero68/tachyonLighting';
+import type { StoredProfileRecord } from '../src/state/profileTypes';
 import { CustomPlayback } from './customPlayback';
 import { deferredSave } from './deferredSave';
 import { RgbFrameEncoder } from './frame';
 import { FrameDelivery } from './frameTelemetry';
 import { HallBroker } from './hallBroker';
 import type { latestSse } from './latestSse';
+import { AutoProfileSwitcher } from './profile/autoProfileSwitcher';
+import { ZeroWearHardwareExecutor } from './profile/hardwareExecutor';
 import { normalizeProfile } from './rgb/profileNormalizer';
 import { defaultRhythm, restoreRhythm, type RhythmConfiguration } from './rhythm';
 
@@ -73,7 +76,7 @@ export function createServiceContext(options: ServiceContextOptions) {
       initialTachyonPreviousMode = saved.previousMode;
     }
   } catch {
-}
+  }
 
   let initialRhythmConfig: RhythmConfiguration = defaultRhythm();
   try {
@@ -81,7 +84,7 @@ export function createServiceContext(options: ServiceContextOptions) {
       JSON.parse(readFileSync(path.join(stateDir, 'rhythm-preset.json'), 'utf8')),
     );
   } catch {
-}
+  }
 
   let initialProfile: RgbProfile | null = null;
   let initialSavedMode: 'onboard' | 'custom' | 'rhythm' = 'onboard';
@@ -99,7 +102,7 @@ export function createServiceContext(options: ServiceContextOptions) {
           ? 'custom'
           : 'onboard';
   } catch {
-}
+  }
 
   if (initialTachyon) {
     if (initialTachyonPreviousMode === 'onboard' && ['custom', 'rhythm'].includes(initialSavedMode)) {
@@ -125,7 +128,33 @@ export function createServiceContext(options: ServiceContextOptions) {
       initialGamepadSlot = v.slot;
     }
   } catch {
-}
+  }
+
+  // Load persisted Linked + Auto-Profile rules from %LOCALAPPDATA%/OpenAula/profiles.json
+  let initialStoredProfiles: StoredProfileRecord[] = [];
+  let initialAutoProfileEnabled = true;
+  let initialRevertToDefault = true;
+  let initialNotifyOnSwitch = true;
+  let initialDefaultProfileUid: string | null = 'onboard-0';
+  try {
+    const savedProfiles = JSON.parse(readFileSync(path.join(stateDir, 'profiles.json'), 'utf8'));
+    if (Array.isArray(savedProfiles.profiles)) {
+      initialStoredProfiles = savedProfiles.profiles;
+    }
+    if (typeof savedProfiles.enabled === 'boolean') {
+      initialAutoProfileEnabled = savedProfiles.enabled;
+    }
+    if (typeof savedProfiles.revertToDefault === 'boolean') {
+      initialRevertToDefault = savedProfiles.revertToDefault;
+    }
+    if (typeof savedProfiles.notifyOnSwitch === 'boolean') {
+      initialNotifyOnSwitch = savedProfiles.notifyOnSwitch;
+    }
+    if (savedProfiles.defaultProfileUid !== undefined) {
+      initialDefaultProfileUid = savedProfiles.defaultProfileUid;
+    }
+  } catch {
+  }
 
   const eventLoopDelay = monitorEventLoopDelay({
     resolution: 5,
@@ -133,6 +162,7 @@ export function createServiceContext(options: ServiceContextOptions) {
   eventLoopDelay.enable();
 
   const playback = new CustomPlayback(initialProfile);
+  const hardwareExecutor = new ZeroWearHardwareExecutor();
 
   const ctx = {
     ...options,
@@ -148,6 +178,7 @@ export function createServiceContext(options: ServiceContextOptions) {
     updating: false,
     customRevision: 0,
     configurationBusy: false,
+    lastManualSaveAt: 0,
     frameEncoder: new RgbFrameEncoder(),
     deviceModel: null as HeroDeviceModelId | null,
     playback,
@@ -239,6 +270,10 @@ export function createServiceContext(options: ServiceContextOptions) {
     ),
     gamepadClients: new Set<ServerResponse>(),
     gamepadInputClients: new Map<ServerResponse, ReturnType<typeof latestSse>>(),
+    profileEventClients: new Set<ServerResponse>(),
+    hardwareExecutor,
+    autoProfileSwitcher: null as unknown as AutoProfileSwitcher,
+    autoSwitchSendPacket: null as ((packet: Uint8Array) => Promise<void>) | null,
     inputStreamScheduled: false,
     inputStreamApplied: false,
     gamepadState: {
@@ -280,6 +315,7 @@ export function createServiceContext(options: ServiceContextOptions) {
     firmwareRecoveryTimer: undefined as ReturnType<typeof setTimeout> | undefined,
     firmwareRecoveryAttempt: 0,
     presetSave: null as unknown as ReturnType<typeof deferredSave>,
+    profilesSave: null as unknown as ReturnType<typeof deferredSave>,
     persistTachyon() {
       writeFileSync(
         tachyonFile + '.tmp',
@@ -315,7 +351,7 @@ export function createServiceContext(options: ServiceContextOptions) {
         }
       } catch {
         /* No previous valid preset. */
-}
+      }
       writeFileSync(
         file + '.tmp',
         JSON.stringify({
@@ -340,7 +376,82 @@ export function createServiceContext(options: ServiceContextOptions) {
       );
       renameSync(file + '.tmp', file);
     },
+    persistProfiles() {
+      const file = path.join(stateDir, 'profiles.json');
+      const telemetry = ctx.autoProfileSwitcher.getTelemetry();
+      writeFileSync(
+        file + '.tmp',
+        JSON.stringify({
+          version: 1,
+          enabled: telemetry.enabled,
+          revertToDefault: telemetry.revertToDefault,
+          notifyOnSwitch: telemetry.notifyOnSwitch,
+          defaultProfileUid: telemetry.revertToDefault ? 'onboard-0' : null,
+          profiles: ctx.autoProfileSwitcher.getProfiles(),
+        }),
+      );
+      renameSync(file + '.tmp', file);
+    },
+    publishProfileEvent(type: string) {
+      const payload = JSON.stringify({
+        type,
+        autoProfile: ctx.autoProfileSwitcher.getTelemetry(),
+      });
+      for (const client of ctx.profileEventClients) {
+        try {
+          client.write(`data: ${payload}\n\n`);
+        } catch {
+          ctx.profileEventClients.delete(client);
+        }
+      }
+    },
   };
+
+  ctx.autoProfileSwitcher = new AutoProfileSwitcher(
+    async targetProfile => {
+      if (!ctx.autoSwitchSendPacket) {
+        return { mode: 'slot-switch', packetsSent: 0 };
+      }
+      const res = await ctx.hardwareExecutor.executeAutoSwitch(targetProfile, {
+        deviceModel: ctx.deviceModel ?? undefined,
+        sendReport: ctx.autoSwitchSendPacket,
+        lastManualSaveAt: ctx.lastManualSaveAt,
+      });
+      return {
+        mode: res.mode,
+        packetsSent: res.packetsSent,
+        needsSlot3WarmupCommit: res.needsSlot3WarmupCommit,
+      };
+    },
+    () => {
+      ctx.publishProfileEvent('profile-switched');
+    },
+    () => performance.now(),
+    async overflowProfile => {
+      if (!ctx.autoSwitchSendPacket) {
+        return { committed: false, packetsSent: 0 };
+      }
+      const transport = {
+        deviceModel: ctx.deviceModel ?? undefined,
+        sendReport: ctx.autoSwitchSendPacket,
+        lastManualSaveAt: ctx.lastManualSaveAt,
+      };
+      const res = await ctx.hardwareExecutor.commitXsydSlot3Overflow(overflowProfile, transport);
+      if (res.committed && typeof transport.lastManualSaveAt === 'number') {
+        ctx.lastManualSaveAt = transport.lastManualSaveAt;
+      }
+      return { committed: res.committed, packetsSent: res.packetsSent };
+    },
+    () => ctx.hardwareExecutor.getXsydSlot3State(),
+  );
+
+  ctx.autoProfileSwitcher.updateConfiguration({
+    profiles: initialStoredProfiles,
+    defaultProfileUid: initialDefaultProfileUid,
+    enabled: initialAutoProfileEnabled,
+    revertToDefault: initialRevertToDefault,
+    notifyOnSwitch: initialNotifyOnSwitch,
+  });
 
   ctx.tachyonLighting = new TachyonLighting(initialTachyonSnapshot, snapshot => {
     ctx.tachyonLighting.snapshot = snapshot;
@@ -352,6 +463,14 @@ export function createServiceContext(options: ServiceContextOptions) {
     error => {
       ctx.lastError = String(error);
       log('Preset save failed: ' + String(error));
+    },
+  );
+
+  ctx.profilesSave = deferredSave(
+    () => ctx.persistProfiles(),
+    error => {
+      ctx.lastError = String(error);
+      log('Profiles save failed: ' + String(error));
     },
   );
 

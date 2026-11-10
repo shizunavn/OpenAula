@@ -17,6 +17,7 @@ import { AppSelect } from './AppSelect';
 import { useT } from '../../i18n';
 import {
   ALL_DEVICE_MODELS,
+  isWin68HeMaxModel,
   type HeroDeviceModel,
   type HeroDeviceModelId
 } from '../../keyboard/devices';
@@ -88,6 +89,10 @@ export function DeviceConnectionPanel({
       })),
     []
   );
+  const onboardSlots = useMemo<readonly ProfileSlot[]>(
+    () => (isWin68HeMaxModel(deviceModel) ? ([0, 1, 2, 3] as const) : ([0, 1, 2] as const)),
+    [deviceModel]
+  );
   // A connected keyboard decides the model by its UUID or handshake. Letting the selector
   // switch it would write another model's key tables into this board.
   const modelLocked = deviceConnected || deviceConnectionState === 'connecting';
@@ -136,7 +141,7 @@ export function DeviceConnectionPanel({
         <div className="profile-slot-row">
           <span>{tr('Profile slot')}</span>
           <div className="profile-slot-buttons" role="group" aria-label={tr('Profile slot')}>
-            {([0, 1, 2] as const).map(slot => (
+            {onboardSlots.map(slot => (
               <button
                 type="button"
                 key={slot}

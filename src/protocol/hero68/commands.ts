@@ -168,7 +168,7 @@ export function readSwitchType(keyIds: Iterable<number>): Uint8Array {
     data: Array.from(keyIds).flatMap(u16be)
   });
 }
-export function selectProfile(slot: 0 | 1 | 2): Uint8Array {
+export function selectProfile(slot: 0 | 1 | 2 | 3): Uint8Array {
   return buildReport({
     command: 0x10,
     data: [slot]
@@ -400,7 +400,7 @@ export function readDeadZone(keyIds: Iterable<number>): Uint8Array {
     data: Array.from(keyIds).flatMap(u16be)
   });
 }
-export function writeProfileName(slot: 0 | 1 | 2, name: string): Uint8Array {
+export function writeProfileName(slot: 0 | 1 | 2 | 3, name: string): Uint8Array {
   const encoded = new TextEncoder().encode(name);
   if (encoded.length > 55) {
     throw new RangeError('name cannot exceed 55 UTF-8 bytes');
@@ -416,7 +416,7 @@ export function writeProfileName(slot: 0 | 1 | 2, name: string): Uint8Array {
     data
   });
 }
-export function readProfileName(slot: 0 | 1 | 2): Uint8Array {
+export function readProfileName(slot: 0 | 1 | 2 | 3): Uint8Array {
   return buildReport({
     command: 0x9a,
     zone: slot,

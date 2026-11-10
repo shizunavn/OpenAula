@@ -13,6 +13,7 @@ export const VI_SERVICE_AND_SETTINGS: Record<string, string> = {
   'Onboard changes use Save to profile.': 'Thay đổi onboard được ghi bằng Lưu vào hồ sơ.',
   Help: 'Trợ giúp',
   'My Profile': 'Hồ sơ của tôi',
+  'My Profiles': 'Hồ sơ của tôi',
   Profiles: 'Hồ sơ',
   'Manage profile': 'Quản lý hồ sơ',
   'Profile slot': 'Khe hồ sơ',
@@ -103,5 +104,90 @@ export const VI_SERVICE_AND_SETTINGS: Record<string, string> = {
   'Draft changes are ready. Use Save to profile above to apply them to the keyboard.':
     'Bản nháp đã sẵn sàng. Bấm Lưu vào hồ sơ ở phía trên để áp dụng lên bàn phím.',
   'Draft changes are kept locally. Connect HERO68, then use Save to profile above.':
-    'Bản nháp được giữ trên máy. Kết nối HERO68, sau đó bấm Lưu vào hồ sơ ở phía trên.'
+    'Bản nháp được giữ trên máy. Kết nối HERO68, sau đó bấm Lưu vào hồ sơ ở phía trên.',
+  // Wootility v5 Profile UI & OpenMAD Auto-Profile translations (from web/i18n/vi.json)
+  'Search...': 'Tìm kiếm...',
+  'New Profile': 'Hồ sơ mới',
+  'No profiles found': 'Không tìm thấy hồ sơ nào',
+  'ONBOARD PROFILES': 'HỒ SƠ TRÊN BÀN PHÍM',
+  'LINKED WITH AN APPLICATION': 'LIÊN KẾT VỚI ỨNG DỤNG',
+  'INACTIVE PROFILES': 'HỒ SƠ KHÔNG HOẠT ĐỘNG',
+  DEFAULT: 'MẶC ĐỊNH',
+  INACTIVE: 'KHÔNG HOẠT ĐỘNG',
+  'Edit Profile': 'Chỉnh sửa hồ sơ',
+  Duplicate: 'Nhân bản',
+  'Move to Inactive': 'Chuyển sang Không hoạt động',
+  'Move to Onboard': 'Chuyển lên Bàn phím',
+  'Copy to Onboard': 'Sao chép lên Bàn phím',
+  'Link to App': 'Liên kết với Ứng dụng',
+  'Unlink Profile': 'Hủy liên kết Hồ sơ',
+  'Copy to Inactive Profiles': 'Sao chép sang Không hoạt động',
+  'Set as Default': 'Đặt làm Mặc định',
+  'Export / Share': 'Xuất / Chia sẻ',
+  'Export JSON': 'Xuất tệp JSON',
+  'Delete...': 'Xóa...',
+  'Delete profile': 'Xóa hồ sơ',
+  'Are you sure you want to remove this profile? This action cannot be undone.':
+    'Bạn có chắc muốn xóa hồ sơ này không? Hành động này không thể hoàn tác.',
+  'Creating new profile': 'Tạo hồ sơ mới',
+  'Select the type of profile you would like to create': 'Chọn loại hồ sơ bạn muốn tạo',
+  'Change Colour': 'Đổi màu',
+  'Linked Applications': 'Ứng dụng liên kết',
+  'Your device will automatically switch to this profile when a linked application is your active window.':
+    'Bàn phím sẽ tự động chuyển sang hồ sơ này khi ứng dụng được liên kết là cửa sổ đang hoạt động.',
+  'Link an application': 'Liên kết một ứng dụng',
+  'Link another application': 'Liên kết ứng dụng khác',
+  'Previously linked apps': 'Ứng dụng đã từng liên kết',
+  'Background service is running. App detection is active.':
+    'Dịch vụ nền đang chạy. Tự động nhận diện ứng dụng đang hoạt động.',
+  'Background service is not running. App detection will not work.':
+    'Dịch vụ nền chưa chạy. Nhận diện ứng dụng tự động sẽ không hoạt động.',
+  'Background Service is not running': 'Dịch vụ nền chưa chạy',
+  "Your linked profiles won't switch automatically until the Background Service is connected.":
+    'Các hồ sơ liên kết sẽ không tự động chuyển đổi cho đến khi Dịch vụ nền được kết nối.',
+  'Go to Background Service': 'Đi tới Dịch vụ nền',
+  Installed: 'Đã cài đặt',
+  'No matching apps': 'Không có ứng dụng phù hợp',
+  'App not listed? Add it manually.': 'Không thấy ứng dụng? Thêm thủ công.',
+  'App name': 'Tên ứng dụng',
+  'Detection method': 'Phương thức nhận diện',
+  'Choose how this app should be detected. You can combine multiple methods.':
+    'Chọn cách nhận diện ứng dụng này. Bạn có thể kết hợp nhiều phương thức.',
+  'A specific app': 'Một ứng dụng cụ thể',
+  'Detect by its executable file (.exe).': 'Nhận diện theo tệp thực thi (.exe).',
+  'All apps from a folder': 'Tất cả ứng dụng trong thư mục',
+  'Detect any app running from a specific folder.':
+    'Nhận diện mọi ứng dụng chạy từ một thư mục cụ thể.',
+  'By window title': 'Theo tiêu đề cửa sổ',
+  'Detect when the window title contains specific text.':
+    'Nhận diện khi tiêu đề cửa sổ chứa chuỗi văn bản cụ thể.',
+  'Back to search': 'Quay lại tìm kiếm',
+  Confirm: 'Xác nhận',
+  Remove: 'Xóa',
+  'Save to keyboard': 'Lưu vào bàn phím',
+  'Save profile': 'Lưu hồ sơ',
+  'Changes saved': 'Đã lưu thay đổi',
+  'Hold Ctrl to copy profile': 'Giữ phím Ctrl để sao chép hồ sơ',
+  'Release to copy profile': 'Thả chuột để sao chép hồ sơ',
+  'Import a Profile': 'Nhập một hồ sơ',
+  'Hardware Sync Mode': 'Chế độ nạp xuống phần cứng',
+  'Onboard Slot Switch (Recommended - 0 Flash Wear)':
+    'Chuyển khe Onboard (Khuyên dùng - 0 hao mòn Flash)',
+  'Host RAM / Diff Stream (For >3 game profiles)':
+    'Nạp trực tiếp từ máy tính (RAM / Diff cho >3 hồ sơ game)',
+  'Auto-Profile Switching (Zero Flash Wear)': 'Tự động chuyển Hồ sơ (Chống mỏi Flash)',
+  'Revert to Default Profile (Slot 1) when leaving linked apps':
+    'Tự quay về Hồ sơ Mặc định (Khe 1) khi rời khỏi ứng dụng liên kết',
+  'Show notification when profile switches automatically':
+    'Hiện thông báo khi tự động chuyển đổi hồ sơ',
+  '3 slots on your {device}': '3 khe hồ sơ trên {device}',
+  '4 slots on your {device}': '4 khe hồ sơ trên {device}',
+  'Background Service v1.8.0 is not running': 'Dịch vụ nền v1.8.0 chưa chạy',
+  'Background Service update to v1.8.0 required': 'Cần cập nhật Dịch vụ nền lên v1.8.0',
+  "Your linked profiles won't switch automatically until Background Service v1.8.0 is connected.":
+    'Các hồ sơ liên kết sẽ không tự động chuyển đổi cho đến khi Dịch vụ nền v1.8.0 được kết nối.',
+  'Detected service': 'Phát hiện dịch vụ',
+  'update to': 'hãy cập nhật lên',
+  'for Auto-Profile & Zero-Flash-Wear.': 'để dùng Tự động chuyển Hồ sơ & Chống mỏi Flash.',
+  'Profile Icon': 'Biểu tượng hồ sơ'
 };

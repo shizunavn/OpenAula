@@ -9,6 +9,7 @@ export type RgbServiceStatus = {
   supportsFullUpdate?: boolean;
   coreVersion?: string;
   launcherVersion?: string;
+  version?: string;
   driverInstalled?: boolean;
   tachyon?: boolean;
   supportsTachyon?: boolean;

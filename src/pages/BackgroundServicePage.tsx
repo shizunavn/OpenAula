@@ -9,13 +9,16 @@ import {
   ExternalLink,
   Gamepad2,
   Keyboard,
-  RefreshCw
+  Link2,
+  RefreshCw,
+  ShieldCheck
 } from 'lucide-react';
 import {
   RGB_SERVICE_DOWNLOAD,
   refreshRgbService,
   useRgbServiceState
 } from '../protocol/rgbServiceState';
+import { useBgService } from '../protocol/bgServiceClient';
 import { gamepadService, VIGEMBUS_DOWNLOAD, VIGEMBUS_RELEASE } from '../protocol/gamepadService';
 import { useLocalServiceAccess } from '../protocol/localServiceAccess';
 import { useHero68Device } from '../protocol/hero68/webhid';
@@ -80,14 +83,27 @@ const VI: Record<string, string> = {
 type DriverState = 'checking' | 'ready' | 'missing' | 'update' | 'unknown' | 'error';
 export default function BackgroundServicePage({
   onOpenCustom,
-  onOpenGamepad
+  onOpenGamepad,
+  autoProfileEnabled = true,
+  onToggleAutoProfile,
+  revertToDefaultOnFocusLoss = true,
+  onToggleRevertToDefault,
+  notifyOnProfileSwitch = true,
+  onToggleNotifyOnSwitch
 }: {
   onOpenCustom: () => void;
   onOpenGamepad: () => void;
+  autoProfileEnabled?: boolean;
+  onToggleAutoProfile?: (enabled: boolean) => void;
+  revertToDefaultOnFocusLoss?: boolean;
+  onToggleRevertToDefault?: (enabled: boolean) => void;
+  notifyOnProfileSwitch?: boolean;
+  onToggleNotifyOnSwitch?: (enabled: boolean) => void;
 }) {
   const { language, tr } = useI18n();
   const t = (text: string) => (language === 'vi' ? (VI[text] ?? tr(text)) : text);
   const { checking, status, reconnecting } = useRgbServiceState();
+  const { autoProfile, openWindows, refreshApps, isServiceOutdated, serviceVersion, requiredServiceVersion } = useBgService();
   const heroDevice = useHero68Device();
   const xsydDevice = useXsydDevice();
   const { permission } = useLocalServiceAccess();
@@ -210,6 +226,7 @@ export default function BackgroundServicePage({
             onClick={() => {
               setAttempt(n => n + 1);
               void refreshRgbService();
+              void refreshApps();
             }}
           >
             <RefreshCw size={14} className={checkingConnection ? 'bs-spinning' : ''} />
@@ -247,6 +264,107 @@ export default function BackgroundServicePage({
           )}
         </p>
       </section>
+
+      {/* Wootility v5 + OpenMAD Auto-Profile Switching & Zero-Flash-Wear Card (E2e / j2e, L88940-L89120) */}
+      <section
+        className="bs-connection"
+        aria-label={tr('Auto-Profile Switching (Zero Flash Wear)')}
+      >
+        <div className="bs-connection-top">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShieldCheck size={18} color="#4ade80" />
+            <h2>{tr('Auto-Profile Switching (Zero Flash Wear)')}</h2>
+          </div>
+          <span
+            className="woot-shortcut-pill"
+            style={{
+              color: online && !isServiceOutdated ? '#4ade80' : '#facc15',
+              borderColor: online && !isServiceOutdated ? 'rgba(74,222,128,0.35)' : 'rgba(250,204,21,0.35)'
+            }}
+          >
+            {online
+              ? isServiceOutdated
+                ? `UPDATE REQUIRED (v${serviceVersion} → v${requiredServiceVersion})`
+                : `v${serviceVersion || requiredServiceVersion} · 400ms Poll · 800ms Debounce · 3000ms Dwell`
+              : `OFFLINE (Requires v${requiredServiceVersion}+)`}
+          </span>
+        </div>
+
+        {(!online || isServiceOutdated) && (
+          <div className="woot-bg-warning-banner" style={{ marginTop: 10 }}>
+            <div>
+              <strong>
+                {isServiceOutdated
+                  ? tr('Background Service update to v1.8.0 required')
+                  : tr('Background Service v1.8.0 is not running')}
+              </strong>
+              <span>
+                {isServiceOutdated
+                  ? `${tr('Detected service')} v${serviceVersion} — ${tr('update to')} v${requiredServiceVersion} ${tr('for Auto-Profile & Zero-Flash-Wear.')}`
+                  : tr(
+                      "Your linked profiles won't switch automatically until Background Service v1.8.0 is connected."
+                    )}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5 }}>
+            <input
+              type="checkbox"
+              checked={autoProfileEnabled}
+              onChange={e => onToggleAutoProfile?.(e.target.checked)}
+            />
+            <span>{tr('Auto-Profile Switching (Zero Flash Wear)')}</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5 }}>
+            <input
+              type="checkbox"
+              checked={revertToDefaultOnFocusLoss}
+              onChange={e => onToggleRevertToDefault?.(e.target.checked)}
+            />
+            <span>{tr('Revert to Default Profile (Slot 1) when leaving linked apps')}</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5 }}>
+            <input
+              type="checkbox"
+              checked={notifyOnProfileSwitch}
+              onChange={e => onToggleNotifyOnSwitch?.(e.target.checked)}
+            />
+            <span>{tr('Show notification when profile switches automatically')}</span>
+          </label>
+        </div>
+
+        <div
+          style={{
+            marginTop: 12,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'rgba(255,255,255,0.03)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 16,
+            fontSize: 12.5,
+            color: 'var(--woot-text-subtle)'
+          }}
+        >
+          <span>
+            <Link2 size={13} style={{ verticalAlign: 'middle', marginRight: 5 }} />
+            Active Foreground App: <strong>{autoProfile.activeApp?.exe || 'None'}</strong>
+          </span>
+          <span>
+            Open Windows Detected: <strong>{openWindows.length}</strong>
+          </span>
+          <span>
+            Auto-Switches: <strong>{autoProfile.switchCount}</strong>
+          </span>
+          <span>
+            Flash Erase/Write Cycles Saved: <strong>{autoProfile.flashWritesSaved}</strong>
+          </span>
+        </div>
+      </section>
+
       <div className="bs-install-grid">
         <section className="bs-install-card">
           <div className="bs-install-heading">
@@ -261,7 +379,7 @@ export default function BackgroundServicePage({
           <a className="apply-button bs-download" href={RGB_SERVICE_DOWNLOAD}>
             <ArrowDownToLine size={17} />
             {t('Download Windows app')}
-            <span>Windows x64 · EXE</span>
+            <span>v1.8.0 · Windows x64 · EXE</span>
           </a>
           <ol className="bs-steps">
             <li>

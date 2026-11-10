@@ -3,6 +3,12 @@ import type { RgbProfile, RgbDirty } from '../protocol/hero68/rgb';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import type { HeroDeviceModelId } from '../keyboard/devices';
 import type { LanguagePreference } from '../i18n';
+import type {
+  LinkedAppRule,
+  ProfileId,
+  StoredProfileRecord,
+  WootProfileMetadata
+} from './profileTypes';
 import { BRAND } from '../brand';
 export const OPENHERO68_STATE_KEY = `${BRAND.storagePrefix}:web-state:v1`;
 export type PersistedOpenHeroState = {
@@ -37,10 +43,19 @@ export type PersistedOpenHeroState = {
   autoCalibration?: boolean;
   switchSearch?: string;
   switchBrandFilter?: string;
-  profileSlot?: 0 | 1 | 2;
-  profileNames?: Record<0 | 1 | 2, string>;
+  profileSlot?: 0 | 1 | 2 | 3;
+  profileNames?: Record<0 | 1 | 2 | 3, string>;
   remapLayers?: RemapLayers;
-  profileDrafts?: Partial<Record<0 | 1 | 2, ProfileDraft>>;
+  profileDrafts?: Partial<Record<0 | 1 | 2 | 3, ProfileDraft>>;
+  // Wootility v5 + OpenMAD 3-Tier Profile Storage
+  activeProfileId?: ProfileId;
+  onboardMetadata?: Partial<Record<0 | 1 | 2 | 3, WootProfileMetadata>>;
+  linkedProfiles?: StoredProfileRecord[];
+  inactiveProfiles?: StoredProfileRecord[];
+  cachedLinkedApps?: LinkedAppRule[];
+  autoProfileEnabled?: boolean;
+  revertToDefaultOnFocusLoss?: boolean;
+  notifyOnProfileSwitch?: boolean;
 };
 export type ProfileDraft = Pick<
   PersistedOpenHeroState,

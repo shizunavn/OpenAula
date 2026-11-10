@@ -9,6 +9,8 @@ import {
 
 export { HERO84_ONLY_KEYS, HERO84_DEMO_HUES, HERO84_COLOR_SOURCES, HERO84_LAYOUT };
 
+export const HERO84_KEY_IDS = HERO84_LAYOUT.flat().map(key => key.id);
+
 export function makeHero84DemoLighting(): Record<string, string> {
   return HERO84_BOARD.makeDemoLighting();
 }

@@ -7,6 +7,7 @@
 #include <psapi.h>
 #include <setupapi.h>
 #pragma comment(lib, "psapi.lib")
+#include "foreground_monitor.h"
 #include "frame_telemetry.h"
 #include "gamepad_output.h"
 #include "hall_core.h"
@@ -1386,6 +1387,14 @@ struct BridgeSession {
   }
 
   void handleCommandLine(const std::string& line) {
+    if (line == "foreground-app") {
+      emitLine("foreground-app:" + foreground::toJson(foreground::getForegroundApp()));
+      return;
+    }
+    if (line == "list-windows") {
+      emitLine("open-windows:" + foreground::toJsonArray(foreground::listWindowedProcesses()));
+      return;
+    }
     if (line.rfind("hall-config:", 0) == 0) {
       handleHallConfig(line.substr(12));
       return;

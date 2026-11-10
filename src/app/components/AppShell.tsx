@@ -1,8 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { version as uiVersion } from '../../../package.json';
 import {
   Activity,
   ArrowDownToLine,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -10,8 +11,11 @@ import {
   Gamepad2,
   Keyboard,
   Lightbulb,
+  Link2,
   ListOrdered,
+  Loader2,
   Palette,
+  Save,
   Settings,
   Sparkles,
   Stethoscope,
@@ -22,8 +26,23 @@ import { BRAND } from '../../brand';
 import LegacyHostBanner from '../../components/LegacyHostBanner';
 import LocalServicePermissionGuide from '../../components/LocalServicePermissionGuide';
 import type { RgbTab } from '../../components/RgbSettingsPage';
+import { CreateProfileWizard } from '../../components/profile/CreateProfileWizard';
+import { DeleteProfileDialog } from '../../components/profile/DeleteProfileDialog';
+import { ImportProfileModal } from '../../components/profile/ImportProfileModal';
+import { MyProfilesDrawer } from '../../components/profile/MyProfilesDrawer';
+import { renderProfileAvatarIcon } from '../../components/profile/ProfileCard';
+import { ProfileEditorModal } from '../../components/profile/ProfileEditorModal';
 import { useT } from '../../i18n';
+import { isWin68HeMaxModel, type HeroDeviceModelId } from '../../keyboard/devices';
+import { useBgService } from '../../protocol/bgServiceClient';
 import type { ProfileSlot } from '../../protocol/hero68/types';
+import {
+  createDefaultOnboardMetadata,
+  type ProfileNamespace,
+  type StoredProfileRecord,
+  type WootPresetDefinition,
+  type WootProfileMetadata
+} from '../../state/profileTypes';
 import { AdvancedKeysMenuIcon } from './AdvancedKeysMenuIcon';
 import { KeyRemapMenuIcon } from './KeyRemapMenuIcon';
 import { KeyboardMenuIcon } from './KeyboardMenuIcon';
@@ -44,6 +63,7 @@ export type AppShellProps = {
   onToggleCompactSidebar: () => void;
   showAdvancedPages: boolean;
   devicePanel: ReactNode;
+  deviceModel?: HeroDeviceModelId;
   profileSlot: ProfileSlot;
   profileNames: Record<ProfileSlot, string>;
   onSelectProfileSlot: (slot: ProfileSlot) => void;
@@ -57,6 +77,26 @@ export type AppShellProps = {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  // Optional Wootility v5 Profile Workspace bindings
+  onboardMetadata?: Record<ProfileSlot, WootProfileMetadata>;
+  linkedProfiles?: StoredProfileRecord[];
+  inactiveProfiles?: StoredProfileRecord[];
+  activeProfileNamespace?: ProfileNamespace;
+  activeProfileUid?: string;
+  onSelectStoredProfile?: (record: StoredProfileRecord, namespace: 'linked' | 'inactive') => void;
+  onUpdateProfileMetadata?: (updated: WootProfileMetadata) => void;
+  onCreateNewProfile?: (
+    namespace: ProfileNamespace,
+    metadata: WootProfileMetadata,
+    preset: WootPresetDefinition
+  ) => void;
+  onDuplicateProfile?: (meta: WootProfileMetadata) => void;
+  onExportAnyProfile?: (meta: WootProfileMetadata) => void;
+  onMoveToInactive?: (meta: WootProfileMetadata, sourceSlot?: ProfileSlot) => void;
+  onMoveToOnboard?: (record: StoredProfileRecord, targetSlot?: ProfileSlot) => void;
+  onSwapDefaultSlot?: (slot: ProfileSlot) => void;
+  onDeleteStoredProfile?: (uid: string) => void;
+  onImportProfileRecord?: (record: StoredProfileRecord) => void;
   children: ReactNode;
 };
 
@@ -71,6 +111,7 @@ export function AppShell({
   onToggleCompactSidebar,
   showAdvancedPages,
   devicePanel,
+  deviceModel = 'hero68',
   profileSlot,
   profileNames,
   onSelectProfileSlot,
@@ -84,11 +125,86 @@ export function AppShell({
   canRedo = false,
   onUndo,
   onRedo,
+  onboardMetadata,
+  linkedProfiles = [],
+  inactiveProfiles = [],
+  activeProfileNamespace = 'onboard',
+  activeProfileUid,
+  onSelectStoredProfile,
+  onUpdateProfileMetadata,
+  onCreateNewProfile,
+  onDuplicateProfile,
+  onExportAnyProfile,
+  onMoveToInactive,
+  onMoveToOnboard,
+  onSwapDefaultSlot,
+  onDeleteStoredProfile,
+  onImportProfileRecord,
   children
 }: AppShellProps) {
   const tr = useT();
+  const { autoProfile, hasBgService, isServiceOutdated, requiredServiceVersion } = useBgService();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<WootProfileMetadata | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [deletingProfile, setDeletingProfile] = useState<WootProfileMetadata | null>(null);
   const showKeyboardArea = activeRail === 'keyboard';
+  const maxOnboardSlots: 3 | 4 = isWin68HeMaxModel(deviceModel) ? 4 : 3;
+
+  const resolvedOnboardMeta = useMemo<Record<ProfileSlot, WootProfileMetadata>>(
+    () => ({
+      0:
+        onboardMetadata?.[0] ??
+        createDefaultOnboardMetadata(0, profileNames[0] || 'Onboard Profile 0', deviceModel),
+      1:
+        onboardMetadata?.[1] ??
+        createDefaultOnboardMetadata(1, profileNames[1] || 'Onboard Profile 1', deviceModel),
+      2:
+        onboardMetadata?.[2] ??
+        createDefaultOnboardMetadata(2, profileNames[2] || 'Onboard Profile 2', deviceModel),
+      3:
+        onboardMetadata?.[3] ??
+        createDefaultOnboardMetadata(3, profileNames[3] || 'Onboard Profile 3', deviceModel)
+    }),
+    [deviceModel, onboardMetadata, profileNames]
+  );
+
+  const currentProfileMeta = useMemo<WootProfileMetadata>(() => {
+    if (activeProfileUid && !activeProfileUid.startsWith('onboard-')) {
+      const found = [...linkedProfiles, ...inactiveProfiles].find(
+        p => p.metadata.uid === activeProfileUid
+      );
+      if (found) {
+        return found.metadata;
+      }
+    }
+    return resolvedOnboardMeta[profileSlot] ?? resolvedOnboardMeta[0];
+  }, [activeProfileUid, inactiveProfiles, linkedProfiles, profileSlot, resolvedOnboardMeta]);
+
+  const allStoredProfiles = useMemo<StoredProfileRecord[]>(() => {
+    const slots: readonly ProfileSlot[] =
+      maxOnboardSlots === 4 ? ([0, 1, 2, 3] as const) : ([0, 1, 2] as const);
+    const onboardRecs: StoredProfileRecord[] = slots.map(s => ({
+      metadata: resolvedOnboardMeta[s],
+      draft: {}
+    }));
+    return [...onboardRecs, ...linkedProfiles, ...inactiveProfiles];
+  }, [inactiveProfiles, linkedProfiles, maxOnboardSlots, resolvedOnboardMeta]);
+
+  // Global Ctrl+S / Cmd+S shortcut for Save (Pp in wootility.readable.js L93310-L93420)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (deviceConnected && !profileBusy && canSaveAll) {
+          onSaveAll();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canSaveAll, deviceConnected, onSaveAll, profileBusy]);
 
   const sidebarItems = useMemo(() => {
     const items = [
@@ -130,6 +246,15 @@ export function AppShell({
     ],
     [tr]
   );
+
+  // 4-state Save button class & label (Pp, L93310-L93420)
+  const saveButtonState = profileBusy
+    ? 'is-saving'
+    : saveState === 'sent'
+      ? 'is-saved'
+      : canSaveAll && deviceConnected
+        ? 'is-can-save'
+        : 'is-idle';
 
   return (
     <div className={`app-shell ${compactSidebar ? 'is-sidebar-compact' : ''}`}>
@@ -276,43 +401,99 @@ export function AppShell({
                 </div>
               ) : showKeyboardArea ? (
                 <>
-                  <button
-                    className="profile-control"
-                    disabled={profileBusy}
-                    onClick={() => setProfileOpen(!profileOpen)}
+                  {/* Wootility v5 TopBar Profile Bar (xae, L93098-L93245) */}
+                  <div
+                    className="woot-topbar-profile-bar"
+                    style={
+                      {
+                        '--profile-color': currentProfileMeta.color || '#ffd45c'
+                      } as React.CSSProperties
+                    }
                   >
-                    <span className="profile-icon">
-                      <Keyboard size={17} />
-                    </span>
-                    <strong>{profileNames[profileSlot]}</strong>
-                    <ChevronDown size={17} className={profileOpen ? 'rotate' : ''} />
-                  </button>
-                  {profileOpen && (
-                    <div className="profile-menu">
-                      {([0, 1, 2] as const).map(slot => (
-                        <button
-                          key={slot}
-                          className={profileSlot === slot ? 'is-selected' : ''}
-                          disabled={profileBusy}
-                          onClick={() => {
-                            setProfileOpen(false);
-                            onSelectProfileSlot(slot);
-                          }}
-                        >
-                          {profileNames[slot]}{' '}
-                          {profileSlot === slot && <span>{tr('Current')}</span>}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => {
-                          onSelectPage('profile');
-                          setProfileOpen(false);
-                        }}
-                      >
-                        {tr('Manage profile')}
-                      </button>
-                    </div>
-                  )}
+                    <span className="woot-topbar-accent-arch" aria-hidden="true" />
+
+                    {/* Clickable avatar button opens ProfileEditorModal directly (h4 -> aw) */}
+                    <button
+                      type="button"
+                      className="woot-topbar-avatar-btn"
+                      disabled={profileBusy}
+                      title={tr('Edit Profile')}
+                      aria-label={tr('Edit Profile')}
+                      onClick={() => setEditingProfile(currentProfileMeta)}
+                    >
+                      {renderProfileAvatarIcon(currentProfileMeta.icon, 18)}
+                    </button>
+
+                    {/* Body button opens MyProfilesDrawer (bae) */}
+                    <button
+                      type="button"
+                      className="woot-topbar-body-btn"
+                      disabled={profileBusy}
+                      onClick={() => setProfileOpen(prev => !prev)}
+                      aria-expanded={profileOpen}
+                    >
+                      <span className="woot-topbar-title-group">
+                        <strong className="woot-topbar-name">{currentProfileMeta.name}</strong>
+
+                        {activeProfileNamespace === 'inactive' ? (
+                          <span className="woot-badge-inactive">{tr('INACTIVE')}</span>
+                        ) : autoProfile.activeApp?.exe ? (
+                          <span className="woot-badge-active-app">
+                            <Link2 size={11} />
+                            {autoProfile.activeApp.exe}
+                          </span>
+                        ) : (
+                          <kbd className="woot-shortcut-pill">Fn + P{profileSlot + 1}</kbd>
+                        )}
+                        {linkedProfiles.length > 0 && !hasBgService && (
+                          <span
+                            className="woot-shortcut-pill"
+                            style={{
+                              color: '#facc15',
+                              borderColor: 'rgba(250, 204, 21, 0.38)',
+                              background: 'rgba(250, 204, 21, 0.1)'
+                            }}
+                            title={
+                              isServiceOutdated
+                                ? tr('Background Service update to v1.8.0 required')
+                                : tr('Background Service v1.8.0 is not running')
+                            }
+                          >
+                            ! Service v{requiredServiceVersion}
+                          </span>
+                        )}
+                      </span>
+                      <ChevronDown size={17} className={profileOpen ? 'rotate' : ''} />
+                    </button>
+                  </div>
+
+                  {/* Wootility v5 MyProfilesDrawer (bae, L92807-L93096) */}
+                  <MyProfilesDrawer
+                    isOpen={profileOpen}
+                    onClose={() => setProfileOpen(false)}
+                    activeSlot={profileSlot}
+                    activeProfileUid={activeProfileUid ?? `onboard-${profileSlot}`}
+                    maxOnboardSlots={maxOnboardSlots}
+                    onboardProfiles={resolvedOnboardMeta}
+                    linkedProfiles={linkedProfiles}
+                    inactiveProfiles={inactiveProfiles}
+                    onSelectOnboard={slot => onSelectProfileSlot(slot)}
+                    onSelectStoredProfile={(rec, ns) => onSelectStoredProfile?.(rec, ns)}
+                    onEditProfile={meta => setEditingProfile(meta)}
+                    onDuplicateProfile={meta => onDuplicateProfile?.(meta)}
+                    onExportProfile={meta => onExportAnyProfile?.(meta)}
+                    onMoveToInactive={(meta, slot) => onMoveToInactive?.(meta, slot)}
+                    onMoveToOnboard={(rec, slot) => onMoveToOnboard?.(rec, slot)}
+                    onSetAsDefault={slot => onSwapDefaultSlot?.(slot)}
+                    onDeleteProfile={meta => setDeletingProfile(meta)}
+                    onOpenNewProfile={() => setCreateOpen(true)}
+                    onOpenImportProfile={() => setImportOpen(true)}
+                    onOpenMyProfilesPage={() => onSelectPage('profile')}
+                    onOpenBgServiceSettings={() => {
+                      onSelectRail('settings');
+                      onSelectSettingsPage('background-service');
+                    }}
+                  />
                 </>
               ) : (
                 <div className="page-title-bar">
@@ -343,15 +524,31 @@ export function AppShell({
                     />
                   )}
                   <button
-                    className="apply-button"
+                    type="button"
+                    className={`woot-save-btn apply-button ${saveButtonState}`}
                     onClick={onSaveAll}
                     disabled={!deviceConnected || profileBusy || !canSaveAll}
+                    title="Ctrl+S"
                   >
-                    {profileBusy
-                      ? tr('Syncing…')
-                      : saveState === 'sent'
-                        ? tr('Saved to profile {slot}', { slot: profileSlot })
-                        : tr('Save to profile {slot}', { slot: profileSlot })}
+                    {profileBusy ? (
+                      <>
+                        <Loader2 size={15} className="bs-spinning" />
+                        {tr('Saving…')}
+                      </>
+                    ) : saveState === 'sent' ? (
+                      <>
+                        <Check size={15} />
+                        {tr('Changes saved')}
+                      </>
+                    ) : (
+                      <>
+                        {canSaveAll && deviceConnected && <span className="woot-save-dot" />}
+                        <Save size={15} />
+                        {activeProfileNamespace === 'inactive'
+                          ? tr('Save profile')
+                          : tr('Save to keyboard')}
+                      </>
+                    )}
                   </button>
                 </>
               )}
@@ -367,6 +564,56 @@ export function AppShell({
           {children}
         </div>
       </main>
+
+      {/* Modals rendered at AppShell level for instant access from TopBar or Drawer */}
+      {editingProfile && (
+        <ProfileEditorModal
+          profile={editingProfile}
+          maxOnboardSlots={maxOnboardSlots}
+          allProfiles={allStoredProfiles}
+          onClose={() => setEditingProfile(null)}
+          onSave={updated => onUpdateProfileMetadata?.(updated)}
+          onOpenBgServiceSettings={() => {
+            setEditingProfile(null);
+            onSelectRail('settings');
+            onSelectSettingsPage('background-service');
+          }}
+        />
+      )}
+
+      {createOpen && (
+        <CreateProfileWizard
+          deviceModel={deviceModel}
+          usedOnboardSlots={maxOnboardSlots}
+          totalOnboardSlots={maxOnboardSlots}
+          usedLinkedSlots={linkedProfiles.length}
+          usedInactiveSlots={inactiveProfiles.length}
+          allProfiles={allStoredProfiles}
+          onClose={() => setCreateOpen(false)}
+          onCreate={(ns, meta, preset) => onCreateNewProfile?.(ns, meta, preset)}
+          onOpenBgServiceSettings={() => {
+            setCreateOpen(false);
+            onSelectRail('settings');
+            onSelectSettingsPage('background-service');
+          }}
+        />
+      )}
+
+      {importOpen && (
+        <ImportProfileModal
+          currentDeviceModel={deviceModel}
+          onClose={() => setImportOpen(false)}
+          onImport={rec => onImportProfileRecord?.(rec)}
+        />
+      )}
+
+      {deletingProfile && (
+        <DeleteProfileDialog
+          profileName={deletingProfile.name}
+          onCancel={() => setDeletingProfile(null)}
+          onConfirm={() => onDeleteStoredProfile?.(deletingProfile.uid)}
+        />
+      )}
     </div>
   );
 }

@@ -2,7 +2,11 @@
 // These types describe the wire protocol recovered from the official AULA HERO68 HE
 // web bundle (firmware 0323). See src/protocol/hero68/README.md for provenance notes.
 
-export type ProfileSlot = 0 | 1 | 2;
+export type ProfileSlot = 0 | 1 | 2 | 3;
+
+export function getOnboardSlotsForModel(model?: string | null): ProfileSlot[] {
+  return model === 'win68HeMax' || model === 'win68' ? [0, 1, 2, 3] : [0, 1, 2];
+}
 export type LayerId = 0 | 1 | 2;
 export type PhysicalKeyId = number;
 export type PollingRate = 125 | 250 | 500 | 1000 | 2000 | 4000 | 8000;

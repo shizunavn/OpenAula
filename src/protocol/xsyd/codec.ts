@@ -218,3 +218,11 @@ export function decodeXsydFrame(frame: Uint8Array): XsydReply {
     raw: frame
   };
 }
+
+export function xsydReport(opcode: number, payload: ArrayLike<number> = []): Uint8Array {
+  return buildXsydFrame(opcode, payload);
+}
+
+export function xsydSelectProfileSlot(slot: number): Uint8Array {
+  return buildXsydFrame(0x00, [0x70, slot & 0xff, 0xff, 0xff]);
+}

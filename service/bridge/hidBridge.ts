@@ -8,6 +8,7 @@ import { decodeReport } from '../../src/protocol/hero68/codec';
 import type { HallRecord, ServiceContext } from '../context';
 import type { NativeFrameTotals } from '../frameTelemetry';
 import { decodeHero68Input } from '../keyInput';
+import type { ForegroundAppInfo } from '../profile/autoProfileSwitcher';
 import { profileRequest } from '../profileSelection';
 import { nativeRhythmCommand, type RhythmConfiguration } from '../rhythm';
 
@@ -317,7 +318,8 @@ export class NativeBridge {
     return this.ctx.gamepadState.enabled;
   }
 
-  async request(packet: Uint8Array, sendOnly = false) {    return profileRequest(packet, nextPacket => this.requestOnce(nextPacket, sendOnly));
+  async request(packet: Uint8Array, sendOnly = false) {
+    return profileRequest(packet, nextPacket => this.requestOnce(nextPacket, sendOnly));
   }
 
   private async requestOnce(packet: Uint8Array, sendOnly = false) {
@@ -402,6 +404,22 @@ export class NativeBridge {
       throw Error('Audio enumeration failed');
     }
     return JSON.parse(result.slice(14));
+  }
+
+  async foregroundApp(): Promise<ForegroundAppInfo | null> {
+    const result = await this.line('foreground-app');
+    if (!result.startsWith('foreground-app:')) {
+      return null;
+    }
+    return JSON.parse(result.slice(15)) as ForegroundAppInfo;
+  }
+
+  async openWindows(): Promise<ForegroundAppInfo[]> {
+    const result = await this.line('list-windows');
+    if (!result.startsWith('open-windows:')) {
+      return [];
+    }
+    return JSON.parse(result.slice(13)) as ForegroundAppInfo[];
   }
 
   async close() {

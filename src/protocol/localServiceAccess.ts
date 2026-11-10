@@ -165,6 +165,9 @@ export function createLocalServiceAccess(
 }
 const access = createLocalServiceAccess();
 export const fetchLocalService = access.request;
+export function getLocalServicePermission(): PermissionState | 'unknown' {
+  return access.getSnapshot().permission;
+}
 export function useLocalServiceAccess() {
   return useSyncExternalStore(access.subscribe, access.getSnapshot, access.getSnapshot);
 }

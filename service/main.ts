@@ -126,6 +126,15 @@ bridge = new NativeBridge(ctx, __dirname, {
   onFatalExit: exitCode => void shutdown(exitCode),
 });
 
+ctx.autoSwitchSendPacket = async packet => {
+  await exclusive(async () => {
+    if (!ctx.connected) {
+      await rgbController.connect();
+    }
+    await bridge.request(packet, ctx.deviceModel === 'win68HeMax');
+  });
+};
+
 const setupUpdater = createSetupUpdater({
   version: coreVersion,
   stateDir,
@@ -144,6 +153,7 @@ const { server } = createServiceServer({
 });
 
 let timer: ReturnType<typeof setTimeout>;
+let lastForegroundPollAt = 0;
 
 async function loop() {
   const now = performance.now();
@@ -156,6 +166,20 @@ async function loop() {
       ctx.lastError = String(e);
     }
   }
+  // OpenMAD 400ms foreground window sensor poll (when not busy with manual configuration)
+  if (
+    !ctx.configurationBusy &&
+    !ctx.closing &&
+    now - lastForegroundPollAt >= ctx.autoProfileSwitcher.pollIntervalMs
+  ) {
+    lastForegroundPollAt = now;
+    try {
+      const fgApp = await exclusive(() => bridge.foregroundApp());
+      await ctx.autoProfileSwitcher.onForegroundPoll(fgApp);
+    } catch {
+      // Ignore transient foreground poll contention
+    }
+  }
   if (now - ctx.windowStart >= 1000) {
     ctx.fps = (ctx.windowFrames * 1000) / (now - ctx.windowStart);
     ctx.renderFps = (ctx.windowRendered * 1000) / (now - ctx.windowStart);
@@ -164,7 +188,7 @@ async function loop() {
     ctx.windowStart = now;
   }
   if (!ctx.closing) {
-    timer = setTimeout(loop, 250);
+    timer = setTimeout(loop, 200);
   }
 }
 
@@ -196,6 +220,9 @@ async function shutdown(exitCode = 0) {
   for (const client of ctx.hallClients.keys()) {
     client.end();
   }
+  for (const client of ctx.profileEventClients) {
+    client.end();
+  }
   await exclusive(() => bridge.close()).catch(() => {});
   bridge.end();
   server.close(() => process.exit(exitCode));
@@ -223,7 +250,7 @@ server.listen(port, '127.0.0.1', () => {
       try {
         await gamepadController.firmware.restore();
       } catch {
-setImmediate(() => gamepadController.scheduleFirmwareRecovery());
+        setImmediate(() => gamepadController.scheduleFirmwareRecovery());
       }
     }
     if (ctx.mode === 'custom') {

@@ -328,9 +328,14 @@ function App() {
               onToggleCompactSidebar={() => ui.setCompactSidebar(prev => !prev)}
               showAdvancedPages={ui.showAdvancedPages}
               devicePanel={devicePanel}
+              deviceModel={deviceModel}
               profileSlot={workspace.profileSlot}
               profileNames={workspace.profileNames}
-              onSelectProfileSlot={slot => void sync.selectOnboardProfile(slot)}
+              onSelectProfileSlot={slot => {
+                workspace.setActiveProfileNamespace('onboard');
+                workspace.setActiveProfileUid(`onboard-${slot}`);
+                void sync.selectOnboardProfile(slot);
+              }}
               activeRgbTab={ui.activeRgbTab}
               deviceConnected={deviceConnected}
               profileBusy={workspace.profileBusy}
@@ -341,6 +346,28 @@ function App() {
               canRedo={sync.canRedo}
               onUndo={sync.undoProfileChange}
               onRedo={sync.redoProfileChange}
+              onboardMetadata={workspace.onboardMetadata}
+              linkedProfiles={workspace.linkedProfiles}
+              inactiveProfiles={workspace.inactiveProfiles}
+              activeProfileNamespace={workspace.activeProfileNamespace}
+              activeProfileUid={workspace.activeProfileUid}
+              onSelectStoredProfile={(rec, ns) => {
+                workspace.setActiveProfileNamespace(ns);
+                workspace.setActiveProfileUid(rec.metadata.uid);
+                workspace.restoreWorkspaceDraft(rec.draft);
+                perf.restoreFromDraft(rec.draft, modelKeyIds);
+              }}
+              onUpdateProfileMetadata={workspace.updateProfileMetadata}
+              onCreateNewProfile={(ns, meta, preset) => {
+                workspace.createNewProfile(ns, meta, preset);
+              }}
+              onDuplicateProfile={workspace.duplicateProfile}
+              onExportAnyProfile={workspace.exportAnyProfile}
+              onMoveToInactive={workspace.moveProfileToInactive}
+              onMoveToOnboard={workspace.moveProfileToOnboard}
+              onSwapDefaultSlot={workspace.swapDefaultSlot}
+              onDeleteStoredProfile={workspace.deleteStoredProfile}
+              onImportProfileRecord={workspace.importProfileRecord}
             >
               {ui.activeRail === 'keyboard' ? (
                 ui.activePage === 'profile' ? (
@@ -369,7 +396,11 @@ function App() {
                       0
                     )}
                     advancedKeys={workspace.advancedBindings.length}
-                    onSelect={slot => void sync.selectOnboardProfile(slot)}
+                    onSelect={slot => {
+                      workspace.setActiveProfileNamespace('onboard');
+                      workspace.setActiveProfileUid(`onboard-${slot}`);
+                      void sync.selectOnboardProfile(slot);
+                    }}
                     onRename={sync.renameProfile}
                     onExport={sync.exportProfile}
                     onRemap={() => ui.setActivePage('remap')}
@@ -377,6 +408,31 @@ function App() {
                     onRefresh={() => void sync.handleReadFromDevice()}
                     onResetProfile={sync.resetProfileToDefaults}
                     onDiscardDraft={sync.discardProfileDraftChanges}
+                    onboardMetadata={workspace.onboardMetadata}
+                    linkedProfiles={workspace.linkedProfiles}
+                    inactiveProfiles={workspace.inactiveProfiles}
+                    activeProfileUid={workspace.activeProfileUid}
+                    autoProfileEnabled={workspace.autoProfileEnabled}
+                    onToggleAutoProfile={workspace.setAutoProfileEnabled}
+                    onSelectStoredProfile={(rec, ns) => {
+                      workspace.setActiveProfileNamespace(ns);
+                      workspace.setActiveProfileUid(rec.metadata.uid);
+                      workspace.restoreWorkspaceDraft(rec.draft);
+                      perf.restoreFromDraft(rec.draft, modelKeyIds);
+                    }}
+                    onUpdateProfileMetadata={workspace.updateProfileMetadata}
+                    onCreateNewProfile={workspace.createNewProfile}
+                    onDuplicateProfile={workspace.duplicateProfile}
+                    onExportAnyProfile={workspace.exportAnyProfile}
+                    onMoveToInactive={workspace.moveProfileToInactive}
+                    onMoveToOnboard={workspace.moveProfileToOnboard}
+                    onSwapDefaultSlot={workspace.swapDefaultSlot}
+                    onDeleteStoredProfile={workspace.deleteStoredProfile}
+                    onImportProfileRecord={workspace.importProfileRecord}
+                    onOpenBgServiceSettings={() => {
+                      ui.setActiveRail('settings');
+                      ui.setActiveSettingsPage('background-service');
+                    }}
                   />
                 ) : ui.activePage === 'macros' ? (
                   <MacroPage />
@@ -448,7 +504,7 @@ function App() {
                     handleActuationHallStreamToggle={hallVm.handleActuationHallStreamToggle}
                     actuationHallTriggered={hallVm.actuationHallTriggered}
                     actuationHallFocusKeyId={hallVm.actuationHallFocusKeyId}
-                    actuationHallTravelMm={hallVm.actuationHallTravelMm}
+                    actuationHallTravelMm={hallVm.hallStreamFocusSample ? hallVm.actuationHallTravelMm : hallVm.actuationHallTravelMm}
                     actuationHallTravelPercent={hallVm.actuationHallTravelPercent}
                     actuationHallThresholdPercent={hallVm.actuationHallThresholdPercent}
                     actuationHallThresholdMm={hallVm.actuationHallThresholdMm}
@@ -679,6 +735,12 @@ function App() {
                       ui.setActivePage('gamepad');
                       ui.setActiveRail('keyboard');
                     }}
+                    autoProfileEnabled={workspace.autoProfileEnabled}
+                    onToggleAutoProfile={workspace.setAutoProfileEnabled}
+                    revertToDefaultOnFocusLoss={workspace.revertToDefaultOnFocusLoss}
+                    onToggleRevertToDefault={workspace.setRevertToDefaultOnFocusLoss}
+                    notifyOnProfileSwitch={workspace.notifyOnProfileSwitch}
+                    onToggleNotifyOnSwitch={workspace.setNotifyOnProfileSwitch}
                   />
                 ) : ui.activeSettingsPage === 'diagnostics' ? (
                   <DiagnosticsPage />

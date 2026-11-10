@@ -79,6 +79,85 @@
   --device-thumb-size: clamp(46px, 2.9vw, 56px);
   --card-pad-x: clamp(16px, 1.25vw, 24px);
   --switch-preview-key-size: 48px;
+
+  /* === WOOTILITY V5 SEMANTIC DESIGN TOKENS (web/assets/index-CDXn1GwQ.css) === */
+  /* Elevation & Surfaces */
+  --woot-elevation-surface: #181a1b;
+  --woot-elevation-sunken: #111213;
+  --woot-elevation-raised: #222426;
+  --woot-elevation-overlay: #2b2e31;
+  --woot-elevation-overlay-hover: #34383c;
+  --woot-elevation-overlay-pressed: rgba(205, 219, 234, 0.28);
+  --woot-elevation-screen-overlay: rgba(0, 0, 0, 0.8);
+
+  /* Selectable Cards (ProfileCard I3, AppItemRow If, PresetCard iv) */
+  --woot-selectable-subtle-bg: rgba(175, 189, 203, 0.08);
+  --woot-selectable-subtle-bg-hover: rgba(182, 196, 210, 0.16);
+  --woot-selectable-subtle-bg-pressed: rgba(205, 219, 234, 0.28);
+  --woot-selectable-subtle-bg-selected: rgba(175, 189, 203, 0.08);
+  --woot-selectable-default-bg: rgba(182, 196, 210, 0.16);
+  --woot-selectable-default-bg-hover: rgba(205, 219, 234, 0.28);
+
+  /* Text & Icon Hierarchy */
+  --woot-text-strong: #e8ebed;
+  --woot-text-primary: #ccd1d6;
+  --woot-text-subtle: #a6adb5;
+  --woot-text-subtlest: #7c848d;
+  --woot-text-disabled: rgba(166, 179, 191, 0.5);
+
+  /* Borders & Focus Rings */
+  --woot-border-default: rgba(182, 196, 210, 0.16);
+  --woot-border-hover: rgba(205, 219, 234, 0.28);
+  --woot-border-focus: #ffd45c;
+  --woot-border-selected: #ffd45c;
+  --woot-border-danger: #f87171;
+  --woot-border-success: #4ade80;
+  --woot-border-warning: #facc15;
+
+  /* Status Badges & Buttons */
+  --woot-cta-bg: #ffd45c;
+  --woot-cta-bg-hover: #ffe08a;
+  --woot-cta-bg-pressed: #ffecb8;
+  --woot-cta-fg: #181a1b;
+  --woot-success-bg: #4ade80;
+  --woot-success-secondary-bg: #052e16;
+  --woot-danger-bg: #f87171;
+  --woot-danger-secondary-bg: #450a0a;
+  --woot-warning-bg: #facc15;
+  --woot-info-bg: #60a5fa;
+
+  /* Shadows */
+  --woot-shadow-lg-overlay: 0 20px 25px -5px #111213, 0 8px 10px -6px #111213;
+  --woot-shadow-md-brand: 0 2px 15px 6px hsla(44.17, 100%, 68.04%, 0.12);
+}
+
+/* Slot transition animations (Deepen / Shallow) from Wootility v5 */
+@keyframes woot-deepen-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translate(1rem);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate(0);
+  }
+}
+@keyframes woot-shallow-in {
+  0% {
+    opacity: 0;
+    transform: scale(1.08) translate(-1rem);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate(0);
+  }
+}
+
+.woot-slot-deepen {
+  animation: woot-deepen-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.woot-slot-shallow {
+  animation: woot-shallow-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 * {

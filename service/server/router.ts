@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { performance } from 'node:perf_hooks';
 import { CUSTOM_RGB_EFFECTS } from '../../src/keyboard/customRgb';
 import { isTachyonLightingWrite } from '../../src/protocol/hero68/tachyonLighting';
+import type { StoredProfileRecord } from '../../src/state/profileTypes';
 import { BRAND } from '../brand';
 import type { DeviceLock } from '../bridge/deviceLock';
 import type { NativeBridge } from '../bridge/hidBridge';
@@ -12,6 +13,7 @@ import type { GamepadController } from '../gamepad/gamepadController';
 import type { HallController } from '../hall/hallController';
 import { readUpdateStatus, terminal } from '../installState';
 import { isAllowedServiceRequest } from '../origins';
+import { scanInstalledLinkableApps } from '../profile/autoProfileSwitcher';
 import { percentile } from '../rgb/profileNormalizer';
 import type { RgbController } from '../rgb/rgbController';
 import { RHYTHM_MODES, RHYTHM_SIDE_VERIFIED } from '../rhythm';
@@ -126,6 +128,7 @@ export function createServiceServer({
       captureToWriteP95Ms: percentile(ctx.captureLatencies),
       supportsGamepad: true,
       gamepad: gamepadController.gamepadStatus(),
+      autoProfile: ctx.autoProfileSwitcher.getTelemetry(),
       sharedHall: true,
       cpuPercent: ctx.cpuPercent,
       rssMB: process.memoryUsage().rss / 1048576,
@@ -231,6 +234,9 @@ export function createServiceServer({
         const changesDigitalSettings = requests.some(({ packet }) =>
           [0x13, 0x19, 0x16].includes(packet[1]),
         );
+        if (changesDigitalSettings || mutatesRemaps) {
+          ctx.lastManualSaveAt = performance.now();
+        }
         if (run && (mutatesRemaps || changesDigitalSettings)) {
           await gamepadController.configureNativeGamepad(
             ctx.gamepadConfigurations[ctx.gamepadSlot],
@@ -308,6 +314,40 @@ export function createServiceServer({
         json(200, status());
         return;
       }
+      if (req.method === 'GET' && req.url === '/apps/open-windows') {
+        const windows = await exclusive(() => bridge.openWindows()).catch(() => []);
+        json(200, { windows });
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/apps/linkable') {
+        json(200, scanInstalledLinkableApps());
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/profiles/state') {
+        json(200, {
+          autoProfile: ctx.autoProfileSwitcher.getTelemetry(),
+          profiles: ctx.autoProfileSwitcher.getProfiles(),
+        });
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/events') {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        });
+        ctx.profileEventClients.add(res);
+        res.write(
+          `data: ${JSON.stringify({
+            type: 'connected',
+            autoProfile: ctx.autoProfileSwitcher.getTelemetry(),
+          })}\n\n`,
+        );
+        req.on('close', () => {
+          ctx.profileEventClients.delete(res);
+        });
+        return;
+      }
       if (req.method === 'GET' && req.url === '/gamepad/status') {
         json(200, gamepadController.gamepadStatus());
         return;
@@ -355,6 +395,7 @@ export function createServiceServer({
         '/gamepad/start',
         '/gamepad/stop',
         '/gamepad/toggle',
+        '/profiles/sync',
         '/tachyon',
         '/start',
         '/stop',
@@ -400,6 +441,30 @@ export function createServiceServer({
         )
       ) {
         throw Error('App update in progress');
+      }
+
+      if (req.url === '/profiles/sync') {
+        const profiles = Array.isArray(input.profiles)
+          ? (input.profiles as StoredProfileRecord[])
+          : ctx.autoProfileSwitcher.getProfiles();
+        ctx.autoProfileSwitcher.updateConfiguration({
+          profiles,
+          defaultProfileUid:
+            typeof input.defaultProfileUid === 'string' || input.defaultProfileUid === null
+              ? input.defaultProfileUid
+              : undefined,
+          enabled: typeof input.enabled === 'boolean' ? input.enabled : undefined,
+          revertToDefault:
+            typeof input.revertToDefault === 'boolean' ? input.revertToDefault : undefined,
+          notifyOnSwitch:
+            typeof input.notifyOnSwitch === 'boolean' ? input.notifyOnSwitch : undefined,
+        });
+        ctx.profilesSave.schedule();
+        ctx.publishProfileEvent('profiles-synced');
+        json(200, {
+          autoProfile: ctx.autoProfileSwitcher.getTelemetry(),
+        });
+        return;
       }
 
       if (req.url?.startsWith('/gamepad/')) {

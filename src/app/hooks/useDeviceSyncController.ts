@@ -325,7 +325,8 @@ export function useDeviceSyncController({
   const slotHistoriesRef = useRef<Record<ProfileSlot, SlotHistoryEntry>>({
     0: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null },
     1: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null },
-    2: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null }
+    2: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null },
+    3: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null }
   });
   const suppressHistoryRef = useRef(false);
   const pointerDownRef = useRef(false);
@@ -656,11 +657,11 @@ export function useDeviceSyncController({
     if (xsydDeviceManager.connected) {
       try {
         const slot = await readXsydProfileSlot(xsydDeviceManager);
-        if (slot === 0 || slot === 1 || slot === 2) {
+        if (slot === 0 || slot === 1 || slot === 2 || slot === 3) {
           return slot;
         }
       } catch {
-        // Keep current workspace slot if the board reports slot 3 (P4) or does not reply.
+        // Keep current workspace slot if the board does not reply.
       }
       return profileSlot;
     }
@@ -992,11 +993,17 @@ export function useDeviceSyncController({
     }
   }
   async function renameProfile(name: string) {
-    if (
-      profileBusyRef.current ||
-      !hero68DeviceManager.connected ||
-      loadedProfileSlot !== profileSlot
-    ) {
+    if (profileBusyRef.current) {
+      return false;
+    }
+    if (xsydDeviceManager.connected || !hero68DeviceManager.connected) {
+      setProfileNames(previous => ({
+        ...previous,
+        [profileSlot]: name
+      }));
+      return true;
+    }
+    if (loadedProfileSlot !== profileSlot) {
       return false;
     }
     profileBusyRef.current = true;
