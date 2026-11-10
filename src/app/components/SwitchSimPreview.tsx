@@ -168,7 +168,7 @@ export function SwitchSimPreview({
       viewRef.current = null;
       simRef.current = null;
     };
-  }, [selectedSwitch]);
+  }, [selectedSwitch.id, selectedSwitch.front, selectedSwitch.travelMm]);
 
   const isMixedVisual = switchProfileMixed || (hasSelection && actuationMixed);
 

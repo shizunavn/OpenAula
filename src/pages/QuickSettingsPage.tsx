@@ -1,3 +1,4 @@
+import { SelectionActions } from '../app/components/SelectionActions';
 import { useI18n } from '../i18n';
 import type { Dispatch, SetStateAction } from 'react';
 import Hero68Preview from '../components/Hero68Preview';
@@ -159,25 +160,12 @@ function QuickSettingsPage({
 
       <div className="quick-heading-row">
         <h1>{tr('Quick Settings')}</h1>
-        <div className="selection-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={allSelected}
-            aria-pressed={allSelected}
-            onClick={selectAll}
-          >
-            {tr('Select all keys')}
-          </button>
-          <button
-            type="button"
-            className={hasSelection ? 'secondary-button' : 'ghost-button'}
-            disabled={!hasSelection}
-            onClick={discardSelection}
-          >
-            {tr('Discard selection')}
-          </button>
-        </div>
+        <SelectionActions
+          hasSelection={hasSelection}
+          allSelected={allSelected}
+          onSelectAll={selectAll}
+          onDiscardSelection={discardSelection}
+        />
       </div>
 
       <section className="quick-grid">

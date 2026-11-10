@@ -18,7 +18,6 @@ import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import AdvancedKeyIcon from './AdvancedKeyIcon';
 import { TachyonContext } from '../app/TachyonContext';
 import { DeviceModelContext } from '../app/DeviceModelContext';
-import { useI18n } from '../i18n';
 
 const tachyonLightingFrames = Object.fromEntries(
   (['hero68', 'hero68Xs', 'hero84', 'win68HeMax', 'win68'] as const).map(model => [
@@ -39,7 +38,7 @@ const HERO68_ROWS = 5;
 const HERO_ROW_PITCH_EM = 3.8962;
 const HERO68_MIN_FONT_PX = 7.4;
 const HALL_STREAM_NOISE_FLOOR_MM = 0.05;
-const DRAG_THRESHOLD_PX = 5;
+const DRAG_THRESHOLD_PX = 4;
 
 function fitKeyboardFontSize(
   width: number,
@@ -54,6 +53,26 @@ function fitKeyboardFontSize(
   // Preserve the preferred minimum only while the entire keyboard still fits.
   const minimum = Math.min(HERO68_MIN_FONT_PX, widthScale, heightScale);
   return Math.max(minimum, Math.round(fitted * 100) / 100);
+}
+
+// Check if line segment (x0, y0) -> (x1, y1) intersects axis-aligned rect
+function segmentIntersectsRect(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  rect: { left: number; top: number; right: number; bottom: number }
+): boolean {
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 8));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const x = x0 + (x1 - x0) * t;
+    const y = y0 + (y1 - y0) * t;
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export type Hero68PreviewProps = {
@@ -146,7 +165,6 @@ export default function Hero68Preview({
   maxFontPx = WOOTILITY_MAX_FONT_PX,
   onWidthChange
 }: Hero68PreviewProps) {
-  const { tr } = useI18n();
   const contextModel = useContext(DeviceModelContext);
   const model = modelProp ?? contextModel;
   const keyboard = useMemo(() => heroLayout(model), [model]);
@@ -210,7 +228,6 @@ export default function Hero68Preview({
   selectedKeysRef.current = selectedKeys;
 
   const [keyboardFontSize, setKeyboardFontSize] = useState(maxFontPx);
-  const [dragSelectionMode, setDragSelectionMode] = useState<'box' | 'swipe'>('box');
   const [marqueeRect, setMarqueeRect] = useState<null | {
     left: number;
     top: number;
@@ -222,11 +239,14 @@ export default function Hero68Preview({
     pointerId: number;
     startClientX: number;
     startClientY: number;
+    lastClientX: number;
+    lastClientY: number;
     isDragging: boolean;
     mode: 'box' | 'swipe';
+    startKeyId: string | null;
     deselect: boolean;
-    baseSelection: Set<string>;
     liveSelection: Set<string>;
+    visitedSwipeKeys: Set<string>;
     keyRects: { id: string; left: number; top: number; right: number; bottom: number }[];
   }>(null);
   const suppressNextClickRef = useRef(false);
@@ -314,14 +334,12 @@ export default function Hero68Preview({
   const canDragSelect =
     selectionEnabled && overlayMode !== 'stream' && (!draggableKeys || draggableKeys.size === 0);
 
-  const handleStagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!canDragSelect || event.button !== 0) {
-      return;
-    }
-    const targetEl = event.target as HTMLElement | null;
-    if (targetEl?.closest('.hero-drag-mode-bar')) {
-      return;
-    }
+  const startDragSessionFromEvent = (
+    pointerId: number,
+    clientX: number,
+    clientY: number,
+    targetEl: HTMLElement | null
+  ) => {
     const caseEl = caseRef.current;
     if (!caseEl) return;
 
@@ -341,27 +359,62 @@ export default function Hero68Preview({
 
     const startKeyBtn = targetEl?.closest<HTMLButtonElement>('button.hero-key[data-key-id]');
     const startKeyId = startKeyBtn?.dataset.keyId ?? null;
-    const effectiveMode: 'box' | 'swipe' = event.shiftKey ? 'swipe' : dragSelectionMode;
+    // If pointer starts on a key -> swipe drag (no box, follows mouse cursor).
+    // If pointer starts outside keys (on stage/case background) -> box marquee drag (auto deselects all previous keys).
+    const mode: 'box' | 'swipe' = startKeyId ? 'swipe' : 'box';
     const startKeySelected = Boolean(startKeyId && selectedKeysRef.current.has(startKeyId));
-    const allCurrentlySelected =
-      keyRects.length > 0 && selectedKeysRef.current.size >= keyRects.length;
-    const deselect =
-      event.altKey ||
-      (effectiveMode === 'swipe' && startKeySelected) ||
-      (effectiveMode === 'box' && (allCurrentlySelected || (startKeySelected && event.ctrlKey)));
 
     dragSessionRef.current = {
-      pointerId: event.pointerId,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
+      pointerId,
+      startClientX: clientX,
+      startClientY: clientY,
+      lastClientX: clientX,
+      lastClientY: clientY,
       isDragging: false,
-      mode: effectiveMode,
-      deselect,
-      baseSelection: new Set(selectedKeysRef.current),
+      mode,
+      startKeyId,
+      deselect: mode === 'swipe' ? startKeySelected : false,
       liveSelection: new Set(selectedKeysRef.current),
+      visitedSwipeKeys: new Set(startKeyId ? [startKeyId] : []),
       keyRects
     };
   };
+
+  const handleStagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!canDragSelect || event.button !== 0) {
+      return;
+    }
+    startDragSessionFromEvent(
+      event.pointerId,
+      event.clientX,
+      event.clientY,
+      event.target as HTMLElement | null
+    );
+  };
+
+  // Also allow starting a marquee box drag from the surrounding .keyboard-stage area outside .hero68-preview-wrap
+  useEffect(() => {
+    const previewEl = previewRef.current;
+    const stageEl = previewEl?.closest<HTMLElement>('.keyboard-stage');
+    if (!stageEl || !canDragSelect) return;
+
+    const onStageDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      if (previewEl && previewEl.contains(event.target as Node | null)) {
+        // Handled by handleStagePointerDown on previewRef
+        return;
+      }
+      startDragSessionFromEvent(
+        event.pointerId,
+        event.clientX,
+        event.clientY,
+        event.target as HTMLElement | null
+      );
+    };
+
+    stageEl.addEventListener('pointerdown', onStageDown);
+    return () => stageEl.removeEventListener('pointerdown', onStageDown);
+  }, [canDragSelect, model]);
 
   useEffect(() => {
     const handleWindowPointerMove = (event: PointerEvent) => {
@@ -392,41 +445,37 @@ export default function Hero68Preview({
           height: Math.max(1, maxY - minY)
         });
 
-        const nextSelection = new Set(session.baseSelection);
+        // Every box drag automatically deselects all previous keys and selects only keys inside the new box
+        const nextSelection = new Set<string>();
         for (const k of session.keyRects) {
           const intersects = k.left <= maxX && k.right >= minX && k.top <= maxY && k.bottom >= minY;
           if (intersects) {
-            if (session.deselect) {
-              nextSelection.delete(k.id);
-            } else {
-              nextSelection.add(k.id);
-            }
+            nextSelection.add(k.id);
           }
         }
         commitBatchSelection(nextSelection, session.liveSelection);
         session.liveSelection = nextSelection;
       } else {
-        // Swipe / paint mode: hit-test key under pointer (and start point)
+        // Swipe drag inside keys: only adds to selection (never deselects)
         const nextSelection = new Set(session.liveSelection);
+        if (session.startKeyId) {
+          nextSelection.add(session.startKeyId);
+        }
         for (const k of session.keyRects) {
-          const hitCurrent =
-            event.clientX >= k.left &&
-            event.clientX <= k.right &&
-            event.clientY >= k.top &&
-            event.clientY <= k.bottom;
-          const hitStart =
-            session.startClientX >= k.left &&
-            session.startClientX <= k.right &&
-            session.startClientY >= k.top &&
-            session.startClientY <= k.bottom;
-          if (hitCurrent || hitStart) {
-            if (session.deselect) {
-              nextSelection.delete(k.id);
-            } else {
-              nextSelection.add(k.id);
-            }
+          if (
+            segmentIntersectsRect(
+              session.lastClientX,
+              session.lastClientY,
+              event.clientX,
+              event.clientY,
+              k
+            )
+          ) {
+            nextSelection.add(k.id);
           }
         }
+        session.lastClientX = event.clientX;
+        session.lastClientY = event.clientY;
         commitBatchSelection(nextSelection, session.liveSelection);
         session.liveSelection = nextSelection;
       }

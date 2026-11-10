@@ -696,3 +696,63 @@
     transition: none;
   }
 }
+
+/* Shortcut tooltips on Select all keys (L-Ctrl A) and Discard selection (Esc) */
+.selection-action-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.selection-action-wrap > button,
+.actuation-page .selection-actions .selection-action-wrap > button {
+  min-height: 40px;
+  padding: 9px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.selection-shortcut-tooltip {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: #383d41;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  z-index: 25;
+  transition:
+    opacity 130ms ease,
+    transform 130ms ease,
+    visibility 130ms ease;
+}
+
+.selection-action-wrap:hover .selection-shortcut-tooltip,
+.selection-action-wrap:focus-within .selection-shortcut-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.selection-shortcut-tooltip kbd {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: #52585d;
+  color: #f3f6f8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  border: 0;
+}

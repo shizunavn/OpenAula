@@ -1,11 +1,31 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { heroLayout } from '../../keyboard/layout';
 import type { HeroDeviceModelId } from '../../keyboard/devices';
 import { SwitchStemMenuIcon } from './SwitchStemMenuIcon';
 
 // React's CSSProperties has no index signature for custom properties.
 const keyUnits = (units: number) => ({ '--key-units': units }) as CSSProperties;
-const DRAG_THRESHOLD_PX = 5;
+const DRAG_THRESHOLD_PX = 4;
+
+function segmentIntersectsRect(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  rect: { left: number; top: number; right: number; bottom: number }
+): boolean {
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 8));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const x = x0 + (x1 - x0) * t;
+    const y = y0 + (y1 - y0) * t;
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function SwitchSelectorBoard({
   model,
@@ -21,6 +41,7 @@ function SwitchSelectorBoard({
   switchImagesByKey: Record<string, string>;
 }) {
   const rows = heroLayout(model).rows;
+  const wrapRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const selectedKeysRef = useRef<Set<string>>(selectedKeys);
   selectedKeysRef.current = selectedKeys;
@@ -37,14 +58,14 @@ function SwitchSelectorBoard({
     pointerId: number;
     startClientX: number;
     startClientY: number;
-    boardLeft: number;
-    boardTop: number;
-    boardWidth: number;
-    boardHeight: number;
+    lastClientX: number;
+    lastClientY: number;
     isDragging: boolean;
+    mode: 'box' | 'swipe';
+    startKeyId: string | null;
     deselect: boolean;
-    baseSelection: Set<string>;
     liveSelection: Set<string>;
+    visitedSwipeKeys: Set<string>;
     keyRects: { id: string; left: number; top: number; right: number; bottom: number }[];
   }>(null);
 
@@ -82,36 +103,54 @@ function SwitchSelectorBoard({
         session.isDragging = true;
         suppressNextClickRef.current = true;
       }
-      const minX = Math.min(session.startClientX, event.clientX);
-      const maxX = Math.max(session.startClientX, event.clientX);
-      const minY = Math.min(session.startClientY, event.clientY);
-      const maxY = Math.max(session.startClientY, event.clientY);
 
-      const clampedLeft = Math.max(0, Math.min(session.boardWidth, minX - session.boardLeft));
-      const clampedTop = Math.max(0, Math.min(session.boardHeight, minY - session.boardTop));
-      const clampedRight = Math.max(0, Math.min(session.boardWidth, maxX - session.boardLeft));
-      const clampedBottom = Math.max(0, Math.min(session.boardHeight, maxY - session.boardTop));
+      if (session.mode === 'box') {
+        const minX = Math.min(session.startClientX, event.clientX);
+        const maxX = Math.max(session.startClientX, event.clientX);
+        const minY = Math.min(session.startClientY, event.clientY);
+        const maxY = Math.max(session.startClientY, event.clientY);
 
-      setMarqueeRect({
-        left: (clampedLeft / session.boardWidth) * 100,
-        top: (clampedTop / session.boardHeight) * 100,
-        width: Math.max(0, ((clampedRight - clampedLeft) / session.boardWidth) * 100),
-        height: Math.max(0, ((clampedBottom - clampedTop) / session.boardHeight) * 100)
-      });
+        setMarqueeRect({
+          left: minX,
+          top: minY,
+          width: Math.max(1, maxX - minX),
+          height: Math.max(1, maxY - minY)
+        });
 
-      const nextSelection = new Set(session.baseSelection);
-      for (const k of session.keyRects) {
-        const intersects = k.left <= maxX && k.right >= minX && k.top <= maxY && k.bottom >= minY;
-        if (intersects) {
-          if (session.deselect) {
-            nextSelection.delete(k.id);
-          } else {
+        // Auto deselect all previous keys on each box drag
+        const nextSelection = new Set<string>();
+        for (const k of session.keyRects) {
+          const intersects = k.left <= maxX && k.right >= minX && k.top <= maxY && k.bottom >= minY;
+          if (intersects) {
             nextSelection.add(k.id);
           }
         }
+        commitBatchSelection(nextSelection, session.liveSelection);
+        session.liveSelection = nextSelection;
+      } else {
+        // Swipe drag inside keys: only adds to selection (never deselects)
+        const nextSelection = new Set(session.liveSelection);
+        if (session.startKeyId) {
+          nextSelection.add(session.startKeyId);
+        }
+        for (const k of session.keyRects) {
+          if (
+            segmentIntersectsRect(
+              session.lastClientX,
+              session.lastClientY,
+              event.clientX,
+              event.clientY,
+              k
+            )
+          ) {
+            nextSelection.add(k.id);
+          }
+        }
+        session.lastClientX = event.clientX;
+        session.lastClientY = event.clientY;
+        commitBatchSelection(nextSelection, session.liveSelection);
+        session.liveSelection = nextSelection;
       }
-      commitBatchSelection(nextSelection, session.liveSelection);
-      session.liveSelection = nextSelection;
     };
 
     const onUp = (event: PointerEvent) => {
@@ -137,46 +176,84 @@ function SwitchSelectorBoard({
     };
   });
 
+  const startSession = (
+    pointerId: number,
+    clientX: number,
+    clientY: number,
+    targetEl: HTMLElement | null
+  ) => {
+    if (!boardRef.current) return;
+    const keyButtons = Array.from(
+      boardRef.current.querySelectorAll<HTMLButtonElement>('button.switch-board-key[data-key-id]')
+    );
+    const keyRects = keyButtons.map(btn => {
+      const r = btn.getBoundingClientRect();
+      return {
+        id: btn.dataset.keyId!,
+        left: r.left,
+        top: r.top,
+        right: r.right,
+        bottom: r.bottom
+      };
+    });
+    const startKeyBtn = targetEl?.closest<HTMLButtonElement>(
+      'button.switch-board-key[data-key-id]'
+    );
+    const startKeyId = startKeyBtn?.dataset.keyId ?? null;
+    const mode: 'box' | 'swipe' = startKeyId ? 'swipe' : 'box';
+    const startKeySelected = Boolean(startKeyId && selectedKeysRef.current.has(startKeyId));
+
+    dragSessionRef.current = {
+      pointerId,
+      startClientX: clientX,
+      startClientY: clientY,
+      lastClientX: clientX,
+      lastClientY: clientY,
+      isDragging: false,
+      mode,
+      startKeyId,
+      deselect: mode === 'swipe' ? startKeySelected : false,
+      liveSelection: new Set(selectedKeysRef.current),
+      visitedSwipeKeys: new Set(startKeyId ? [startKeyId] : []),
+      keyRects
+    };
+  };
+
+  useEffect(() => {
+    const wrapEl = wrapRef.current;
+    const stageEl = wrapEl?.closest<HTMLElement>('.switch-selector-stage');
+    if (!stageEl) return;
+
+    const onStageDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      if (wrapEl && wrapEl.contains(event.target as Node | null)) return;
+      startSession(
+        event.pointerId,
+        event.clientX,
+        event.clientY,
+        event.target as HTMLElement | null
+      );
+    };
+
+    stageEl.addEventListener('pointerdown', onStageDown);
+    return () => stageEl.removeEventListener('pointerdown', onStageDown);
+  }, [model]);
+
   return (
-    <div className={`switch-board-wrap is-${model}`}>
-      <div
-        ref={boardRef}
-        className="switch-board-preview"
-        style={{ position: 'relative' }}
-        onPointerDown={event => {
-          if (event.button !== 0 || !boardRef.current) return;
-          const bounds = boardRef.current.getBoundingClientRect();
-          const keyButtons = Array.from(
-            boardRef.current.querySelectorAll<HTMLButtonElement>(
-              'button.switch-board-key[data-key-id]'
-            )
-          );
-          const keyRects = keyButtons.map(btn => {
-            const r = btn.getBoundingClientRect();
-            return {
-              id: btn.dataset.keyId!,
-              left: r.left,
-              top: r.top,
-              right: r.right,
-              bottom: r.bottom
-            };
-          });
-          dragSessionRef.current = {
-            pointerId: event.pointerId,
-            startClientX: event.clientX,
-            startClientY: event.clientY,
-            boardLeft: bounds.left,
-            boardTop: bounds.top,
-            boardWidth: Math.max(1, bounds.width),
-            boardHeight: Math.max(1, bounds.height),
-            isDragging: false,
-            deselect: event.altKey,
-            baseSelection: new Set(selectedKeysRef.current),
-            liveSelection: new Set(selectedKeysRef.current),
-            keyRects
-          };
-        }}
-      >
+    <div
+      ref={wrapRef}
+      className={`switch-board-wrap is-${model}`}
+      onPointerDown={event => {
+        if (event.button !== 0) return;
+        startSession(
+          event.pointerId,
+          event.clientX,
+          event.clientY,
+          event.target as HTMLElement | null
+        );
+      }}
+    >
+      <div ref={boardRef} className="switch-board-preview" style={{ position: 'relative' }}>
         {rows.map((row, rowIndex) => (
           <div className="switch-board-row" key={rowIndex}>
             {row.map(key => (
@@ -218,19 +295,23 @@ function SwitchSelectorBoard({
             ))}
           </div>
         ))}
-        {marqueeRect && (
+      </div>
+      {marqueeRect &&
+        typeof document !== 'undefined' &&
+        createPortal(
           <div
             className="hero-marquee-selection"
             aria-hidden="true"
             style={{
-              left: `${marqueeRect.left}%`,
-              top: `${marqueeRect.top}%`,
-              width: `${marqueeRect.width}%`,
-              height: `${marqueeRect.height}%`
+              position: 'fixed',
+              left: `${marqueeRect.left}px`,
+              top: `${marqueeRect.top}px`,
+              width: `${marqueeRect.width}px`,
+              height: `${marqueeRect.height}px`
             }}
-          />
+          />,
+          document.body
         )}
-      </div>
     </div>
   );
 }

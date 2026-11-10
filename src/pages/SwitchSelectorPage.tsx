@@ -1,3 +1,4 @@
+import { SelectionActions } from '../app/components/SelectionActions';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { SwitchSelectorBoard } from '../app/components/SwitchSelectorBoard';
@@ -133,25 +134,12 @@ export function SwitchSelectorPage({
 
       <div className="switch-selector-heading-row">
         <h1>{tr('Switch Selector')}</h1>
-        <div className="selection-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={allSelected}
-            aria-pressed={allSelected}
-            onClick={onSelectAll}
-          >
-            {tr('Select all keys')}
-          </button>
-          <button
-            type="button"
-            className={hasSelection ? 'secondary-button' : 'ghost-button'}
-            disabled={!hasSelection}
-            onClick={onDiscardSelection}
-          >
-            {tr('Discard selection')}
-          </button>
-        </div>
+        <SelectionActions
+          hasSelection={hasSelection}
+          allSelected={allSelected}
+          onSelectAll={onSelectAll}
+          onDiscardSelection={onDiscardSelection}
+        />
       </div>
 
       <section className="switch-assignment-grid">

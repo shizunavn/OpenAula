@@ -1,3 +1,4 @@
+import { SelectionActions } from '../app/components/SelectionActions';
 import { useI18n } from '../i18n';
 import { translateHallError } from '../i18n/deviceErrors';
 import type { Dispatch, SetStateAction } from 'react';
@@ -139,25 +140,12 @@ function ActuationPage({
             ]}
           />
         </div>
-        <div className="selection-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={allSelected}
-            aria-pressed={allSelected}
-            onClick={selectAll}
-          >
-            {tr('Select all keys')}
-          </button>
-          <button
-            type="button"
-            className={hasSelection ? 'secondary-button' : 'ghost-button'}
-            disabled={!hasSelection}
-            onClick={discardSelection}
-          >
-            {tr('Discard selection')}
-          </button>
-        </div>
+        <SelectionActions
+          hasSelection={hasSelection}
+          allSelected={allSelected}
+          onSelectAll={selectAll}
+          onDiscardSelection={discardSelection}
+        />
       </div>
 
       <section className="actuation-woot-grid">

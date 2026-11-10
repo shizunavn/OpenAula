@@ -808,14 +808,23 @@ export async function createSwitch(
     t0 = t;
     raf = requestAnimationFrame(loop);
   };
-
+  const start = () => {
+    if (!raf) {
+      t0 = performance.now();
+      raf = requestAnimationFrame(loop);
+    }
+  };
   const stop = () => {
     cancelAnimationFrame(raf);
     raf = 0;
   };
+  const destroy = () => {
+    stop();
+    view.dispose();
+  };
 
   view.draw(0, 0);
-  return {
+  const controller: SwitchController = {
     sim,
     view,
     tick,
@@ -823,18 +832,11 @@ export async function createSwitch(
     release: () => sim.release(),
     drag: (mm: number) => sim.drag(mm <= 0 ? -1 : mm),
     setPercent: (p: number) => sim.drag(p <= 0 ? -1 : T * p),
-    start() {
-      if (!raf) {
-        t0 = performance.now();
-        raf = requestAnimationFrame(loop);
-      }
-    },
+    start,
     stop,
-    destroy() {
-      stop();
-      view.dispose();
-    }
+    destroy
   };
+  return controller;
 }
 
 export const SwitchKit = {
