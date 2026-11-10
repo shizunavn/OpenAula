@@ -498,14 +498,21 @@
   padding-bottom: 7px;
   user-select: none;
   -webkit-user-select: none;
-  cursor: default;
+  cursor: pointer;
   transition: color 150ms ease;
 }
 
 .selection-instruction:hover,
+.selection-instruction.is-highlighted,
 .actuation-selection-instruction:hover,
+.actuation-selection-instruction.is-highlighted,
 .rapid-selection-instruction:hover,
-.switch-selection-instruction:hover {
+.rapid-selection-instruction.is-highlighted,
+.switch-selection-instruction:hover,
+.switch-selection-instruction.is-highlighted,
+.quick-page:has(.setting-card:hover) .selection-instruction,
+.rapid-page:has(.setting-card:hover) .selection-instruction,
+.actuation-page:has(.setting-card:hover) .selection-instruction {
   color: var(--brand, #ffd45c);
 }
 .quick-heading-row {

@@ -1,7 +1,7 @@
 import { SelectionActions } from '../app/components/SelectionActions';
 import { useI18n } from '../i18n';
 import { translateHallError } from '../i18n/deviceErrors';
-import type { Dispatch, SetStateAction } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { Info } from 'lucide-react';
 import Hero68Preview from '../components/Hero68Preview';
 import FeatureHelp from '../components/FeatureHelp';
@@ -87,6 +87,7 @@ function ActuationPage({
   actuationHallThresholdMm
 }: ActuationPageProps) {
   const { tr } = useI18n();
+  const [cardHovered, setCardHovered] = useState(false);
   const resolvedPreviewWidth =
     actuationPreviewWidth && actuationPreviewWidth >= 320 ? actuationPreviewWidth : undefined;
   return (
@@ -116,7 +117,9 @@ function ActuationPage({
         />
       </section>
 
-      <div className="selection-instruction actuation-selection-instruction">
+      <div
+        className={`selection-instruction actuation-selection-instruction ${cardHovered ? 'is-highlighted' : ''}`}
+      >
         {hasSelection
           ? tr(
               selectedKeys.size === 1
@@ -151,6 +154,8 @@ function ActuationPage({
       <section className="actuation-woot-grid">
         <article
           className={`setting-card actuation-woot-card actuation-editor-woot-card ${!hasSelection ? 'is-unavailable' : ''}`}
+          onMouseEnter={() => setCardHovered(true)}
+          onMouseLeave={() => setCardHovered(false)}
         >
           <div className="actuation-editor-head actuation-editor-woot-head">
             <div>
@@ -222,6 +227,8 @@ function ActuationPage({
 
         <article
           className={`setting-card actuation-woot-card actuation-hall-card ${(!hasSelection || !deviceConnected) && !hallStream.active ? 'is-unavailable' : ''}`}
+          onMouseEnter={() => setCardHovered(true)}
+          onMouseLeave={() => setCardHovered(false)}
         >
           <div className="actuation-woot-card-head actuation-hall-head">
             <div>

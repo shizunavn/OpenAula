@@ -1,6 +1,6 @@
 import { SelectionActions } from '../app/components/SelectionActions';
 import { useI18n } from '../i18n';
-import type { Dispatch, SetStateAction } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import Hero68Preview from '../components/Hero68Preview';
 import FeatureHelp from '../components/FeatureHelp';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
@@ -111,6 +111,7 @@ function RapidPage({
   rapidTriggerByKey
 }: RapidPageProps) {
   const { tr } = useI18n();
+  const [cardHovered, setCardHovered] = useState(false);
   const isXs = isXsPrecisionModel(model);
   const rapidTriggerValues = rapidTriggerValuesForModel(model);
   const minRt = isXs ? 0.005 : 0.01;
@@ -129,7 +130,9 @@ function RapidPage({
         />
       </section>
 
-      <div className="selection-instruction rapid-selection-instruction">
+      <div
+        className={`selection-instruction rapid-selection-instruction ${cardHovered ? 'is-highlighted' : ''}`}
+      >
         {hasSelection
           ? tr(
               selectedKeys.size === 1
@@ -164,7 +167,11 @@ function RapidPage({
       <section className="rapid-woot-grid">
         <article
           className={`setting-card rapid-woot-card rapid-enable-card ${!hasSelection ? 'is-unavailable' : ''}`}
-          onMouseEnter={() => setQuickPreviewMode('rapid')}
+          onMouseEnter={() => {
+            setQuickPreviewMode('rapid');
+            setCardHovered(true);
+          }}
+          onMouseLeave={() => setCardHovered(false)}
         >
           <div className="rapid-card-head with-control">
             <h2>{tr('Enable Rapid Trigger')}</h2>
@@ -278,8 +285,14 @@ function RapidPage({
 
         <article
           className={`setting-card rapid-woot-card rapid-deadzone-card ${!hasSelection ? 'is-unavailable' : ''}`}
-          onMouseEnter={() => setQuickPreviewMode('deadzone')}
-          onMouseLeave={() => setQuickPreviewMode('rapid')}
+          onMouseEnter={() => {
+            setQuickPreviewMode('deadzone');
+            setCardHovered(true);
+          }}
+          onMouseLeave={() => {
+            setQuickPreviewMode('rapid');
+            setCardHovered(false);
+          }}
         >
           <div className="rapid-card-head with-control">
             <h2>{tr('Dead Zone')}</h2>

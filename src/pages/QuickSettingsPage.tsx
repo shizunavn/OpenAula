@@ -148,7 +148,9 @@ function QuickSettingsPage({
         />
       </section>
 
-      <div className="selection-instruction">
+      <div
+        className={`selection-instruction ${quickPreviewMode !== 'none' ? 'is-highlighted' : ''}`}
+      >
         {hasSelection
           ? tr(selectedKeys.size === 1 ? '{count} key selected.' : '{count} keys selected.', {
               count: selectedKeys.size

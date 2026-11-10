@@ -142,6 +142,13 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: 13px;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.switch-selection-instruction:hover,
+.switch-selection-instruction.is-highlighted {
+  color: var(--brand, #ffd45c);
 }
 .switch-selector-heading-row {
   display: flex;

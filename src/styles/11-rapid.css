@@ -23,9 +23,14 @@
   user-select: none;
   -webkit-user-select: none;
   color: #c3c9cd;
+  cursor: pointer;
   transition: color 150ms ease;
 }
-.rapid-selection-instruction:hover {
+.rapid-selection-instruction:hover,
+.rapid-selection-instruction.is-highlighted,
+.rapid-page .rapid-selection-instruction:hover,
+.rapid-page .rapid-selection-instruction.is-highlighted,
+.rapid-page:has(.setting-card:hover) .rapid-selection-instruction {
   color: var(--brand, #ffd45c);
 }
 
