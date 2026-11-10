@@ -394,7 +394,14 @@ export default function MyProfilePage({
             </div>
             <small style={{ color: 'var(--woot-text-subtle)', fontSize: 12 }}>
               {hasBgService
-                ? `Active window: ${autoProfile.activeApp?.exe || 'Desktop'} · Switches: ${autoProfile.switchCount} · Flash Erase/Write Cycles Saved: ${autoProfile.flashWritesSaved}`
+                ? tr(
+                    'Active window: {app} · Switches: {switches} · Flash writes saved: {saved}',
+                    {
+                      app: autoProfile.activeApp?.exe || tr('Desktop'),
+                      switches: autoProfile.switchCount,
+                      saved: autoProfile.flashWritesSaved
+                    }
+                  )
                 : isServiceOutdated
                   ? `${tr('Detected service')} v${serviceVersion} — ${tr('update to')} v${requiredServiceVersion} ${tr('for Auto-Profile & Zero-Flash-Wear.')}`
                   : tr(
@@ -434,7 +441,7 @@ export default function MyProfilePage({
                 checked={autoProfileEnabled}
                 onChange={e => onToggleAutoProfile(e.target.checked)}
               />
-              {autoProfileEnabled ? 'Auto-Switch Enabled' : 'Paused'}
+              {autoProfileEnabled ? tr('Auto-Switch Enabled') : tr('Paused')}
             </label>
           )}
           <button
@@ -675,7 +682,7 @@ export default function MyProfilePage({
       {/* Section 2: LINKED WITH AN APPLICATION */}
       <div className="profile-section-heading" style={{ marginTop: 22 }}>
         <h2>{tr('LINKED WITH AN APPLICATION')}</h2>
-        <span>{linkedProfiles.length} / 10 slots</span>
+        <span>{tr('{count} / 10 slots', { count: linkedProfiles.length })}</span>
       </div>
       <section
         className="onboard-profile-grid"
@@ -727,7 +734,7 @@ export default function MyProfilePage({
       {/* Section 3: INACTIVE PROFILES */}
       <div className="profile-section-heading" style={{ marginTop: 22 }}>
         <h2>{tr('INACTIVE PROFILES')}</h2>
-        <span>{inactiveProfiles.length} / 25 stored locally</span>
+        <span>{tr('{count} / 25 stored locally', { count: inactiveProfiles.length })}</span>
       </div>
       <section
         className="onboard-profile-grid"

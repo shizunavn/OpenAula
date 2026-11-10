@@ -110,7 +110,7 @@ export function ProfileEditorModal({
           <button
             type="button"
             className="icon-button compact"
-            aria-label="Close"
+            aria-label={tr('Close')}
             onClick={e => {
               e.stopPropagation();
               onClose();
@@ -235,7 +235,7 @@ export function ProfileEditorModal({
               }}
             >
               <label style={{ fontSize: 12, color: 'var(--woot-text-subtle)' }}>
-                {tr('Profile Icon')} (Wootility Assets)
+                {tr('Profile Icon')} ({tr('Wootility Assets')})
               </label>
               <div className="woot-icon-picker-tabs" style={{ marginBottom: 0 }}>
                 {WOOT_ICON_CATEGORIES.map(cat => (
@@ -245,7 +245,7 @@ export function ProfileEditorModal({
                     className={`woot-icon-picker-tab ${iconCategory === cat.id ? 'is-active' : ''}`}
                     onClick={() => setIconCategory(cat.id)}
                   >
-                    {cat.label} ({cat.icons.length})
+                    {tr(cat.label)} ({cat.icons.length})
                   </button>
                 ))}
               </div>
@@ -305,7 +305,7 @@ export function ProfileEditorModal({
                   {tr('Onboard Slot Switch (Recommended - 0 Flash Wear)')}
                 </div>
                 <small style={{ color: 'var(--woot-text-subtle)', fontSize: 11 }}>
-                  Switches hardware slot via CMD 0x10 / 0x00 0x70 (SRAM load only)
+                  {tr('Switches hardware slot via CMD 0x10 / 0x00 0x70 (SRAM load only)')}
                 </small>
               </button>
               <button
@@ -318,7 +318,7 @@ export function ProfileEditorModal({
                   {tr('Host RAM / Diff Stream (For >3 game profiles)')}
                 </div>
                 <small style={{ color: 'var(--woot-text-subtle)', fontSize: 11 }}>
-                  Streams FlashOp.NORMAL (0x00) or Smart Slot 3 Virtualization
+                  {tr('Streams config into RAM or Smart Slot 3 Virtualization (0 wear)')}
                 </small>
               </button>
             </div>
@@ -332,7 +332,7 @@ export function ProfileEditorModal({
                     className={`woot-icon-pill ${mappedOnboardSlot === s ? 'is-active' : ''}`}
                     onClick={() => setMappedOnboardSlot(s)}
                   >
-                    Slot {s + 1} (Fn+P{s + 1}) {s === 0 ? `· ${tr('DEFAULT')}` : ''}
+                    {tr('Slot {slot}', { slot: s + 1 })} (Fn+P{s + 1}) {s === 0 ? `· ${tr('DEFAULT')}` : ''}
                   </button>
                 ))}
               </div>

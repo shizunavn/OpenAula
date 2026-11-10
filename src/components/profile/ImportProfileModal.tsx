@@ -33,7 +33,7 @@ export function ImportProfileModal({
       setError(null);
     } catch {
       setParsedRecord(null);
-      setError('Invalid profile share code or JSON file.');
+      setError(tr('Invalid profile share code or JSON file.'));
     }
   }
 
@@ -86,7 +86,7 @@ export function ImportProfileModal({
                 marginBottom: 6
               }}
             >
-              Paste Share Code (`OA2-...`) or JSON
+              {tr('Paste Share Code (OA2-...) or JSON')}
             </label>
             <textarea
               rows={4}
@@ -117,7 +117,7 @@ export function ImportProfileModal({
                 fontSize: 12.5
               }}
             >
-              <Upload size={14} /> Upload `.json` profile file
+              <Upload size={14} /> {tr('Upload .json profile file')}
               <input
                 type="file"
                 accept=".json,application/json"
@@ -134,8 +134,8 @@ export function ImportProfileModal({
                   {parsedRecord.metadata.name}
                 </strong>
                 <small style={{ color: 'var(--woot-text-subtle)', fontSize: 11.5 }}>
-                  Target model: {parsedRecord.metadata.createdFor} ·{' '}
-                  {parsedRecord.metadata.linkedApps.length} linked apps
+                  {tr('Target model')}: {parsedRecord.metadata.createdFor} ·{' '}
+                  {tr('{count} linked apps', { count: parsedRecord.metadata.linkedApps.length })}
                 </small>
               </div>
               <span className="woot-badge-default">READY</span>
@@ -148,8 +148,13 @@ export function ImportProfileModal({
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <AlertTriangle size={16} />
                 <span>
-                  This profile was created for <strong>{parsedRecord.metadata.createdFor}</strong>.
-                  Keys that do not exist on <strong>{currentDeviceModel}</strong> will be ignored.
+                  {tr(
+                    'This profile was created for {model}. Keys that do not exist on {current} will be ignored.',
+                    {
+                      model: parsedRecord.metadata.createdFor,
+                      current: currentDeviceModel
+                    }
+                  )}
                 </span>
               </div>
             </div>

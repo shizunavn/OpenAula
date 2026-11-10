@@ -189,5 +189,61 @@ export const VI_SERVICE_AND_SETTINGS: Record<string, string> = {
   'Detected service': 'Phát hiện dịch vụ',
   'update to': 'hãy cập nhật lên',
   'for Auto-Profile & Zero-Flash-Wear.': 'để dùng Tự động chuyển Hồ sơ & Chống mỏi Flash.',
-  'Profile Icon': 'Biểu tượng hồ sơ'
+  'Profile Icon': 'Biểu tượng hồ sơ',
+  'Create Profile': 'Tạo hồ sơ',
+  Preset: 'Bản mẫu',
+  'Storage Namespace': 'Không gian lưu trữ',
+  'Stored on keyboard hardware slots': 'Lưu trong bộ nhớ phần cứng bàn phím',
+  'Linked App': 'Liên kết ứng dụng',
+  'Activates automatically on focus': 'Tự động kích hoạt khi mở ứng dụng',
+  Inactive: 'Hồ sơ lưu trữ',
+  'Saved locally in OpenAula': 'Lưu trữ cục bộ trong OpenAula',
+  'SWITCHY & UwU': 'SWITCHY & UwU',
+  WOOTING: 'WOOTING',
+  GRADIENTS: 'MÀU CHUYỂN SẮC',
+  'Wootility Assets': 'Tài nguyên Wootility',
+  'Switches hardware slot via CMD 0x10 / 0x00 0x70 (SRAM load only)':
+    'Chuyển khe phần cứng qua CMD 0x10 / 0x00 0x70 (Chỉ nạp SRAM)',
+  'Streams config into RAM or Smart Slot 3 Virtualization (0 wear)':
+    'Nạp cấu hình vào RAM hoặc Bộ đệm ảo hóa Slot 3 (0 hao mòn Flash)',
+  'Slot {slot}': 'Khe {slot}',
+  'Match ALL selected rules (AND)': 'Khớp TẤT CẢ quy tắc đã chọn (AND)',
+  'Match ANY selected rule (OR)': 'Khớp BẤT KỲ quy tắc nào đã chọn (OR)',
+  'Select at least one detection method and enter a value.':
+    'Hãy chọn ít nhất một phương thức nhận diện và nhập giá trị.',
+  'You can use up to {count} detection methods per app.':
+    'Bạn có thể dùng tối đa {count} phương thức nhận diện cho mỗi ứng dụng.',
+  'App name is too long.': 'Tên ứng dụng quá dài.',
+  'e.g. Valorant / Counter-Strike 2': 'Ví dụ: Valorant / Counter-Strike 2',
+  'e.g. Valorant.exe or *cs2*.exe': 'Ví dụ: Valorant.exe hoặc *cs2*.exe',
+  'e.g. C:\\Program Files\\AppName': 'Ví dụ: C:\\Program Files\\AppName',
+  'e.g. Minecraft or *Counter-Strike*': 'Ví dụ: Minecraft hoặc *Counter-Strike*',
+  'Linked to {name} profile. Selecting will replace the existing link.':
+    'Đã liên kết với hồ sơ {name}. Chọn mục này sẽ thay thế liên kết hiện tại.',
+  'Active window: {app} · Switches: {switches} · Flash writes saved: {saved}':
+    'Cửa sổ hoạt động: {app} · Lần chuyển: {switches} · Chu kỳ Ghi Flash đã tiết kiệm: {saved}',
+  Desktop: 'Màn hình chính',
+  'Auto-Switch Enabled': 'Đã bật Tự động chuyển',
+  Paused: 'Đang tạm dừng',
+  '{count} / 10 slots': '{count} / 10 khe',
+  '{count} / 25 stored locally': '{count} / 25 hồ sơ lưu trên máy',
+  'Paste Share Code (OA2-...) or JSON': 'Dán mã chia sẻ (OA2-...) hoặc nội dung JSON',
+  'Upload .json profile file': 'Tải lên tệp hồ sơ .json',
+  'Target model': 'Thiết bị đích',
+  '{count} linked apps': '{count} ứng dụng liên kết',
+  'This profile was created for {model}. Keys that do not exist on {current} will be ignored.':
+    'Hồ sơ này được tạo cho {model}. Các phím không tồn tại trên {current} sẽ được bỏ qua.',
+  'Invalid profile share code or JSON file.': 'Mã chia sẻ hoặc tệp JSON không hợp lệ.',
+  'Ultra-fast actuation (0.4 mm) and Rapid Trigger (0.15 mm) for competitive shooters.':
+    'Nhận phím siêu tốc (0.4 mm) và Rapid Trigger (0.15 mm) tối ưu cho game bắn súng thi đấu.',
+  'Smooth travel response (1.2 mm) with balanced Rapid Trigger (0.35 mm).':
+    'Hành trình phím mượt mà (1.2 mm) cùng Rapid Trigger cân bằng (0.35 mm).',
+  'Comfortable 2.0 mm actuation point with Rapid Trigger disabled to prevent typos.':
+    'Điểm nhận phím 2.0 mm êm ái, tắt Rapid Trigger để tránh gõ nhầm văn bản.',
+  'Optimized 1.0 mm actuation for hybrid keyboard + analog controller workflows.':
+    'Điểm nhận phím 1.0 mm tối ưu cho trải nghiệm kết hợp bàn phím và cần analog.',
+  'Instant 0.1 mm actuation and 0.15 mm Rapid Trigger tuned for peak competitive play.':
+    'Nhận phím tức thì 0.1 mm và Rapid Trigger 0.15 mm tinh chỉnh cho tuyển thủ thi đấu.',
+  'Start from standard baseline settings (1.6 mm) and customize every key yourself.':
+    'Bắt đầu từ cấu hình cơ bản (1.6 mm) và tự do tùy biến sâu từng phím bấm.'
 };

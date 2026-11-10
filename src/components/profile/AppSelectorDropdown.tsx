@@ -125,7 +125,9 @@ export function AppSelectorDropdown({
                   onClick={() => handlePickRunning(win)}
                   title={
                     conflictProfile
-                      ? `Linked to ${conflictProfile} profile. Selecting will replace the existing link.`
+                      ? tr('Linked to {name} profile. Selecting will replace the existing link.', {
+                          name: conflictProfile
+                        })
                       : win.path
                   }
                 >
@@ -189,7 +191,9 @@ export function AppSelectorDropdown({
                   onClick={() => handlePickInstalled(app)}
                   title={
                     conflictProfile
-                      ? `Linked to ${conflictProfile} profile. Selecting will replace the existing link.`
+                      ? tr('Linked to {name} profile. Selecting will replace the existing link.', {
+                          name: conflictProfile
+                        })
                       : app.path
                   }
                 >

@@ -58,7 +58,9 @@ export function CreateProfileWizard({
   const [color, setColor] = useState(WOOT_PROFILE_PRESETS[0].color);
   const [icon, setIcon] = useState(WOOT_PROFILE_PRESETS[0].icon);
   const [iconCategory, setIconCategory] = useState<WootIconCategory>('switchyUwu');
-  const [namespace, setNamespace] = useState<ProfileNamespace>('linked');
+  const [namespace, setNamespace] = useState<ProfileNamespace>(
+    usedOnboardSlots < totalOnboardSlots ? 'onboard' : 'linked'
+  );
   const [linkedApps, setLinkedApps] = useState<LinkedAppRule[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,7 +136,7 @@ export function CreateProfileWizard({
                 type="button"
                 className="icon-button compact"
                 onClick={() => setStep(1)}
-                title="Back"
+                title={tr('Back')}
               >
                 <ArrowLeft size={16} />
               </button>
@@ -144,7 +146,7 @@ export function CreateProfileWizard({
               <p style={{ margin: '2px 0 0', fontSize: 12.5, color: 'var(--woot-text-subtle)' }}>
                 {step === 1
                   ? tr('Select the type of profile you would like to create')
-                  : `Preset: ${selectedPreset.title} (${selectedPreset.actuationMm} mm AP)`}
+                  : `${tr('Preset')}: ${tr(selectedPreset.title)} (${selectedPreset.actuationMm} mm AP)`}
               </p>
             </div>
           </div>
@@ -184,10 +186,10 @@ export function CreateProfileWizard({
                     <ArrowRight size={15} color="var(--woot-text-subtle)" />
                   </div>
                   <strong style={{ fontSize: 15, color: 'var(--woot-text-strong)' }}>
-                    {preset.title}
+                    {tr(preset.title)}
                   </strong>
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--woot-text-subtle)', lineHeight: 1.45 }}>
-                    {preset.description}
+                    {tr(preset.description)}
                   </p>
                   <div style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 4 }}>
                     <span className="woot-shortcut-pill">AP {preset.actuationMm}mm</span>
@@ -276,7 +278,7 @@ export function CreateProfileWizard({
                         className={`woot-icon-picker-tab ${iconCategory === cat.id ? 'is-active' : ''}`}
                         onClick={() => setIconCategory(cat.id)}
                       >
-                        {cat.label}
+                        {tr(cat.label)}
                       </button>
                     ))}
                   </div>
@@ -311,7 +313,7 @@ export function CreateProfileWizard({
               {/* Storage Destination Cards with usedSlots / totalSlots (yJ in Wootility L61905) */}
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: 'var(--woot-text-subtle)', marginBottom: 6 }}>
-                  Storage Namespace
+                  {tr('Storage Namespace')}
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                   <button
@@ -321,13 +323,13 @@ export function CreateProfileWizard({
                     onClick={() => setNamespace('onboard')}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <strong style={{ fontSize: 13 }}>Onboard</strong>
+                      <strong style={{ fontSize: 13 }}>{tr('Onboard')}</strong>
                       <span className="woot-shortcut-pill">
                         {usedOnboardSlots} / {totalOnboardSlots}
                       </span>
                     </div>
                     <small style={{ color: 'var(--woot-text-subtle)', fontSize: 11 }}>
-                      Stored on keyboard hardware slots
+                      {tr('Stored on keyboard hardware slots')}
                     </small>
                   </button>
 
@@ -339,13 +341,13 @@ export function CreateProfileWizard({
                     onClick={() => setNamespace('linked')}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <strong style={{ fontSize: 13 }}>Linked App</strong>
+                      <strong style={{ fontSize: 13 }}>{tr('Linked App')}</strong>
                       <span className="woot-shortcut-pill">
                         {usedLinkedSlots} / {MAX_LINKED_PROFILES}
                       </span>
                     </div>
                     <small style={{ color: 'var(--woot-text-subtle)', fontSize: 11 }}>
-                      Activates automatically on focus
+                      {tr('Activates automatically on focus')}
                     </small>
                   </button>
 
@@ -357,25 +359,29 @@ export function CreateProfileWizard({
                     onClick={() => setNamespace('inactive')}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <strong style={{ fontSize: 13 }}>Inactive</strong>
+                      <strong style={{ fontSize: 13 }}>{tr('Inactive')}</strong>
                       <span className="woot-shortcut-pill">
                         {usedInactiveSlots} / {MAX_INACTIVE_PROFILES}
                       </span>
                     </div>
                     <small style={{ color: 'var(--woot-text-subtle)', fontSize: 11 }}>
-                      Saved locally in OpenAula
+                      {tr('Saved locally in OpenAula')}
                     </small>
                   </button>
                 </div>
               </div>
 
-              <LinkedAppsList
-                currentProfileUid="new-profile"
-                linkedApps={linkedApps}
-                allProfiles={allProfiles}
-                onChange={handleAppsChange}
-                onOpenBgServiceSettings={onOpenBgServiceSettings}
-              />
+              <div className={`woot-linked-apps-collapse ${namespace === 'linked' ? 'is-expanded' : ''}`}>
+                <div className="woot-linked-apps-collapse-inner">
+                  <LinkedAppsList
+                    currentProfileUid="new-profile"
+                    linkedApps={linkedApps}
+                    allProfiles={allProfiles}
+                    onChange={handleAppsChange}
+                    onOpenBgServiceSettings={onOpenBgServiceSettings}
+                  />
+                </div>
+              </div>
 
               {error && (
                 <p role="alert" style={{ margin: 0, fontSize: 12, color: 'var(--woot-danger-bg)' }}>
@@ -388,7 +394,7 @@ export function CreateProfileWizard({
                   {tr('Cancel')}
                 </button>
                 <button type="button" className="apply-button" onClick={handleCreate}>
-                  <Check size={15} /> {tr('New Profile')}
+                  <Check size={15} /> {tr('Create Profile')}
                 </button>
               </div>
             </div>

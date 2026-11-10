@@ -19,8 +19,10 @@ export interface CustomAppFormProps {
 export function validateCustomAppRule(
   appName: string,
   enabledKinds: Record<'processName' | 'processDirectory' | 'windowTitle', boolean>,
-  values: Record<'processName' | 'processDirectory' | 'windowTitle', string>
+  values: Record<'processName' | 'processDirectory' | 'windowTitle', string>,
+  tr?: (k: string, v?: Record<string, string | number>) => string
 ): { valid: boolean; error?: string; filters: CustomAppFilter[] } {
+  const t = tr ?? ((s: string) => s);
   const filters: CustomAppFilter[] = [];
   if (enabledKinds.processName && values.processName.trim()) {
     filters.push({ kind: 'processName', value: values.processName.trim() });
@@ -34,21 +36,21 @@ export function validateCustomAppRule(
   if (filters.length === 0) {
     return {
       valid: false,
-      error: 'Select at least one detection method and enter a value.',
+      error: t('Select at least one detection method and enter a value.'),
       filters
     };
   }
   if (filters.length > MAX_FILTERS_PER_APP) {
     return {
       valid: false,
-      error: `You can use up to ${MAX_FILTERS_PER_APP} detection methods per app.`,
+      error: t('You can use up to {count} detection methods per app.', { count: MAX_FILTERS_PER_APP }),
       filters
     };
   }
   if (new TextEncoder().encode(appName.trim() || 'Unknown App').length > 120) {
     return {
       valid: false,
-      error: 'App name is too long.',
+      error: t('App name is too long.'),
       filters
     };
   }
@@ -98,7 +100,7 @@ export function CustomAppForm({
   }
 
   function handleSubmit() {
-    const check = validateCustomAppRule(name, enabledKinds, values);
+    const check = validateCustomAppRule(name, enabledKinds, values, tr);
     if (!check.valid) {
       setError(check.error ?? 'Invalid rule');
       return;
@@ -140,8 +142,8 @@ export function CustomAppForm({
             fontSize: 12
           }}
         >
-          <option value="AllMatches">Match ALL selected rules (AND)</option>
-          <option value="AnyMatches">Match ANY selected rule (OR)</option>
+          <option value="AllMatches">{tr('Match ALL selected rules (AND)')}</option>
+          <option value="AnyMatches">{tr('Match ANY selected rule (OR)')}</option>
         </select>
       </div>
 
@@ -151,7 +153,7 @@ export function CustomAppForm({
         </label>
         <input
           type="text"
-          placeholder="e.g. Valorant / Counter-Strike 2"
+          placeholder={tr('e.g. Valorant / Counter-Strike 2')}
           value={name}
           onChange={e => setName(e.target.value)}
           style={{
@@ -188,7 +190,7 @@ export function CustomAppForm({
         {enabledKinds.processName && (
           <input
             type="text"
-            placeholder="e.g. Valorant.exe or *cs2*.exe"
+            placeholder={tr('e.g. Valorant.exe or *cs2*.exe')}
             value={values.processName}
             onChange={e => {
               setValues(prev => ({ ...prev, processName: e.target.value }));
@@ -225,7 +227,7 @@ export function CustomAppForm({
         {enabledKinds.processDirectory && (
           <input
             type="text"
-            placeholder="e.g. C:\Program Files\AppName"
+            placeholder={tr('e.g. C:\\Program Files\\AppName')}
             value={values.processDirectory}
             onChange={e => {
               setValues(prev => ({ ...prev, processDirectory: e.target.value }));
@@ -262,7 +264,7 @@ export function CustomAppForm({
         {enabledKinds.windowTitle && (
           <input
             type="text"
-            placeholder="e.g. Minecraft or *Counter-Strike*"
+            placeholder={tr('e.g. Minecraft or *Counter-Strike*')}
             value={values.windowTitle}
             onChange={e => {
               setValues(prev => ({ ...prev, windowTitle: e.target.value }));
