@@ -171,23 +171,26 @@ class Hero68HallStream {
       }
       this.#hostPressedKeys.delete(event.code);
       const sample = this.#state.samples[event.code];
-      if (!sample || (!sample.pressed && sample.visualDistanceMm === 0)) {
+      if (!sample) {
         return;
       }
-      const released: HallStreamSample = {
-        ...sample,
-        visualDistanceMm: 0,
-        pressed: false,
-        releaseInferred: true,
-        timestampMs: performance.now()
-      };
-      this.#setState({
-        samples: {
-          ...this.#state.samples,
-          [event.code]: released
-        }
-      });
-      this.#scheduleSampleExpiry(event.code, 450);
+      if (sample.pressed) {
+        const released: HallStreamSample = {
+          ...sample,
+          pressed: false,
+          releaseInferred: true,
+          timestampMs: performance.now()
+        };
+        this.#setState({
+          samples: {
+            ...this.#state.samples,
+            [event.code]: released
+          }
+        });
+      }
+      if (sample.visualDistanceMm <= 0.08) {
+        this.#scheduleSampleExpiry(event.code, 450);
+      }
     };
     window.addEventListener('keydown', this.#keydownHandler, true);
     window.addEventListener('keyup', this.#keyupHandler, true);
@@ -246,7 +249,7 @@ class Hero68HallStream {
     const timer = window.setTimeout(() => {
       this.#sampleExpiryTimers.delete(keyId);
       const sample = this.#state.samples[keyId];
-      if (!sample || sample.pressed || (!sample.releaseInferred && sample.visualDistanceMm > 0)) {
+      if (!sample || sample.pressed || sample.visualDistanceMm > 0.08) {
         return;
       }
       const next = {
