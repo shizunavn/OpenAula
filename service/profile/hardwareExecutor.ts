@@ -484,12 +484,12 @@ export class ZeroWearHardwareExecutor {
             {
               pos,
               field: XsydFeatureField.RapidTriggerPress,
-              value: Math.max(50, Math.min(2000, mmToUm(nextState.pressMm)))
+              value: Math.max(10, Math.min(3400, Math.round(mmToUm(nextState.pressMm) / 10) * 10))
             },
             {
               pos,
               field: XsydFeatureField.RapidTriggerRelease,
-              value: Math.max(50, Math.min(2000, mmToUm(nextState.releaseMm)))
+              value: Math.max(10, Math.min(3400, Math.round(mmToUm(nextState.releaseMm) / 10) * 10))
             }
           );
         }

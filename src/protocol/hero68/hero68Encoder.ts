@@ -92,7 +92,10 @@ export const hero68ProtocolEncoder: Hero68ProtocolEncoder = {
   encodeSave(snapshot: DeviceConfigurationSnapshot): string[] {
     const packets: Uint8Array[] = [selectProfile(snapshot.profileSlot)];
     const model = snapshot.model;
-    const precisionMm = snapshot.precisionMm ?? getHero68DistanceUnitMm();
+    const precisionMm =
+      snapshot.precisionMm ??
+      (model != null ? (model === 'hero68Xs' ? 0.005 : 0.01) : getHero68DistanceUnitMm());
+    const minRtMm = precisionMm <= 0.005 ? 0.005 : 0.01;
 
     // Mirror the official AULA sync functions instead of sending one HID
     // transaction per key. Keep the exact batch ordering:
@@ -112,16 +115,10 @@ export const hero68ProtocolEncoder: Hero68ProtocolEncoder = {
     }));
     packets.push(...writeActuationBatch(actuationConfigs));
     const rapidTriggerConfigs = snapshot.keys.map(key => {
-      const releaseMm = key.rapidTriggerEnabled
-        ? key.splitSensitivity
-          ? key.releaseSensitivityMm
-          : key.rapidSensitivityMm
-        : 0;
-      const pressMm = key.rapidTriggerEnabled
-        ? key.splitSensitivity
-          ? key.pressSensitivityMm
-          : key.rapidSensitivityMm
-        : 0;
+      const releaseRaw = key.splitSensitivity ? key.releaseSensitivityMm : key.rapidSensitivityMm;
+      const pressRaw = key.splitSensitivity ? key.pressSensitivityMm : key.rapidSensitivityMm;
+      const releaseMm = key.rapidTriggerEnabled ? Math.max(minRtMm, releaseRaw) : 0;
+      const pressMm = key.rapidTriggerEnabled ? Math.max(minRtMm, pressRaw) : 0;
       return {
         profile: snapshot.profileSlot,
         layer: 0 as const,

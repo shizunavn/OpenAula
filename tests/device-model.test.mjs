@@ -296,9 +296,13 @@ test('ALL_DEVICE_MODELS includes HERO68, HERO68 XS, HERO84, and WIN 68 HE MAX in
   assert.equal(layouts.heroLayout('hero68Xs').keyIds.length, 68)
 })
 
-test('formatMillimeters and rapidTriggerValuesForModel preserve 0.005mm and 0.025mm for HERO 68 XS without slider rounding to 0.03', () => {
+test('formatMillimeters and rapidTriggerValuesForModel round HERO 68 XS to 0.005mm steps (0.164->0.165, 0.172->0.17, 0.173->0.175) and non-XS boards to 0.01mm steps (0.005->0.01, 0.155->0.16)', () => {
   assert.equal(helpers.formatMillimeters(0.005), '0.005')
   assert.equal(helpers.formatMillimeters(0.025), '0.025')
+  assert.equal(helpers.formatMillimeters(0.155), '0.155')
+  assert.equal(helpers.formatMillimeters(0.164), '0.165')
+  assert.equal(helpers.formatMillimeters(0.172), '0.17')
+  assert.equal(helpers.formatMillimeters(0.173), '0.175')
   assert.equal(helpers.formatMillimeters(0.01), '0.01')
   assert.equal(helpers.formatMillimeters(0.1), '0.10')
   assert.equal(helpers.formatMillimeters(0.2), '0.20')
@@ -309,8 +313,24 @@ test('formatMillimeters and rapidTriggerValuesForModel preserve 0.005mm and 0.02
   assert.equal(xsValues[4], 0.025)
   assert.equal(helpers.snapToAllowedValue(0.005, xsValues), 0.005)
   assert.equal(helpers.snapToAllowedValue(0.025, xsValues), 0.025)
+  assert.equal(helpers.snapToAllowedValue(0.155, xsValues), 0.155)
+  assert.equal(helpers.snapToAllowedValue(0.164, xsValues), 0.165)
+  assert.equal(helpers.snapToAllowedValue(0.172, xsValues), 0.17)
+  assert.equal(helpers.snapToAllowedValue(0.173, xsValues), 0.175)
+  assert.equal(helpers.clampRapidTriggerForModel(0.005, 'hero68Xs'), 0.005)
+  assert.equal(helpers.clampRapidTriggerForModel(0.155, 'hero68Xs'), 0.155)
+  assert.equal(helpers.clampRapidTriggerForModel(0.164, 'hero68Xs'), 0.165)
+  assert.equal(helpers.clampRapidTriggerForModel(0.172, 'hero68Xs'), 0.17)
+  assert.equal(helpers.clampRapidTriggerForModel(0.173, 'hero68Xs'), 0.175)
 
-  const stdValues = helpers.rapidTriggerValuesForModel('hero68')
-  assert.equal(stdValues[0], 0.01)
-  assert.equal(helpers.snapToAllowedValue(0.005, stdValues), 0.01)
+  for (const nonXsModel of ['hero68', 'hero84', 'win68HeMax']) {
+    const stdValues = helpers.rapidTriggerValuesForModel(nonXsModel)
+    assert.equal(stdValues[0], 0.01)
+    assert.equal(helpers.snapToAllowedValue(0.005, stdValues), 0.01)
+    assert.equal(helpers.snapToAllowedValue(0.025, stdValues), 0.03)
+    assert.equal(helpers.snapToAllowedValue(0.155, stdValues), 0.16)
+    assert.equal(helpers.clampRapidTriggerForModel(0.005, nonXsModel), 0.01)
+    assert.equal(helpers.clampRapidTriggerForModel(0.05, nonXsModel), 0.05)
+    assert.equal(helpers.clampRapidTriggerForModel(0.155, nonXsModel), 0.16)
+  }
 })

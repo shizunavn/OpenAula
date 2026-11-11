@@ -3,6 +3,19 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.8.0 — Wootility v5 Visual Icon Picker, Auto-Profile Switcher, 4 Onboard Slots, XSYD Smart Slot 3 Virtualization & Non-XS 0.01 mm RT Clamping
+
+- Rapid Trigger `0.01 mm` Clamping & Rounding on Non-XS Boards (`src/app/helpers.ts`, `RangeControl.tsx`, `VerticalRangeControl.tsx`, `usePerKeyPerformance.ts`, `hero68Encoder.ts`, `xsyd/device.ts`):
+  - Restricted `0.005 mm` (`5 µm`) discrete table promotion (`RAPID_TRIGGER_VALUES_XS`) exclusively to `HERO 68 XS` (`step <= 0.005` / `isXsPrecisionModel(model)`).
+  - Enforced `0.01 mm` minimum Rapid Trigger sensitivity and automatic half-up rounding to `0.01 mm` steps across manual text input, slider dragging, state hydration, and model switching on `HERO68`, `HERO84`, and `WIN 68 HE MAX` (e.g. `0.005 mm` clamps to `0.01 mm`, `0.155 mm` rounds to `0.16 mm`), while clamping `HERO 68 XS` at `0.005 mm` minimum and automatically rounding arbitrary inputs to the nearest `0.005 mm` (`5 µm`) step (e.g. `0.164 mm` rounds to `0.165 mm`, `0.172 mm` rounds to `0.17 mm`, `0.173 mm` rounds to `0.175 mm`).
+- Auto-Profile Switching & Zero Flash Wear Execution (`service/profile/autoProfileSwitcher.ts`, `service/profile/hardwareExecutor.ts`, `service/native/foreground_monitor.h`):
+  - Added Win32 foreground process monitor (`400 ms` poll with `800 ms` Alt-Tab debounce and `3000 ms` min dwell) and linked-application rule engine supporting executable names (including wildcards like `cs2.exe`, `*valorant*.exe`), install directories, and window titles.
+  - Enforced zero Flash wear during automatic profile switches (`CMD 0x10` slot switch or volatile RAM diff streaming `0x15 -> 0x13 -> 0x19 -> 0x16` on ByteTech; `0x00 0x70` + volatile SRAM `0x2A` on XSYD).
+- XSYD Smart Slot 3 Virtualization & 4 Onboard Slots (`service/profile/hardwareExecutor.ts`, `src/state/profileTypes.ts`):
+  - Extended onboard profile architecture to 4 slots (`0..3`) for `WIN 68 HE MAX` with Smart Slot 3 dynamic scratchpad caching (`12 s` warm-up dwell and token-bucket wear guard).
+- Wootility v5 Visual Icon Picker & Profile Share Codes (`src/components/MyProfilePage.tsx`, `src/components/profile/`):
+  - Added 89 profile icons (`SWITCHY & UwU`, `WOOTING`, `GRADIENTS`), 6 preset banners (including **TenZ Pro FPS**), automatic dominant color extraction, and `OA2-...` Profile Share Codes.
+
 ## 1.7.1 — Native System Tray Flyout, Service Control Panel, and HERO 68 XS 5 µm Sync
 
 - Native System Tray & Windows Background Service:

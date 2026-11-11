@@ -120,6 +120,11 @@ export function mmUnits(mm: number, precisionMm: number): number {
   if (!(precisionMm > 0)) {
     throw new RangeError('precisionMm must be positive');
   }
+  const mmUm = Math.round(mm * 1000);
+  const precisionUm = Math.round(precisionMm * 1000);
+  if (precisionUm > 0) {
+    return Math.round(mmUm / precisionUm);
+  }
   return Math.round(mm / precisionMm);
 }
 export interface RemapRecord {

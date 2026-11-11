@@ -33,17 +33,23 @@ function RangeControl({
   mixedPlaceholder?: string;
   onChange: (value: number) => void;
 }) {
-  // Automatically promote to 0.005 mm discrete table if current value has a .xx5 step
-  // or if step <= 0.005 so a 0.025 value never snaps to 0.03 -> 0.04.
-  const valueHasFiveUmStep = Math.round(value * 1000) % 10 !== 0;
+  // Only use 0.005 mm discrete table when step explicitly allows 5 µm resolution (HERO 68 XS).
+  // Non-XS keyboards (step = 0.01) must clamp at 0.01 mm and round .xx5 inputs to 0.01 mm steps.
   const resolvedAllowedValues =
-    allowedValues?.length && (valueHasFiveUmStep || step <= 0.005) && allowedValues.length < 680
+    allowedValues?.length && step <= 0.005 && allowedValues.length < 680
       ? RAPID_TRIGGER_VALUES_XS
       : allowedValues;
   const hasAllowedValues = Boolean(resolvedAllowedValues?.length);
   const effectiveValue = hasAllowedValues
-    ? snapToAllowedValue(value, resolvedAllowedValues!)
-    : value;
+    ? snapToAllowedValue(
+        clampNumber(
+          value,
+          resolvedAllowedValues![0],
+          resolvedAllowedValues![resolvedAllowedValues!.length - 1]
+        ),
+        resolvedAllowedValues!
+      )
+    : snapToStep(value, min, max, step);
   const minAllowed = hasAllowedValues ? resolvedAllowedValues![0] : min;
   const maxAllowed = hasAllowedValues
     ? resolvedAllowedValues![resolvedAllowedValues!.length - 1]
@@ -83,31 +89,32 @@ function RangeControl({
             Math.max(1, resolvedAllowedValues!.length - 1)) *
           100
         : ((recommendedValue - minAllowed) / (maxAllowed - minAllowed)) * 100;
-  const [draftValue, setDraftValue] = useState(() => (mixed ? '' : formatMillimeters(value)));
+  const [draftValue, setDraftValue] = useState(() =>
+    mixed ? '' : formatMillimeters(effectiveValue)
+  );
 
   useEffect(() => {
-    setDraftValue(mixed ? '' : formatMillimeters(value));
-  }, [value, mixed]);
+    setDraftValue(mixed ? '' : formatMillimeters(effectiveValue));
+  }, [effectiveValue, mixed]);
 
   const commitNumberInput = () => {
     const normalized = draftValue.trim().replace(',', '.');
     const parsed = Number(normalized);
     if (!normalized || Number.isNaN(parsed)) {
-      setDraftValue(mixed ? '' : formatMillimeters(value));
+      setDraftValue(mixed ? '' : formatMillimeters(effectiveValue));
       return;
     }
-    const activeTable =
-      hasAllowedValues &&
-      Math.round(parsed * 1000) % 10 !== 0 &&
-      resolvedAllowedValues!.length < 680
-        ? RAPID_TRIGGER_VALUES_XS
-        : resolvedAllowedValues;
-    const committed = activeTable?.length
-      ? snapToAllowedValue(
-          clampNumber(parsed, activeTable[0], activeTable[activeTable.length - 1]),
-          activeTable
-        )
-      : snapToStep(parsed, min, max, step);
+    const committed =
+      hasAllowedValues && resolvedAllowedValues?.length
+        ? snapToAllowedValue(
+            clampNumber(
+              parsed,
+              resolvedAllowedValues[0],
+              resolvedAllowedValues[resolvedAllowedValues.length - 1]
+            ),
+            resolvedAllowedValues
+          )
+        : snapToStep(parsed, min, max, step);
     onChange(committed);
     setDraftValue(formatMillimeters(committed));
   };
@@ -131,7 +138,7 @@ function RangeControl({
           min={hasAllowedValues ? 0 : minAllowed}
           max={hasAllowedValues ? resolvedAllowedValues!.length - 1 : maxAllowed}
           step={hasAllowedValues ? 1 : step}
-          value={hasAllowedValues ? discreteIndex : value}
+          value={hasAllowedValues ? discreteIndex : effectiveValue}
           disabled={disabled}
           style={{ '--range-progress': `${pct}%` } as React.CSSProperties}
           onChange={e => {
@@ -171,7 +178,14 @@ function RangeControl({
                 if (hasAllowedValues) {
                   const parsed = Number(draftValue.trim().replace(',', '.'));
                   const baseValue = Number.isFinite(parsed)
-                    ? snapToAllowedValue(parsed, resolvedAllowedValues!)
+                    ? snapToAllowedValue(
+                        clampNumber(
+                          parsed,
+                          resolvedAllowedValues![0],
+                          resolvedAllowedValues![resolvedAllowedValues!.length - 1]
+                        ),
+                        resolvedAllowedValues!
+                      )
                     : effectiveValue;
                   const baseIndex = resolvedAllowedValues!.reduce(
                     (bestIndex, candidate, index) =>
@@ -194,7 +208,7 @@ function RangeControl({
                   onChange(nextValue);
                 } else {
                   const parsed = Number(draftValue.trim().replace(',', '.'));
-                  const baseValue = Number.isFinite(parsed) ? parsed : value;
+                  const baseValue = Number.isFinite(parsed) ? parsed : effectiveValue;
                   const nextValue = snapToStep(
                     baseValue + delta * stepAllowed,
                     min,
@@ -210,7 +224,7 @@ function RangeControl({
                 e.currentTarget.blur();
               } else if (e.key === 'Escape') {
                 e.preventDefault();
-                setDraftValue(mixed ? '' : formatMillimeters(value));
+                setDraftValue(mixed ? '' : formatMillimeters(effectiveValue));
                 e.currentTarget.blur();
               }
             }}

@@ -25,29 +25,30 @@ function VerticalRangeControl({
   mixedPlaceholder?: string;
   onChange: (value: number) => void;
 }) {
-  const effectiveStep = Math.round(value * 1000) % 10 !== 0 && step > 0.005 ? 0.005 : step;
-  const pct = ((value - min) / (max - min)) * 100;
+  const effectiveStep = step;
+  const effectiveValue = snapToStep(value, min, max, effectiveStep);
+  const pct = ((effectiveValue - min) / (max - min)) * 100;
   const markerStyle = direction === 'bottom' ? { bottom: `${pct}%` } : { top: `${pct}%` };
   const fillStyle =
     direction === 'bottom'
       ? { height: `${pct}%`, bottom: 0, top: 'auto' }
       : { height: `${pct}%`, top: 0, bottom: 'auto' };
-  const [draftValue, setDraftValue] = useState(() => (mixed ? '' : formatMillimeters(value)));
+  const [draftValue, setDraftValue] = useState(() =>
+    mixed ? '' : formatMillimeters(effectiveValue)
+  );
 
   useEffect(() => {
-    setDraftValue(mixed ? '' : formatMillimeters(value));
-  }, [value, mixed]);
+    setDraftValue(mixed ? '' : formatMillimeters(effectiveValue));
+  }, [effectiveValue, mixed]);
 
   const commitNumberInput = () => {
     const normalized = draftValue.trim().replace(',', '.');
     const parsed = Number(normalized);
     if (!normalized || Number.isNaN(parsed)) {
-      setDraftValue(mixed ? '' : formatMillimeters(value));
+      setDraftValue(mixed ? '' : formatMillimeters(effectiveValue));
       return;
     }
-    const targetStep =
-      Math.round(parsed * 1000) % 10 !== 0 && effectiveStep > 0.005 ? 0.005 : effectiveStep;
-    const committed = snapToStep(parsed, min, max, targetStep);
+    const committed = snapToStep(parsed, min, max, effectiveStep);
     onChange(committed);
     setDraftValue(formatMillimeters(committed));
   };
@@ -65,7 +66,7 @@ function VerticalRangeControl({
           min={min}
           max={max}
           step={effectiveStep}
-          value={value}
+          value={effectiveValue}
           disabled={disabled}
           aria-label="Vertical value"
           onChange={e => {
@@ -98,7 +99,7 @@ function VerticalRangeControl({
                 e.preventDefault();
                 const delta = e.key === 'ArrowUp' ? 1 : -1;
                 const parsed = Number(draftValue.trim().replace(',', '.'));
-                const baseValue = Number.isFinite(parsed) ? parsed : value;
+                const baseValue = Number.isFinite(parsed) ? parsed : effectiveValue;
                 const nextValue = snapToStep(
                   baseValue + delta * effectiveStep,
                   min,
@@ -113,7 +114,7 @@ function VerticalRangeControl({
                 e.currentTarget.blur();
               } else if (e.key === 'Escape') {
                 e.preventDefault();
-                setDraftValue(mixed ? '' : formatMillimeters(value));
+                setDraftValue(mixed ? '' : formatMillimeters(effectiveValue));
                 e.currentTarget.blur();
               }
             }}

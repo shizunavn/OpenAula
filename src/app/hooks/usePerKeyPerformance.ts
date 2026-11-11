@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  clampRapidTriggerForModel,
   formatMillimeters,
   isXsPrecisionModel,
   mergeHydratedBooleans,
   mergeHydratedNumbers,
   mergePerKeyState,
-  RAPID_TRIGGER_VALUES_XS,
-  rapidTriggerValuesForModel,
   selectionHasMixedValues,
-  snapToAllowedValue,
   snapToStep
 } from '../helpers';
 import {
@@ -48,7 +46,6 @@ export function usePerKeyPerformance({
   model
 }: UsePerKeyPerformanceOptions) {
   const isXs = isXsPrecisionModel(model);
-  const rapidTriggerValues = useMemo(() => rapidTriggerValuesForModel(model), [model]);
   const [actuation, setActuation] = useState(1.6);
   const [rapidTrigger, setRapidTrigger] = useState(false);
   const [splitSensitivity, setSplitSensitivity] = useState(false);
@@ -142,16 +139,16 @@ export function usePerKeyPerformance({
       Object.fromEntries(
         modelKeyIds.map(keyId => {
           const split = splitSensitivityByKey[keyId] ?? false;
-          const primary = split
+          const primaryRaw = split
             ? (pressSensitivityByKey[keyId] ?? 0.5)
             : (rapidSensitivityByKey[keyId] ?? 0.65);
+          const primary = clampRapidTriggerForModel(primaryRaw, model);
+          const release = clampRapidTriggerForModel(releaseSensitivityByKey[keyId] ?? 0.55, model);
           return [
             keyId,
             {
               primary: formatMillimeters(primary),
-              secondary: split
-                ? formatMillimeters(releaseSensitivityByKey[keyId] ?? 0.55)
-                : undefined,
+              secondary: split ? formatMillimeters(release) : undefined,
               active: rapidTriggerByKey[keyId] ?? false
             }
           ];
@@ -165,6 +162,7 @@ export function usePerKeyPerformance({
         }
       >,
     [
+      model,
       modelKeyIds,
       splitSensitivityByKey,
       pressSensitivityByKey,
@@ -176,14 +174,17 @@ export function usePerKeyPerformance({
   const deadzonePreviewByKey = useMemo(
     () =>
       Object.fromEntries(
-        modelKeyIds.map(keyId => [
-          keyId,
-          {
-            top: formatMillimeters(topDeadzoneByKey[keyId] ?? 0),
-            bottom: formatMillimeters(bottomDeadzoneByKey[keyId] ?? 0),
-            active: deadzoneEnabledByKey[keyId] ?? true
-          }
-        ])
+        modelKeyIds.map(keyId => {
+          const dzStep = isXs ? 0.005 : 0.01;
+          return [
+            keyId,
+            {
+              top: formatMillimeters(snapToStep(topDeadzoneByKey[keyId] ?? 0, 0, 1, dzStep)),
+              bottom: formatMillimeters(snapToStep(bottomDeadzoneByKey[keyId] ?? 0, 0, 1, dzStep)),
+              active: deadzoneEnabledByKey[keyId] ?? true
+            }
+          ];
+        })
       ) as Record<
         string,
         {
@@ -192,7 +193,7 @@ export function usePerKeyPerformance({
           active: boolean;
         }
       >,
-    [modelKeyIds, topDeadzoneByKey, bottomDeadzoneByKey, deadzoneEnabledByKey]
+    [isXs, modelKeyIds, topDeadzoneByKey, bottomDeadzoneByKey, deadzoneEnabledByKey]
   );
   const hasSelection = selectedKeys.size > 0;
   const actuationMixed = selectionHasMixedValues(selectedKeys, actuationByKey);
@@ -209,24 +210,72 @@ export function usePerKeyPerformance({
   const splitSensitivityControlsEnabled = rapidTriggerControlsEnabled && !splitSensitivityMixed;
   const deadzoneControlsEnabled = hasSelection && deadzoneEnabled && !deadzoneEnabledMixed;
   useEffect(() => {
+    const step = isXs ? 0.005 : 0.01;
+    const clampRtMap = (record: Record<string, number>) => {
+      let changed = false;
+      const next: Record<string, number> = {};
+      for (const [keyId, val] of Object.entries(record)) {
+        const clamped = clampRapidTriggerForModel(val, model);
+        next[keyId] = clamped;
+        if (clamped !== val) {
+          changed = true;
+        }
+      }
+      return changed ? next : record;
+    };
+    const clampStepMap = (record: Record<string, number>, min: number, max: number) => {
+      let changed = false;
+      const next: Record<string, number> = {};
+      for (const [keyId, val] of Object.entries(record)) {
+        const snapped = snapToStep(val, min, max, step);
+        next[keyId] = snapped;
+        if (snapped !== val) {
+          changed = true;
+        }
+      }
+      return changed ? next : record;
+    };
+    setRapidSensitivity(prev => clampRapidTriggerForModel(prev, model));
+    setPressSensitivity(prev => clampRapidTriggerForModel(prev, model));
+    setReleaseSensitivity(prev => clampRapidTriggerForModel(prev, model));
+    setActuation(prev => snapToStep(prev, 0.1, 3.4, step));
+    setTopDeadzone(prev => snapToStep(prev, 0, 1, step));
+    setBottomDeadzone(prev => snapToStep(prev, 0, 1, step));
+    setRapidSensitivityByKey(clampRtMap);
+    setPressSensitivityByKey(clampRtMap);
+    setReleaseSensitivityByKey(clampRtMap);
+    setActuationByKey(prev => clampStepMap(prev, 0.1, 3.4));
+    setTopDeadzoneByKey(prev => clampStepMap(prev, 0, 1));
+    setBottomDeadzoneByKey(prev => clampStepMap(prev, 0, 1));
+  }, [isXs, model]);
+  useEffect(() => {
     if (!selectedKeys.size) {
       return;
     }
     const firstSelectedKey = Array.from(selectedKeys)[0];
-    setActuation(actuationByKey[firstSelectedKey] ?? 1.6);
+    const step = isXs ? 0.005 : 0.01;
+    setActuation(snapToStep(actuationByKey[firstSelectedKey] ?? 1.6, 0.1, 3.4, step));
     setRapidTrigger(rapidTriggerByKey[firstSelectedKey] ?? false);
     setSplitSensitivity(splitSensitivityByKey[firstSelectedKey] ?? false);
-    setRapidSensitivity(rapidSensitivityByKey[firstSelectedKey] ?? 0.65);
-    setPressSensitivity(pressSensitivityByKey[firstSelectedKey] ?? 0.5);
-    setReleaseSensitivity(releaseSensitivityByKey[firstSelectedKey] ?? 0.55);
+    setRapidSensitivity(
+      clampRapidTriggerForModel(rapidSensitivityByKey[firstSelectedKey] ?? 0.65, model)
+    );
+    setPressSensitivity(
+      clampRapidTriggerForModel(pressSensitivityByKey[firstSelectedKey] ?? 0.5, model)
+    );
+    setReleaseSensitivity(
+      clampRapidTriggerForModel(releaseSensitivityByKey[firstSelectedKey] ?? 0.55, model)
+    );
     setDeadzoneEnabled(deadzoneEnabledByKey[firstSelectedKey] ?? true);
-    setTopDeadzone(topDeadzoneByKey[firstSelectedKey] ?? 0);
-    setBottomDeadzone(bottomDeadzoneByKey[firstSelectedKey] ?? 0);
+    setTopDeadzone(snapToStep(topDeadzoneByKey[firstSelectedKey] ?? 0, 0, 1, step));
+    setBottomDeadzone(snapToStep(bottomDeadzoneByKey[firstSelectedKey] ?? 0, 0, 1, step));
     const assignedSwitch = assignedSwitchesByKey[firstSelectedKey];
     if (assignedSwitch) {
       setSelectedSwitchId(normalizeSwitchProfileId(assignedSwitch));
     }
   }, [
+    isXs,
+    model,
     selectedKeys,
     actuationByKey,
     rapidTriggerByKey,
@@ -267,7 +316,7 @@ export function usePerKeyPerformance({
     });
   }
   function setActuationForSelection(value: number) {
-    const step = isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0 ? 0.005 : 0.01;
+    const step = isXsPrecisionModel(model) ? 0.005 : 0.01;
     const nextValue = snapToStep(value, 0.1, 3.4, step);
     setActuation(nextValue);
     if (!selectedKeys.size) {
@@ -317,11 +366,7 @@ export function usePerKeyPerformance({
     });
   }
   function setRapidSensitivityForSelection(value: number) {
-    const activeValues =
-      isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0
-        ? RAPID_TRIGGER_VALUES_XS
-        : rapidTriggerValues;
-    const nextValue = snapToAllowedValue(value, activeValues);
+    const nextValue = clampRapidTriggerForModel(value, model);
     setRapidSensitivity(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -338,11 +383,7 @@ export function usePerKeyPerformance({
     });
   }
   function setPressSensitivityForSelection(value: number) {
-    const activeValues =
-      isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0
-        ? RAPID_TRIGGER_VALUES_XS
-        : rapidTriggerValues;
-    const nextValue = snapToAllowedValue(value, activeValues);
+    const nextValue = clampRapidTriggerForModel(value, model);
     setPressSensitivity(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -359,11 +400,7 @@ export function usePerKeyPerformance({
     });
   }
   function setReleaseSensitivityForSelection(value: number) {
-    const activeValues =
-      isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0
-        ? RAPID_TRIGGER_VALUES_XS
-        : rapidTriggerValues;
-    const nextValue = snapToAllowedValue(value, activeValues);
+    const nextValue = clampRapidTriggerForModel(value, model);
     setReleaseSensitivity(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -396,7 +433,7 @@ export function usePerKeyPerformance({
     });
   }
   function setTopDeadzoneForSelection(value: number) {
-    const step = isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0 ? 0.005 : 0.01;
+    const step = isXsPrecisionModel(model) ? 0.005 : 0.01;
     const nextValue = snapToStep(value, 0, 1, step);
     setTopDeadzone(nextValue);
     if (!selectedKeys.size) {
@@ -414,7 +451,7 @@ export function usePerKeyPerformance({
     });
   }
   function setBottomDeadzoneForSelection(value: number) {
-    const step = isXsPrecisionModel(model) || Math.round(value * 1000) % 10 !== 0 ? 0.005 : 0.01;
+    const step = isXsPrecisionModel(model) ? 0.005 : 0.01;
     const nextValue = snapToStep(value, 0, 1, step);
     setBottomDeadzone(nextValue);
     if (!selectedKeys.size) {
@@ -449,20 +486,39 @@ export function usePerKeyPerformance({
     draft: ProfileDraft | undefined,
     keyIds: readonly string[] = modelKeyIds
   ) {
+    const step = isXsPrecisionModel(model) ? 0.005 : 0.01;
+    const snapMap = (record: Record<string, number>, min: number, max: number) =>
+      Object.fromEntries(
+        Object.entries(record).map(([k, v]) => [k, snapToStep(v, min, max, step)])
+      );
+    const snapRtMap = (record: Record<string, number>) =>
+      Object.fromEntries(
+        Object.entries(record).map(([k, v]) => [k, clampRapidTriggerForModel(v, model)])
+      );
     const nextSwitches = mergePerKeyState(
       draft?.assignedSwitchesByKey as Record<string, SwitchTone> | undefined,
       'white' as SwitchTone,
       keyIds
     );
-    const nextActuation = mergePerKeyState(draft?.actuationByKey, 1.6, keyIds);
+    const nextActuation = snapMap(mergePerKeyState(draft?.actuationByKey, 1.6, keyIds), 0.1, 3.4);
     const nextRapidTrigger = mergePerKeyState(draft?.rapidTriggerByKey, false, keyIds);
     const nextSplitSensitivity = mergePerKeyState(draft?.splitSensitivityByKey, false, keyIds);
-    const nextRapidSensitivity = mergePerKeyState(draft?.rapidSensitivityByKey, 0.65, keyIds);
-    const nextPressSensitivity = mergePerKeyState(draft?.pressSensitivityByKey, 0.5, keyIds);
-    const nextReleaseSensitivity = mergePerKeyState(draft?.releaseSensitivityByKey, 0.55, keyIds);
+    const nextRapidSensitivity = snapRtMap(
+      mergePerKeyState(draft?.rapidSensitivityByKey, 0.65, keyIds)
+    );
+    const nextPressSensitivity = snapRtMap(
+      mergePerKeyState(draft?.pressSensitivityByKey, 0.5, keyIds)
+    );
+    const nextReleaseSensitivity = snapRtMap(
+      mergePerKeyState(draft?.releaseSensitivityByKey, 0.55, keyIds)
+    );
     const nextDeadzoneEnabled = mergePerKeyState(draft?.deadzoneEnabledByKey, true, keyIds);
-    const nextTopDeadzone = mergePerKeyState(draft?.topDeadzoneByKey, 0, keyIds);
-    const nextBottomDeadzone = mergePerKeyState(draft?.bottomDeadzoneByKey, 0, keyIds);
+    const nextTopDeadzone = snapMap(mergePerKeyState(draft?.topDeadzoneByKey, 0, keyIds), 0, 1);
+    const nextBottomDeadzone = snapMap(
+      mergePerKeyState(draft?.bottomDeadzoneByKey, 0, keyIds),
+      0,
+      1
+    );
 
     setAssignedSwitchesByKey(nextSwitches);
     setActuationByKey(nextActuation);
@@ -479,15 +535,17 @@ export function usePerKeyPerformance({
     const refKey =
       Array.from(selectedKeys)[0] ?? draft?.dirtyKeys?.[draft.dirtyKeys.length - 1] ?? keyIds[0];
     if (draft?.uiScalarValues) {
-      setActuation(draft.uiScalarValues.actuation);
+      setActuation(snapToStep(draft.uiScalarValues.actuation, 0.1, 3.4, step));
       setRapidTrigger(draft.uiScalarValues.rapidTrigger);
       setSplitSensitivity(draft.uiScalarValues.splitSensitivity);
-      setRapidSensitivity(draft.uiScalarValues.rapidSensitivity);
-      setPressSensitivity(draft.uiScalarValues.pressSensitivity);
-      setReleaseSensitivity(draft.uiScalarValues.releaseSensitivity);
+      setRapidSensitivity(clampRapidTriggerForModel(draft.uiScalarValues.rapidSensitivity, model));
+      setPressSensitivity(clampRapidTriggerForModel(draft.uiScalarValues.pressSensitivity, model));
+      setReleaseSensitivity(
+        clampRapidTriggerForModel(draft.uiScalarValues.releaseSensitivity, model)
+      );
       setDeadzoneEnabled(draft.uiScalarValues.deadzoneEnabled);
-      setTopDeadzone(draft.uiScalarValues.topDeadzone);
-      setBottomDeadzone(draft.uiScalarValues.bottomDeadzone);
+      setTopDeadzone(snapToStep(draft.uiScalarValues.topDeadzone, 0, 1, step));
+      setBottomDeadzone(snapToStep(draft.uiScalarValues.bottomDeadzone, 0, 1, step));
       setSelectedSwitchId(normalizeSwitchProfileId(draft.uiScalarValues.selectedSwitchId));
     } else if (refKey) {
       setActuation(nextActuation[refKey] ?? 1.6);

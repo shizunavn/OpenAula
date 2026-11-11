@@ -49,7 +49,10 @@ export const RAPID_TRIGGER_VALUES_XS = Array.from({ length: 680 }, (_, index) =>
 );
 
 export function isXsPrecisionModel(model?: HeroDeviceModelId | string | null): boolean {
-  return model === 'hero68Xs' || getHero68DistanceUnitMm() === 0.005;
+  if (model != null && model !== '') {
+    return model === 'hero68Xs';
+  }
+  return getHero68DistanceUnitMm() === 0.005;
 }
 
 export function rapidTriggerValuesForModel(
@@ -58,18 +61,28 @@ export function rapidTriggerValuesForModel(
   return isXsPrecisionModel(model) ? RAPID_TRIGGER_VALUES_XS : RAPID_TRIGGER_VALUES_STANDARD;
 }
 
+export function clampRapidTriggerForModel(
+  value: number,
+  model?: HeroDeviceModelId | string | null
+): number {
+  const allowedValues = rapidTriggerValuesForModel(model);
+  const clamped = clampNumber(value, allowedValues[0], allowedValues[allowedValues.length - 1]);
+  return snapToAllowedValue(clamped, allowedValues);
+}
+
 export const RAPID_TRIGGER_VALUES = RAPID_TRIGGER_VALUES_STANDARD;
 
 /**
  * Formats millimeter distances with 2 decimal places for multiples of `0.01 mm`
  * (`0.10`, `1.60`) and 3 decimal places for `0.005 mm` steps (`0.005`, `0.125`),
- * matching the official AULA web driver (`r % 10 === 0 ? toFixed(2) : toFixed(3)`).
+ * rounding arbitrary thousandths (`0.164` -> `0.165`, `0.172` -> `0.17`, `0.173` -> `0.175`)
+ * to the nearest `5 µm` (`0.005 mm`) step.
  */
 export function formatMillimeters(value: number, minDecimals = 2): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return (0).toFixed(minDecimals);
   }
-  const roundedUm = Math.round(value * 1000);
+  const roundedUm = Math.round((value * 1000) / 5) * 5;
   if (roundedUm % 10 !== 0) {
     return (roundedUm / 1000).toFixed(3);
   }
@@ -94,7 +107,7 @@ export function snapToAllowedValue(value: number, allowedValues: readonly number
   for (let i = 1; i < allowedValues.length; i++) {
     const candidate = allowedValues[i];
     const diff = Math.abs(Math.round(candidate * 1000) - targetUm);
-    if (diff < bestDiff) {
+    if (diff <= bestDiff) {
       best = candidate;
       bestDiff = diff;
     }

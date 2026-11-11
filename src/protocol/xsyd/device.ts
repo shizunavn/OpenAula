@@ -1126,11 +1126,11 @@ export const xsydProtocolEncoder: Hero68ProtocolEncoder = {
       const rawReleaseMm = key.splitSensitivity ? key.releaseSensitivityMm : key.rapidSensitivityMm;
       const pressRtUm = Math.max(
         10,
-        Math.min(switchMaxUm, mmToUm(rawPressMm > 0 ? rawPressMm : 0.3))
+        Math.min(switchMaxUm, Math.round(mmToUm(rawPressMm > 0 ? rawPressMm : 0.3) / 10) * 10)
       );
       const releaseRtUm = Math.max(
         10,
-        Math.min(switchMaxUm, mmToUm(rawReleaseMm > 0 ? rawReleaseMm : 0.3))
+        Math.min(switchMaxUm, Math.round(mmToUm(rawReleaseMm > 0 ? rawReleaseMm : 0.3) / 10) * 10)
       );
 
       const topDzUm = key.deadzoneEnabled
