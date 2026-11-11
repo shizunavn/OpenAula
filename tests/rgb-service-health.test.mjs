@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import {readFile} from 'node:fs/promises'
 import {test} from 'node:test'
 import {rolldown} from 'rolldown'
 async function bundle(input){const b=await rolldown({input});try{const {output}=await b.generate({format:'esm'});return import('data:text/javascript;base64,'+Buffer.from(output[0].code).toString('base64'))}finally{await b.close()}}
@@ -42,4 +43,15 @@ test('an old status poll cannot replace a newer action session',async()=>{
     resolve(new Response(JSON.stringify({mode:'rhythm',sessionId:'old-session',enabled:true}),{status:200}))
     await pending;assert.equal(state.getRgbServiceState().status.sessionId,'new-session')
   }finally{globalThis.fetch=original}
+})
+test('service download URL and user-facing service guidance use OpenAula branding instead of legacy Hero68RgbService.exe',async()=>{
+  assert.equal(
+    state.RGB_SERVICE_DOWNLOAD,
+    'https://github.com/shizunavn/OpenAula/releases/latest/download/OpenAula-Setup-Windows-x64.exe'
+  )
+  for(const file of ['src/pages/BackgroundServicePage.tsx','src/protocol/rgbService.ts','src/protocol/hero68/webhid.ts']){
+    const text=await readFile(file,'utf8')
+    assert.equal(text.includes('Hero68RgbService.exe'),false,`${file} still contains legacy Hero68RgbService.exe`)
+    assert.equal(text.includes('OpenAula.exe'),true,`${file} should reference OpenAula.exe`)
+  }
 })

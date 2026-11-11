@@ -121,7 +121,7 @@ async function request(path: string, value?: unknown): Promise<RgbServiceStatus>
     throw Error(
       error instanceof DOMException && error.name === 'TimeoutError'
         ? 'RGB service phản hồi quá chậm. Hãy thử lại.'
-        : 'RGB service đã tắt. Hãy chạy lại Hero68RgbService.exe. Các thay đổi chưa lưu vẫn được giữ trên web.'
+        : 'RGB service đã tắt. Hãy chạy lại OpenAula.exe. Các thay đổi chưa lưu vẫn được giữ trên web.'
     );
   }
   if (response.status === 403) {
@@ -216,7 +216,7 @@ export const rgbService = {
       if (error instanceof LocalServicePermissionError) {
         throw error;
       }
-      throw Error('RGB service đã tắt. Hãy chạy lại Hero68RgbService.exe.');
+      throw Error('RGB service đã tắt. Hãy chạy lại OpenAula.exe.');
     }
     const result = await response.json();
     if (!response.ok) {

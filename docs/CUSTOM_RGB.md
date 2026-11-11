@@ -5,7 +5,7 @@ change keyboard playback. In Custom Effects, an offline service blurs the editor
 Try demo unlocks a local preview without HID writes or Hall polling. Download app
 opens Settings > Background Service with the download and setup tutorial.
 
-Run `service/dist/Hero68RgbService.exe`, then RGB Settings > Custom Effects >
+Run `service/dist/OpenAulaService.exe`, then RGB Settings > Custom Effects >
 Start Custom. Start transfers this preset to the service and routes
 keyboard configuration through the service-owned HID connection, so AP, RT
 and deadzone remain editable while RGB runs. Reopening Custom joins the running

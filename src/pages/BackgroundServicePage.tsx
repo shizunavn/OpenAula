@@ -46,8 +46,8 @@ const VI: Record<string, string> = {
   'Download Windows app': 'Tải ứng dụng Windows',
   'Run setup and choose Desktop shortcut, Auto-start and optional Gamepad driver.':
     'Chạy setup và chọn shortcut Desktop, chạy cùng Windows và driver Gamepad nếu cần.',
-  'Run Hero68RgbService.exe; its icon stays in the system tray.':
-    'Mở Hero68RgbService.exe; biểu tượng sẽ nằm ở khay hệ thống.',
+  'Run OpenAula.exe; its icon stays in the system tray.':
+    'Mở OpenAula.exe; biểu tượng sẽ nằm ở khay hệ thống.',
   'Choose Allow if the browser asks to connect to local apps.':
     'Chọn Cho phép khi trình duyệt hỏi quyền kết nối ứng dụng trên máy.',
   'Xbox controller driver': 'Driver tay cầm Xbox',
@@ -379,13 +379,13 @@ export default function BackgroundServicePage({
           <a className="apply-button bs-download" href={RGB_SERVICE_DOWNLOAD}>
             <ArrowDownToLine size={17} />
             {t('Download Windows app')}
-            <span>v1.8.0 · Windows x64 · EXE</span>
+            <span>{`v${requiredServiceVersion} · Windows x64 · EXE`}</span>
           </a>
           <ol className="bs-steps">
             <li>
               {t('Run setup and choose Desktop shortcut, Auto-start and optional Gamepad driver.')}
             </li>
-            <li>{t('Run Hero68RgbService.exe; its icon stays in the system tray.')}</li>
+            <li>{t('Run OpenAula.exe; its icon stays in the system tray.')}</li>
             <li>{t('Choose Allow if the browser asks to connect to local apps.')}</li>
           </ol>
         </section>

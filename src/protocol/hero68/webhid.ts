@@ -206,7 +206,7 @@ export class Hero68DeviceManager implements Hero68Transport {
         this.#reconnectViaService = true;
         this.#setSnapshot({
           state: 'disconnected',
-          error: 'RGB service đã tắt. Hãy chạy lại Hero68RgbService.exe.'
+          error: 'RGB service đã tắt. Hãy chạy lại OpenAula.exe.'
         });
       } else if (online && this.#reconnectViaService && !this.connected) {
         this.#reconnectViaService = false;

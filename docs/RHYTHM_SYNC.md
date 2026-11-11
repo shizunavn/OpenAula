@@ -8,7 +8,7 @@ leaves native playback running. Return to onboard stops host playback.
 
 On HERO 68/84 HE without a compatible background service, Rhythm uses the same
 blurred, keyboard-inert gate as Custom Effects. On **AULA WIN 68 HE MAX**, Rhythm
-Sync works **both** through the Windows background service (`Hero68RgbService.exe`)
+Sync works **both** through the Windows background service (`OpenAula.exe`)
 **and** directly in the browser over WebHID (`0x18` mode `0x15` + 5 × 14-slot
 `0x2A` batch streaming), using either Web Audio capture (Browser Tab / System Audio
 or Microphone / Line-In) or the built-in Rhythm Synth.

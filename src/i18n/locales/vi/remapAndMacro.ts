@@ -87,8 +87,8 @@ export const VI_REMAP_AND_MACRO: Record<string, string> = {
   'Hold: deep press → end': 'Giữ: nhấn sâu → kết thúc',
   'Aurora is now a Base effect. Move this layer to cover all keys and control its brightness directly.':
     'Aurora giờ là hiệu ứng nền. Chuyển layer này sang nền để phủ toàn bộ phím và điều khiển độ sáng trực tiếp.',
-  'Open Hero68RgbService.exe. The app appears in the system tray. Open Custom Effects, choose your layers, then Apply to keyboard.':
-    'Mở Hero68RgbService.exe. Ứng dụng sẽ xuất hiện trong khay hệ thống. Mở Custom Effects, chọn các layer rồi nhấn Áp dụng lên bàn phím.',
+  'Open OpenAula.exe. The app appears in the system tray. Open Custom Effects, choose your layers, then Apply to keyboard.':
+    'Mở OpenAula.exe. Ứng dụng sẽ xuất hiện trong khay hệ thống. Mở Custom Effects, chọn các layer rồi nhấn Áp dụng lên bàn phím.',
   'Soft color curtains across all keys. Add FX layers for key reactions.':
     'Các dải màu mềm trải trên toàn bộ phím. Thêm layer FX để tạo phản ứng theo phím.',
   'Stages the base for Save. Custom layers remain in your local preset.':

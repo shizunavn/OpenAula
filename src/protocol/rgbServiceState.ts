@@ -7,7 +7,7 @@ import {
 } from './rgbService';
 import { LEGACY_RGB_EFFECTS, type CustomRgbConfiguration } from '../keyboard/customRgbModel';
 export const RGB_SERVICE_DOWNLOAD =
-  'https://github.com/shizunavn/OpenAula/releases/latest/download/OpenHero68-Setup-Windows-x64.exe';
+  'https://github.com/shizunavn/OpenAula/releases/latest/download/OpenAula-Setup-Windows-x64.exe';
 type ServiceState = {
   checking: boolean;
   status: RgbServiceStatus | null;

@@ -137,8 +137,8 @@ export const VI_LIGHTING: Record<string, string> = {
   'Color mode': 'Chế độ màu',
   Colors: 'Màu sắc',
   'Effect parameters': 'Thông số hiệu ứng',
-  'If the service stays offline after Allow, open Hero68RgbService.exe again. For open-hero68.pages.dev, use an app build that supports this website. Close other keyboard configuration apps if the keyboard cannot connect.':
-    'Nếu dịch vụ vẫn offline sau khi Cho phép, mở lại Hero68RgbService.exe. Với open-hero68.pages.dev, hãy dùng bản ứng dụng hỗ trợ website này. Đóng các ứng dụng cấu hình bàn phím khác nếu bàn phím không kết nối được.',
+  'If the service stays offline after Allow, open OpenAula.exe again. For open-hero68.pages.dev, use an app build that supports this website. Close other keyboard configuration apps if the keyboard cannot connect.':
+    'Nếu dịch vụ vẫn offline sau khi Cho phép, mở lại OpenAula.exe. Với open-hero68.pages.dev, hãy dùng bản ứng dụng hỗ trợ website này. Đóng các ứng dụng cấu hình bàn phím khác nếu bàn phím không kết nối được.',
   'Joining running Rhythm…': 'Đang tham gia Rhythm đang chạy…',
   'Keep your Custom RGB running, even after closing the browser.':
     'Giữ Custom RGB chạy ngay cả khi đã đóng trình duyệt.',
