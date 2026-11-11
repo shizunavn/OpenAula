@@ -4,18 +4,18 @@ An open-source, browser-based configurator for **AULA HERO68 / HERO84 / HERO 68 
 
 Formerly OpenHero68; the rename reflects support for the wider AULA line. Existing installs upgrade in place and keep their settings.
 
-[**Website**](https://open-aula.pages.dev/) · [Open the web app](https://open-aula.pages.dev/) · [Download the Windows service](https://github.com/shizunavn/OpenAula/releases/latest) · [Release notes](https://github.com/shizunavn/OpenAula/releases/latest)
+[**Website**](https://open-aula.pages.dev/) · [Open the web app](https://open-aula.pages.dev/) · [Download the Windows service](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest) · [Release notes](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest)
 
-**Found a problem? [Report a bug](https://github.com/shizunavn/OpenAula/issues/new?template=bug-report.yml)** — web app, keyboard features, Windows service or installer.
+**Found a problem? [Report a bug](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dbug-report.yml)** — web app, keyboard features, Windows service or installer.
 
 > [!IMPORTANT]
 > **Own a HERO84 or another Hall-effect keyboard? Help bring support to your model.**
 >
-> **[Request keyboard support →](https://github.com/shizunavn/OpenAula/issues/new?template=add-a-board.yml)** · [Submission guide](docs/SUBMIT_A_BOARD.md)
+> **[Request keyboard support →](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dadd-a-board.yml)** · [Submission guide](https://www.google.com/search?q=docs/SUBMIT_A_BOARD.md)
 >
 > No coding needed. Share your exact model, firmware version, USB IDs and a layout photo; write **Unknown** if you need help. Protocol captures are optional. Owners who can test on real hardware are especially welcome.
 >
-> **Currently verified: AULA HERO68 / HERO84 (verified lighting, RT, AP) / HERO 68 XS (5 µm high precision, 8K receiver) / WIN 68 HE MAX.** Other models still need protocol and hardware validation. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings, Rapid Trigger, 4-mode SOCD, 7-node visual DKS, OS switching, WinLock, and WebHID configuration are fully supported.
+> **Currently verified: AULA HERO68 / HERO84 (verified lighting, RT, AP) / HERO 68 XS (5 µm high precision, 8K receiver) / WIN 68 HE MAX.** Other models still need protocol and hardware validation. WIN 68 HE MAX speaks a separate protocol (XSYD `0x5C`); its per-key settings, Rapid Trigger, 4 onboard profile slots (`0..3`, `Fn + P1..P4`), Smart Slot 3 Virtualization for zero-wear game profile switching, 4-mode SOCD, 7-node visual DKS, OS switching, WinLock, and WebHID configuration are fully supported.
 
 > **Unofficial project.** OpenAula is a community effort based on reverse engineering. It is not affiliated with or endorsed by AULA or the makers of Wootility.
 
@@ -38,7 +38,7 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 
 | Area | What you can do |
 | --- | --- |
-| Profiles | Switch between 3 on-board profile slots, read from and save to device, export/import profiles, discard unsaved draft edits, or reset a profile to factory defaults with one-click Undo; displays dynamic key counts and model names for recognized boards (`HERO68`, `HERO84`, `HERO 68 XS`, `WIN 68 HE MAX`) |
+| Profiles | 3-tier profile system (Onboard, Linked with Apps, Inactive). Switch between 3 on-board profile slots (`0..2`, `Fn + P1..P3`) on HERO68/HERO84/HERO 68 XS or **4 on-board profile slots (`0..3`, `Fn + P1..P4`) on WIN 68 HE MAX**; **Auto-Profile** app switching with zero flash wear via Background Service v1.8.0; 89 SVG profile icons across 3 categories (Switchy & UwU, Logos, Gradients); 6 profile presets with custom artwork; drag-and-drop profile reordering & duplication (hold Ctrl to copy); export/import JSON and share codes, discard unsaved draft edits, or reset a profile to factory defaults with one-click Undo; displays dynamic key counts and model names for recognized boards (`HERO68`, `HERO84`, `HERO 68 XS`, `WIN 68 HE MAX`) |
 | Actuation Point | Per-key or multi-key actuation from 0.10 to 3.40 mm (with fine 0.005 mm / 5 µm resolution on HERO 68 XS), live Hall test overlay on the keyboard |
 | Rapid Trigger | Rapid Trigger and deadzone settings with up to 0.005 mm sensitivity steps on supported hardware (HERO 68 XS) |
 | Key Remap | Remap keys across layers, with a searchable icon catalog |
@@ -55,6 +55,7 @@ Formerly OpenHero68; the rename reflects support for the wider AULA line. Existi
 
 - **Native System Tray Flyout:** custom dark-themed Win32 GDI flyout with live status cards (ViGEm driver status, WebHID bridge connection, active profile slot, RT/AP mode, and RGB/Gamepad state) and one-click quick action buttons.
 - **Service Control Panel:** responsive dark-mode diagnostic and management dashboard at `http://127.0.0.1:16868/` with real-time telemetry, profile switching, and updater integration.
+- **Auto-Profile Switching (Zero Flash Wear):** background service (v1.8.0) actively monitors foreground applications (400 ms poll, 800 ms debounce, 3000 ms dwell) and switches profiles automatically. Uses zero-wear SRAM commands (`0x10` on Bytetech / `0x00 0x70` on XSYD) for onboard profiles and **Smart Slot 3 Virtualization** for >3/4 game profiles, streaming diffs directly into host RAM and Slot 3 without writing flash keymaps to preserve EEPROM/flash lifespan indefinitely.
 - **HERO 68 XS Wire Travel Normalization:** high-resolution 5 µm wire travel normalized across Gamepad analog output and RGB pressure waves.
 - **Custom Effects:** an Aurora or Dynamic Wave base with composable effects (Dynamic Wave, Trigger Response, Comet, Pressure Wave, Ripple, Reaction, Touch, Jelly, AOE, Scan, Breath, Mixing, Trail, RT Display, plus the ambient Ember, Starlight, Afterglow and Tempo Pulse (BPM)) and a layer editor with 9-direction control and smooth circular palette transitions. Start/Stop controls with automatic live updates, session recovery and preserved drafts.
 - **Rhythm Sync:** 10 key modes driven by native system-audio capture with 16 log-spaced FFT bands, 7 side meter modes (including Peak-hold & Far-end), live preview and a 60 FPS USB scheduler shared with Custom Effects.
@@ -89,7 +90,7 @@ Open the HTTPS URL printed by Vite. WebHID requires a secure context, so Vite cr
 
 ## RGB tray service (Windows)
 
-1. Download and run the Windows x64 setup EXE from [Releases](https://github.com/shizunavn/OpenAula/releases/latest). Choose Desktop shortcut (on by default) and optional Auto-start (off by default). The optional Gamepad driver task appears only when the driver is not installed.
+1. Download and run the Windows x64 setup EXE from [Releases](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/releases/latest). Choose Desktop shortcut (on by default) and optional Auto-start (off by default). The optional Gamepad driver task appears only when the driver is not installed.
 2. Open OpenAula from Start Menu or the Desktop shortcut. An **H** icon appears in the system tray.
 3. Open the web app and choose **Allow** if the browser asks for access to apps and services on this device.
 4. Go to **RGB Settings → Custom Effects** or **Rhythm Sync**, pick a preset and click **Start Custom** or **Start Rhythm Sync**. Running edits sync automatically; returning to the editor joins existing playback.
@@ -101,7 +102,7 @@ Gamepad starts disabled whenever the service starts. Once enabled, it keeps runn
 
 | | |
 | --- | --- |
-| Control panel | [http://127.0.0.1:16868/](http://127.0.0.1:16868/) |
+| Control panel | [http://127.0.0.1:16868/](https://www.google.com/url?sa=E&source=gmail&q=http://127.0.0.1:16868/) |
 | Presets and logs | `%LOCALAPPDATA%\OpenAula\rgb-service` |
 | Auto-start | Optional, per Windows account, off by default. Uses the installed stable launcher. |
 | Allowed origins | The deployed web app (`https://open-aula.pages.dev`), legacy origin `https://open-hero68.pages.dev`, and `localhost:5173` / `127.0.0.1:5173`. For another host, start the service with `--allow-origin https://your-host:port`. |
@@ -120,7 +121,7 @@ The installer keeps shortcut and Auto-start choices during automatic updates. Ga
 
 The separate public landing page lives in `landing/`. Build it with
 `npm run build:landing`, check with `npm run check:landing`, and package it with
-`npm run package:landing`. See [landing page development and deployment](landing/README.md).
+`npm run package:landing`. See [landing page development and deployment](https://www.google.com/search?q=landing/README.md).
 
 Production builds and tests require development dependencies. Use `npm ci` (or
 `npm ci --include=dev` if your environment defaults to omitting them) before
@@ -179,7 +180,7 @@ npm run build:setup
 
 The launcher and HID bridge are compiled with MSVC. The TypeScript RGB engine and the Node runtime are bundled into `service/dist/`. Packaging writes `OpenAula-Setup-Windows-x64.exe` to `service/releases/`. `service/version.json` controls the service version, API and pinned toolchain. MSVC is discovered using vswhere; `HERO68_VCVARS` remains an override.
 
-Run `npm run test:setup` for isolated installer/update/rollback smoke tests. See [Setup and release operations](docs/SETUP_UPDATES.md) for release signing and GitHub Actions.
+Run `npm run test:setup` for isolated installer/update/rollback smoke tests. See [Setup and release operations](https://www.google.com/search?q=docs/SETUP_UPDATES.md) for release signing and GitHub Actions.
 
 Helper scripts in `tools/` cover verification (`verify-service-package.mjs`, `verify-service-live.mjs`, …), benchmarking, signing and release publishing.
 
@@ -217,19 +218,19 @@ docs/                Reverse-engineering notes, feature docs, release notes
 
 ## Documentation
 
-- [Custom RGB and the background service](docs/CUSTOM_RGB.md)
-- [Rhythm Sync](docs/RHYTHM_SYNC.md)
-- [Gamepad and shared Hall](docs/GAMEPAD.md) · [Recorded validation results](docs/GAMEPAD_VALIDATION.md)
-- [Macros UI](docs/MACRO_UI.md) · [Advanced Keys UI](docs/ADVANCED_KEYS_UI.md)
-- [Protocol integration notes](src/protocol/README.md)
-- [WIN 68 HE MAX (XSYD 0x5C) protocol](docs/xsyd-protocol.md)
-- [All docs, including reverse-engineering notes](docs/README.md)
-- [Changelog](CHANGELOG.md) · [Service release notes](docs/releases/)
+- [Custom RGB and the background service](https://www.google.com/search?q=docs/CUSTOM_RGB.md)
+- [Rhythm Sync](https://www.google.com/search?q=docs/RHYTHM_SYNC.md)
+- [Gamepad and shared Hall](https://www.google.com/search?q=docs/GAMEPAD.md) · [Recorded validation results](https://www.google.com/search?q=docs/GAMEPAD_VALIDATION.md)
+- [Macros UI](https://www.google.com/search?q=docs/MACRO_UI.md) · [Advanced Keys UI](https://www.google.com/search?q=docs/ADVANCED_KEYS_UI.md)
+- [Protocol integration notes](https://www.google.com/search?q=src/protocol/README.md)
+- [WIN 68 HE MAX (XSYD 0x5C) protocol](https://www.google.com/search?q=docs/xsyd-protocol.md)
+- [All docs, including reverse-engineering notes](https://www.google.com/search?q=docs/README.md)
+- [Changelog](CHANGELOG.md) · [Service release notes](https://www.google.com/search?q=docs/releases/)
 
 ## Status and known limitations
 
 - **Gamepad v1** supports one HERO68 / HERO 68 XS and one Xbox controller on Windows x64. Firmware blocking saves exact original remaps before writing zero and recovers them after service restart. Advanced Keys on assigned keys must be removed first. Windows hook fallback affects matching keys on other keyboards, may not block Raw Input, and displays an anti-cheat warning when selected. No suppression method guarantees anti-cheat approval. DirectInput, mouse-to-stick and kernel keyboard filters are outside v1.
-- **WIN 68 HE MAX** operates on a separate XSYD 0x5C protocol stack. While per-key AP/RT, 4-mode SOCD, 7-node visual DKS, OS mode switching, WinLock, and WebHID configuration are fully supported, background service features (virtual Gamepad and service RGB streaming) currently target the HERO68 / HERO 68 XS family.
+- **WIN 68 HE MAX** operates on a separate XSYD 0x5C protocol stack. Per-key AP/RT, 4 onboard profile slots (`0..3`, `Fn + P1..P4`), 4-mode SOCD, 7-node visual DKS, OS mode switching, WinLock, WebHID configuration, and Auto-Profile app switching via Smart Slot 3 Virtualization are fully supported. Background service virtual Gamepad and custom service RGB streaming currently target the HERO68 / HERO 68 XS family.
 - **Rhythm side-light modes** work in the demo only. Live side output stays disabled until the HERO68 LED count, order and protocol are verified; side LEDs keep their on-board effect while key playback runs.
 - **Tachyon Mode** (8000 Hz polling) turns key and side lighting off to minimize latency. Custom Effects, Rhythm Sync and automatic Hall polling are paused while it is on, and your previous lighting is restored when you turn it off.
 - The tray service supports **Windows x64 only**. The web app needs a WebHID browser (Chrome or Edge).
@@ -237,8 +238,8 @@ docs/                Reverse-engineering notes, feature docs, release notes
 ## Contributing
 
 Want another keyboard model or hardware revision supported? Use the
-[keyboard support form](https://github.com/shizunavn/OpenAula/issues/new?template=add-a-board.yml)
-and [submission guide](docs/SUBMIT_A_BOARD.md). Include the exact model, installed
+[keyboard support form](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dadd-a-board.yml)
+and [submission guide](https://www.google.com/search?q=docs/SUBMIT_A_BOARD.md). Include the exact model, installed
 firmware, USB IDs for each connection and layout. Protocol captures are optional;
 you can submit basic details first and volunteer for hardware testing later.
 
@@ -249,7 +250,7 @@ npm run build
 npm test
 ```
 
-Found a problem? Use the [bug report form](https://github.com/shizunavn/OpenAula/issues/new?template=bug-report.yml)
+Found a problem? Use the [bug report form](https://www.google.com/search?q=https://github.com/shizunavn/OpenAula/issues/new%3Ftemplate%3Dbug-report.yml)
 and tell us what happened in your own words. **Only the problem description is required.**
 English and Vietnamese reports are welcome; screenshots, steps and technical details are optional.
 You do not need to find logs or version numbers to report a bug. We can ask follow-up questions if needed.
