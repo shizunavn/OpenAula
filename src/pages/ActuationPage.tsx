@@ -204,6 +204,7 @@ function ActuationPage({
                 min={0.1}
                 max={3.4}
                 step={isXsPrecisionModel(model) ? 0.005 : 0.01}
+                dragStep={0.05}
                 suffix="mm"
                 direction="top"
                 disabled={!hasSelection}

@@ -207,6 +207,7 @@ function QuickSettingsPage({
               min={0.1}
               max={3.4}
               step={isXs ? 0.005 : 0.01}
+              dragStep={0.05}
               suffix="mm"
               disabled={!hasSelection}
               direction="top"
@@ -260,6 +261,7 @@ function QuickSettingsPage({
                   min={minRt}
                   max={3.4}
                   step={isXs ? 0.005 : 0.01}
+                  dragStep={0.01}
                   allowedValues={rapidTriggerValues}
                   suffix="mm"
                   recommendedValue={0.65}
@@ -283,6 +285,7 @@ function QuickSettingsPage({
                     min={minRt}
                     max={3.4}
                     step={isXs ? 0.005 : 0.01}
+                    dragStep={0.01}
                     allowedValues={rapidTriggerValues}
                     suffix="mm"
                     recommendedValue={0.5}
@@ -304,6 +307,7 @@ function QuickSettingsPage({
                     min={minRt}
                     max={3.4}
                     step={isXs ? 0.005 : 0.01}
+                    dragStep={0.01}
                     allowedValues={rapidTriggerValues}
                     suffix="mm"
                     recommendedValue={0.55}

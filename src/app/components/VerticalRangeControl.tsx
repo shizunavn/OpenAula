@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type * as React from 'react';
 import { formatMillimeters, snapToStep } from '../helpers';
+import { useSliderPointerDrag } from './useSliderPointerDrag';
 
 function VerticalRangeControl({
   value,
   min,
   max,
   step,
+  dragStep,
   suffix,
   disabled = false,
   direction = 'bottom',
@@ -18,6 +20,7 @@ function VerticalRangeControl({
   min: number;
   max: number;
   step: number;
+  dragStep?: number;
   suffix: string;
   disabled?: boolean;
   direction?: 'top' | 'bottom';
@@ -36,10 +39,43 @@ function VerticalRangeControl({
   const [draftValue, setDraftValue] = useState(() =>
     mixed ? '' : formatMillimeters(effectiveValue)
   );
+  const meterTrackRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     setDraftValue(mixed ? '' : formatMillimeters(effectiveValue));
   }, [effectiveValue, mixed]);
+
+  const commitSliderValue = (nextVal: number) => {
+    onChange(nextVal);
+    setDraftValue(formatMillimeters(nextVal));
+  };
+
+  const fineScale = { kind: 'continuous' as const, min, max, step: effectiveStep };
+  const dragScale =
+    dragStep != null && dragStep > effectiveStep
+      ? { kind: 'continuous' as const, min, max, step: dragStep }
+      : undefined;
+
+  const pointerHandlers = useSliderPointerDrag({
+    disabled,
+    currentValue: effectiveValue,
+    currentRatio: pct / 100,
+    fineScale,
+    dragScale,
+    getTrackAxis: input => {
+      const rect =
+        meterTrackRef.current?.getBoundingClientRect() ??
+        input.parentElement?.getBoundingClientRect() ??
+        input.getBoundingClientRect();
+      return {
+        trackStartPx: rect.top,
+        trackSpanPx: Math.max(1, rect.height),
+        direction: direction === 'top' ? 1 : -1
+      };
+    },
+    getCoord: e => e.clientY,
+    onCommitValue: commitSliderValue
+  });
 
   const commitNumberInput = () => {
     const normalized = draftValue.trim().replace(',', '.');
@@ -69,13 +105,14 @@ function VerticalRangeControl({
           value={effectiveValue}
           disabled={disabled}
           aria-label="Vertical value"
+          style={{ touchAction: 'none' }}
+          {...pointerHandlers}
           onChange={e => {
             const nextVal = snapToStep(Number(e.target.value), min, max, effectiveStep);
-            onChange(nextVal);
-            setDraftValue(formatMillimeters(nextVal));
+            commitSliderValue(nextVal);
           }}
         />
-        <span className="meter-track" aria-hidden="true">
+        <span ref={meterTrackRef} className="meter-track" aria-hidden="true">
           <span className="meter-fill" style={fillStyle as React.CSSProperties} />
           <span className="meter-marker" style={markerStyle as React.CSSProperties} />
         </span>

@@ -235,6 +235,7 @@ function RapidPage({
                 min={minRt}
                 max={3.4}
                 step={isXs ? 0.005 : 0.01}
+                dragStep={0.01}
                 allowedValues={rapidTriggerValues}
                 suffix="mm"
                 recommendedValue={0.65}
@@ -256,6 +257,7 @@ function RapidPage({
                   min={minRt}
                   max={3.4}
                   step={isXs ? 0.005 : 0.01}
+                  dragStep={0.01}
                   allowedValues={rapidTriggerValues}
                   suffix="mm"
                   recommendedValue={0.5}
@@ -271,6 +273,7 @@ function RapidPage({
                   min={minRt}
                   max={3.4}
                   step={isXs ? 0.005 : 0.01}
+                  dragStep={0.01}
                   allowedValues={rapidTriggerValues}
                   suffix="mm"
                   recommendedValue={0.55}

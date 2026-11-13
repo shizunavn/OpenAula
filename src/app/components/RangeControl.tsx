@@ -7,12 +7,14 @@ import {
   snapToAllowedValue,
   snapToStep
 } from '../helpers';
+import { useSliderPointerDrag } from './useSliderPointerDrag';
 
 function RangeControl({
   value,
   min,
   max,
   step,
+  dragStep,
   suffix,
   allowedValues,
   disabled = false,
@@ -25,6 +27,7 @@ function RangeControl({
   min: number;
   max: number;
   step: number;
+  dragStep?: number;
   suffix: string;
   allowedValues?: readonly number[];
   disabled?: boolean;
@@ -119,6 +122,45 @@ function RangeControl({
     setDraftValue(formatMillimeters(committed));
   };
 
+  const commitSliderValue = (nextVal: number) => {
+    onChange(nextVal);
+    setDraftValue(formatMillimeters(nextVal));
+  };
+
+  const fineScale = hasAllowedValues
+    ? ({ kind: 'discrete', values: resolvedAllowedValues! } as const)
+    : ({ kind: 'continuous', min: minAllowed, max: maxAllowed, step } as const);
+  const dragScale =
+    dragStep != null && dragStep > stepAllowed
+      ? hasAllowedValues
+        ? ({
+            kind: 'discrete',
+            values: resolvedAllowedValues!.filter(
+              (v, index) => index === 0 || Math.round(v * 1000) % Math.round(dragStep * 1000) === 0
+            )
+          } as const)
+        : ({ kind: 'continuous', min: minAllowed, max: maxAllowed, step: dragStep } as const)
+      : undefined;
+
+  const pointerHandlers = useSliderPointerDrag({
+    disabled,
+    currentValue: effectiveValue,
+    currentRatio: pct / 100,
+    fineScale,
+    dragScale,
+    getTrackAxis: input => {
+      const rect = input.getBoundingClientRect();
+      const thumbInsetPx = rect.width > 32 ? 8 : 0;
+      return {
+        trackStartPx: rect.left + thumbInsetPx,
+        trackSpanPx: Math.max(1, rect.width - thumbInsetPx * 2),
+        direction: 1
+      };
+    },
+    getCoord: e => e.clientX,
+    onCommitValue: commitSliderValue
+  });
+
   const isWideValue = draftValue.length >= 5;
 
   return (
@@ -140,7 +182,8 @@ function RangeControl({
           step={hasAllowedValues ? 1 : step}
           value={hasAllowedValues ? discreteIndex : effectiveValue}
           disabled={disabled}
-          style={{ '--range-progress': `${pct}%` } as React.CSSProperties}
+          style={{ '--range-progress': `${pct}%`, touchAction: 'none' } as React.CSSProperties}
+          {...pointerHandlers}
           onChange={e => {
             if (hasAllowedValues) {
               const index = clampNumber(
@@ -148,14 +191,11 @@ function RangeControl({
                 0,
                 resolvedAllowedValues!.length - 1
               );
-              const nextVal = resolvedAllowedValues![index];
-              onChange(nextVal);
-              setDraftValue(formatMillimeters(nextVal));
+              commitSliderValue(resolvedAllowedValues![index]);
               return;
             }
             const nextVal = snapToStep(Number(e.target.value), minAllowed, maxAllowed, step);
-            onChange(nextVal);
-            setDraftValue(formatMillimeters(nextVal));
+            commitSliderValue(nextVal);
           }}
         />
       </div>
