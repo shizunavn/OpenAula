@@ -7,7 +7,8 @@ import {
   mergeHydratedNumbers,
   mergePerKeyState,
   selectionHasMixedValues,
-  snapToStep
+  snapToStep,
+  travelLimitsForModel
 } from '../helpers';
 import {
   SWITCH_IMAGES,
@@ -215,7 +216,9 @@ export function usePerKeyPerformance({
       let changed = false;
       const next: Record<string, number> = {};
       for (const [keyId, val] of Object.entries(record)) {
-        const clamped = clampRapidTriggerForModel(val, model);
+        const clamped = clampRapidTriggerForModel(val, model, {
+          switchId: assignedSwitchesByKey[keyId]
+        });
         next[keyId] = clamped;
         if (clamped !== val) {
           changed = true;
@@ -223,10 +226,15 @@ export function usePerKeyPerformance({
       }
       return changed ? next : record;
     };
-    const clampStepMap = (record: Record<string, number>, min: number, max: number) => {
+    const clampStepMap = (
+      record: Record<string, number>,
+      min: number,
+      maxOrPerKey: number | ((keyId: string) => number)
+    ) => {
       let changed = false;
       const next: Record<string, number> = {};
       for (const [keyId, val] of Object.entries(record)) {
+        const max = typeof maxOrPerKey === 'function' ? maxOrPerKey(keyId) : maxOrPerKey;
         const snapped = snapToStep(val, min, max, step);
         next[keyId] = snapped;
         if (snapped !== val) {
@@ -235,16 +243,32 @@ export function usePerKeyPerformance({
       }
       return changed ? next : record;
     };
-    setRapidSensitivity(prev => clampRapidTriggerForModel(prev, model));
-    setPressSensitivity(prev => clampRapidTriggerForModel(prev, model));
-    setReleaseSensitivity(prev => clampRapidTriggerForModel(prev, model));
-    setActuation(prev => snapToStep(prev, 0.1, 3.4, step));
+    const selectionLimits = travelLimitsForModel(model, { switchId: selectedSwitchId });
+    setRapidSensitivity(prev =>
+      clampRapidTriggerForModel(prev, model, { switchId: selectedSwitchId })
+    );
+    setPressSensitivity(prev =>
+      clampRapidTriggerForModel(prev, model, { switchId: selectedSwitchId })
+    );
+    setReleaseSensitivity(prev =>
+      clampRapidTriggerForModel(prev, model, { switchId: selectedSwitchId })
+    );
+    setActuation(prev =>
+      snapToStep(prev, selectionLimits.actuationMinMm, selectionLimits.actuationMaxMm, step)
+    );
     setTopDeadzone(prev => snapToStep(prev, 0, 1, step));
     setBottomDeadzone(prev => snapToStep(prev, 0, 1, step));
     setRapidSensitivityByKey(clampRtMap);
     setPressSensitivityByKey(clampRtMap);
     setReleaseSensitivityByKey(clampRtMap);
-    setActuationByKey(prev => clampStepMap(prev, 0.1, 3.4));
+    setActuationByKey(prev =>
+      clampStepMap(
+        prev,
+        selectionLimits.actuationMinMm,
+        keyId =>
+          travelLimitsForModel(model, { switchId: assignedSwitchesByKey[keyId] }).actuationMaxMm
+      )
+    );
     setTopDeadzoneByKey(prev => clampStepMap(prev, 0, 1));
     setBottomDeadzoneByKey(prev => clampStepMap(prev, 0, 1));
   }, [isXs, model]);
@@ -253,18 +277,33 @@ export function usePerKeyPerformance({
       return;
     }
     const firstSelectedKey = Array.from(selectedKeys)[0];
-    const step = isXs ? 0.005 : 0.01;
-    setActuation(snapToStep(actuationByKey[firstSelectedKey] ?? 1.6, 0.1, 3.4, step));
+    const firstSwitchId = assignedSwitchesByKey[firstSelectedKey];
+    const keyLimits = travelLimitsForModel(model, { switchId: firstSwitchId });
+    const step = keyLimits.rapidTriggerStepMm;
+    setActuation(
+      snapToStep(
+        actuationByKey[firstSelectedKey] ?? 1.6,
+        keyLimits.actuationMinMm,
+        keyLimits.actuationMaxMm,
+        step
+      )
+    );
     setRapidTrigger(rapidTriggerByKey[firstSelectedKey] ?? false);
     setSplitSensitivity(splitSensitivityByKey[firstSelectedKey] ?? false);
     setRapidSensitivity(
-      clampRapidTriggerForModel(rapidSensitivityByKey[firstSelectedKey] ?? 0.65, model)
+      clampRapidTriggerForModel(rapidSensitivityByKey[firstSelectedKey] ?? 0.65, model, {
+        switchId: firstSwitchId
+      })
     );
     setPressSensitivity(
-      clampRapidTriggerForModel(pressSensitivityByKey[firstSelectedKey] ?? 0.5, model)
+      clampRapidTriggerForModel(pressSensitivityByKey[firstSelectedKey] ?? 0.5, model, {
+        switchId: firstSwitchId
+      })
     );
     setReleaseSensitivity(
-      clampRapidTriggerForModel(releaseSensitivityByKey[firstSelectedKey] ?? 0.55, model)
+      clampRapidTriggerForModel(releaseSensitivityByKey[firstSelectedKey] ?? 0.55, model, {
+        switchId: firstSwitchId
+      })
     );
     setDeadzoneEnabled(deadzoneEnabledByKey[firstSelectedKey] ?? true);
     setTopDeadzone(snapToStep(topDeadzoneByKey[firstSelectedKey] ?? 0, 0, 1, step));
@@ -304,6 +343,7 @@ export function usePerKeyPerformance({
     if (selectedKeys.size === 0) {
       return;
     }
+    const newLimits = travelLimitsForModel(model, { switchId: normalized });
     markSelectedKeysDirty();
     setAssignedSwitchesByKey(previous => {
       const next = {
@@ -314,10 +354,47 @@ export function usePerKeyPerformance({
       });
       return next;
     });
+    setActuationByKey(previous => {
+      const next = { ...previous };
+      selectedKeys.forEach(keyId => {
+        const cur = next[keyId];
+        if (typeof cur === 'number') {
+          next[keyId] = snapToStep(
+            cur,
+            newLimits.actuationMinMm,
+            newLimits.actuationMaxMm,
+            newLimits.rapidTriggerStepMm
+          );
+        }
+      });
+      return next;
+    });
+    const reClampRt = (previous: Record<string, number>) => {
+      const next = { ...previous };
+      selectedKeys.forEach(keyId => {
+        const cur = next[keyId];
+        if (typeof cur === 'number') {
+          next[keyId] = clampRapidTriggerForModel(cur, model, { switchId: normalized });
+        }
+      });
+      return next;
+    };
+    setRapidSensitivityByKey(reClampRt);
+    setPressSensitivityByKey(reClampRt);
+    setReleaseSensitivityByKey(reClampRt);
   }
   function setActuationForSelection(value: number) {
-    const step = isXsPrecisionModel(model) ? 0.005 : 0.01;
-    const nextValue = snapToStep(value, 0.1, 3.4, step);
+    const selectedSwitchIds = Array.from(selectedKeys).map(k => assignedSwitchesByKey[k]);
+    const limits = travelLimitsForModel(
+      model,
+      selectedSwitchIds.length ? { switchIds: selectedSwitchIds } : { switchId: selectedSwitchId }
+    );
+    const nextValue = snapToStep(
+      value,
+      limits.actuationMinMm,
+      limits.actuationMaxMm,
+      limits.rapidTriggerStepMm
+    );
     setActuation(nextValue);
     if (!selectedKeys.size) {
       return;
@@ -328,7 +405,13 @@ export function usePerKeyPerformance({
         ...previous
       };
       selectedKeys.forEach(keyId => {
-        next[keyId] = nextValue;
+        const keyLimits = travelLimitsForModel(model, { switchId: assignedSwitchesByKey[keyId] });
+        next[keyId] = snapToStep(
+          nextValue,
+          keyLimits.actuationMinMm,
+          keyLimits.actuationMaxMm,
+          keyLimits.rapidTriggerStepMm
+        );
       });
       return next;
     });

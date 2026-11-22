@@ -128,18 +128,15 @@ function toHeroDeviceModel(board: BoardDescriptor): HeroDeviceModel {
   };
 }
 
-export const HERO_DEVICE_MODELS: readonly HeroDeviceModel[] = getBoards().map(toHeroDeviceModel);
+export const HERO_DEVICE_MODELS: readonly HeroDeviceModel[] = getBoards()
+  .filter(board => board.protocol === 'bytetech' && board.id !== 'hero68Xs')
+  .map(toHeroDeviceModel);
 
 export const HERO68_XS_DEVICE_MODEL: HeroDeviceModel = toHeroDeviceModel(HERO68_XS_BOARD);
 
 export const WIN68_HE_MAX_DEVICE_MODEL: HeroDeviceModel = toHeroDeviceModel(WIN68_HE_MAX_BOARD);
 
-export const ALL_DEVICE_MODELS: readonly HeroDeviceModel[] = [
-  HERO_DEVICE_MODELS[0] ?? toHeroDeviceModel(HERO68_XS_BOARD),
-  HERO68_XS_DEVICE_MODEL,
-  ...HERO_DEVICE_MODELS.slice(1),
-  WIN68_HE_MAX_DEVICE_MODEL
-];
+export const ALL_DEVICE_MODELS: readonly HeroDeviceModel[] = getBoards().map(toHeroDeviceModel);
 
 export function heroDeviceModel(id: HeroDeviceModelId): HeroDeviceModel {
   return toHeroDeviceModel(getBoard(id));

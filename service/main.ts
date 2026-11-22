@@ -154,9 +154,30 @@ const { server } = createServiceServer({
 
 let timer: ReturnType<typeof setTimeout>;
 let lastForegroundPollAt = 0;
+let startupRgbPending = !ctx.tachyon && (ctx.mode === 'custom' || ctx.mode === 'rhythm');
 
 async function loop() {
   const now = performance.now();
+  if (startupRgbPending && !ctx.tachyon && !ctx.closing && now >= ctx.reconnectAt) {
+    if (ctx.mode === 'custom' || ctx.mode === 'rhythm') {
+      ctx.reconnectAt = now + 1000;
+      try {
+        await exclusive(async () => {
+          if (ctx.mode === 'custom') {
+            await bridge.startCustom();
+          } else if (ctx.mode === 'rhythm') {
+            await bridge.configureRhythm(ctx.rhythmConfig);
+          }
+          await hallController.syncHall();
+        });
+        startupRgbPending = false;
+      } catch (e) {
+        ctx.lastError = String(e);
+      }
+    } else {
+      startupRgbPending = false;
+    }
+  }
   if (ctx.tachyon && !ctx.connected && !ctx.closing && now >= ctx.reconnectAt) {
     ctx.reconnectAt = now + 1000;
     try {
@@ -206,7 +227,7 @@ async function shutdown(exitCode = 0) {
   });
   await exclusive(async () => {
     await gamepadController.stopGamepad();
-    await rgbController.stop();
+    await rgbController.stop({ persist: false });
   }).catch(e => log(String(e)));
   for (const client of ctx.frameClients) {
     client.end();
@@ -255,14 +276,16 @@ server.listen(port, '127.0.0.1', () => {
     }
     if (ctx.mode === 'custom') {
       await bridge.startCustom();
+      startupRgbPending = false;
     }
     if (ctx.mode === 'rhythm') {
       await bridge.configureRhythm(ctx.rhythmConfig);
+      startupRgbPending = false;
     }
     await hallController.syncHall();
   }).catch(e => {
     ctx.lastError = String(e);
-    ctx.mode = 'onboard';
+    ctx.reconnectAt = performance.now() + 1000;
   });
   void loop();
 });

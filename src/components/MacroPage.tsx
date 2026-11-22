@@ -37,31 +37,7 @@ import { UndoRedoButtons, useUndoRedoState } from '../app/components/UndoRedoBut
 import './MacroPage.css';
 import { useI18n } from '../i18n';
 import { BRAND } from '../brand';
-function loadWorkspace() {
-  let macros: MacroDefinition[] = [];
-  let draft: MacroDefinition | null = null;
-  let error = '';
-  try {
-    macros = loadMacroLibrary();
-  } catch {
-    error =
-      'The saved macro library could not be read. Export or recover your existing data before replacing it.';
-  }
-  try {
-    const stored = localStorage.getItem(MACRO_DRAFT_KEY);
-    if (stored) {
-      draft = JSON.parse(stored);
-      validateMacro(draft, false);
-    }
-  } catch {
-    draft = null;
-  }
-  return {
-    macros,
-    draft,
-    error
-  };
-}
+import { loadWorkspace } from './macro/macroWorkspace';
 const playbackLabels = {
   once: 'Play once',
   repeat: 'Repeat a set number of times',

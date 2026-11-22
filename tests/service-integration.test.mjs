@@ -101,3 +101,11 @@ test('signed core package rejects tampering and incompatible launcher',()=>{
   assert.throws(()=>verifyCore({...manifest,payload:{...payload,minLauncher:'0.4.0'}},bytes,key),/signature|compatibility/)
   assert.throws(()=>verifyCore({...manifest,signature:'AAAA'},bytes,key),/signature|compatibility/)
 })
+
+test('control panel Open Web App link points to open-aula.pages.dev instead of legacy open-hero68 domain', async () => {
+  const { serviceControlPanel } = await bundle('service/controlPanel.ts')
+  const { BRAND } = await bundle('service/brand.ts')
+  assert.equal(BRAND.website, 'https://open-aula.pages.dev')
+  assert.ok(serviceControlPanel.includes('href="https://open-aula.pages.dev/"'))
+  assert.ok(!serviceControlPanel.includes('open-hero68.pages.dev'))
+})

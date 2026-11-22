@@ -12,10 +12,7 @@ import {
   Upload
 } from 'lucide-react';
 import { useI18n } from '../../i18n';
-import {
-  resolveWootProfileIconUrl,
-  type WootProfileMetadata
-} from '../../state/profileTypes';
+import { resolveWootProfileIconUrl, type WootProfileMetadata } from '../../state/profileTypes';
 
 export interface ProfileCardProps {
   profile: WootProfileMetadata;

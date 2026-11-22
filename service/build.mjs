@@ -8,7 +8,7 @@ const root = process.cwd(),
 const BRAND_NAME = 'OpenAula',
   BRAND_SERVICE_EXE = 'OpenAulaService.exe',
   BRAND_DATA_DIR = 'OpenAula',
-  BRAND_WEBSITE = 'https://open-hero68.pages.dev/';
+  BRAND_WEBSITE = 'https://open-aula.pages.dev/';
 const index = process.argv.indexOf('--out-dir'),
   out = path.resolve(index >= 0 ? process.argv[index + 1] : 'service/dist');
 await mkdir(out, {

@@ -4,10 +4,7 @@ import type { ProfileDraft } from './persistence';
 
 declare const Buffer:
   | {
-      from: (
-        input: string,
-        encoding?: string
-      ) => { toString: (encoding?: string) => string };
+      from: (input: string, encoding?: string) => { toString: (encoding?: string) => string };
     }
   | undefined;
 
@@ -209,9 +206,7 @@ export const WOOT_ICON_CATEGORIES: readonly {
   {
     id: 'switchyUwu',
     label: 'SWITCHY & UwU',
-    icons: Object.keys(WOOT_ICON_MAP).filter(
-      k => k.startsWith('switchy:') || k.startsWith('uwu:')
-    )
+    icons: Object.keys(WOOT_ICON_MAP).filter(k => k.startsWith('switchy:') || k.startsWith('uwu:'))
   },
   {
     id: 'wooting',
@@ -257,7 +252,8 @@ export const WOOT_PROFILE_PRESETS: readonly WootPresetDefinition[] = [
   {
     id: 'fps',
     title: 'FPS',
-    description: 'Ultra-fast actuation (0.4 mm) and Rapid Trigger (0.15 mm) for competitive shooters.',
+    description:
+      'Ultra-fast actuation (0.4 mm) and Rapid Trigger (0.15 mm) for competitive shooters.',
     defaultName: 'New FPS Profile',
     color: '#f87171',
     icon: 'switchy:gamer',
@@ -305,7 +301,8 @@ export const WOOT_PROFILE_PRESETS: readonly WootPresetDefinition[] = [
   {
     id: 'tenz',
     title: 'TenZ Pro FPS',
-    description: 'Instant 0.1 mm actuation and 0.15 mm Rapid Trigger tuned for peak competitive play.',
+    description:
+      'Instant 0.1 mm actuation and 0.15 mm Rapid Trigger tuned for peak competitive play.',
     defaultName: 'TenZ Pro Profile',
     color: '#38bdf8',
     icon: 'woot:g:blue',

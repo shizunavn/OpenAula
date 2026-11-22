@@ -207,12 +207,20 @@ test('registerBoard dynamically enables a 3rd keyboard model across layout, prot
   const mockPosToKeyId = new Map(Object.entries(mockKeyIdToPos).map(([id, pos]) => [pos, id]))
 
   const mockHero75 = {
+    ...hero68Board,
     id: 'hero75',
+    aliases: undefined,
     name: 'Hero75',
     label: 'AULA HERO 75 HE (Mock)',
     layoutTag: '75%',
     sideTab: false,
     thumbnail: hero68Board.thumbnail,
+    rgb: {
+      ...hero68Board.rgb,
+      hasSideRgb: false,
+      sideLedCount: 0,
+      sideModes: [],
+    },
     usb: {
       vendorId: 0x372e,
       productIds: [0x103e],
@@ -333,4 +341,55 @@ test('formatMillimeters and rapidTriggerValuesForModel round HERO 68 XS to 0.005
     assert.equal(helpers.clampRapidTriggerForModel(0.05, nonXsModel), 0.05)
     assert.equal(helpers.clampRapidTriggerForModel(0.155, nonXsModel), 0.16)
   }
+})
+
+test('BoardDescriptor registry aliases and resolveEffectiveTravelLimits handle 3.3mm, 3.4mm, 4.0mm, multi-switch, and XSYD firmware caps', async () => {
+  const registry = await bundle('src/keyboard/registry/index.ts')
+  assert.equal(registry.getBoard('win68').id, 'win68HeMax')
+  assert.equal(registry.isBoardModelId('win68'), true)
+  assert.equal(registry.getBoard('hero68Xs').performance.hallUnitsPerMm, 200)
+  assert.equal(registry.getBoard('hero68').performance.hallUnitsPerMm, 100)
+
+  // HERO68 XS Snow God switch (3.3mm) vs default (3.4mm)
+  const xsBoard = registry.getBoard('hero68Xs')
+  const snowGodLimits = registry.resolveEffectiveTravelLimits(xsBoard, { switchId: 'switch-60' })
+  assert.equal(snowGodLimits.maxTravelMm, 3.3)
+  assert.equal(snowGodLimits.dksMaxMm, 3.2)
+  assert.equal(snowGodLimits.rapidTriggerMinMm, 0.005)
+  assert.equal(snowGodLimits.rapidTriggerMaxMm, 3.3)
+  assert.equal(registry.generateRapidTriggerValues(xsBoard, snowGodLimits).at(-1), 3.3)
+
+  // Multi-switch selection takes the minimum travel among selected keys
+  const mixedLimits = registry.resolveEffectiveTravelLimits(xsBoard, {
+    switchIds: ['white', 'switch-60'],
+  })
+  assert.equal(mixedLimits.maxTravelMm, 3.3)
+
+  // XSYD switch-with-firmware-cap respects both switch (3.3mm) and handshake cap (3.2mm)
+  const win68 = registry.getBoard('win68HeMax')
+  const winBlack = registry.resolveEffectiveTravelLimits(win68, { switchId: 'black' })
+  assert.equal(winBlack.maxTravelMm, 3.3)
+  assert.equal(winBlack.dksMaxMm, 3.2)
+  const winCapped = registry.resolveEffectiveTravelLimits(win68, {
+    switchId: 'switch-4',
+    firmwareMaxTravelMm: 3.2,
+  })
+  assert.equal(winCapped.maxTravelMm, 3.2)
+  assert.equal(winCapped.dksMaxMm, 3.1)
+
+  // Custom 4.0mm switch on a switch-authoritative board expands limits automatically
+  const board4mm = {
+    ...registry.getBoard('hero68'),
+    switches: {
+      ...registry.getBoard('hero68').switches,
+      switches: [
+        ...registry.getBoard('hero68').switches.switches,
+        { id: 'switch-99', firmwareId: 99, name: 'Long 4.0mm', color: '#ffffff', travelMm: 4.0 },
+      ],
+    },
+  }
+  const limits4mm = registry.resolveEffectiveTravelLimits(board4mm, { switchId: 'switch-99' })
+  assert.equal(limits4mm.maxTravelMm, 4.0)
+  assert.equal(limits4mm.dksMaxMm, 3.9)
+  assert.equal(registry.generateRapidTriggerValues(board4mm, limits4mm).at(-1), 4.0)
 })

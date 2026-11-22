@@ -11,6 +11,9 @@
 #include "frame_telemetry.h"
 #include "gamepad_output.h"
 #include "hall_core.h"
+#include "hid_device_catalog.h"
+#include "hid_ipc_router.h"
+#include "hid_packet_policy.h"
 #include "ipc_output.h"
 #include "rhythm_audio.h"
 #include <array>
@@ -68,34 +71,6 @@ void emitReport(const Report& report) {
     line << std::setw(2) << unsigned(report[i]);
   }
   emitLine(line.str());
-}
-
-bool heroKeyboard(HANDLE handle) {
-  if (!handle) {
-    return false;
-  }
-  UINT length = 0;
-  if (GetRawInputDeviceInfoW(handle, RIDI_DEVICENAME, nullptr, &length) != 0 || !length) {
-    return false;
-  }
-  std::wstring name(length, L'\0');
-  if (GetRawInputDeviceInfoW(handle, RIDI_DEVICENAME, name.data(), &length) == UINT(-1)) {
-    return false;
-  }
-  for (auto& ch : name) {
-    ch = std::towupper(ch);
-  }
-  const bool hero = name.find(L"VID_372E") != std::wstring::npos &&
-                    (name.find(L"PID_103E") != std::wstring::npos ||
-                     name.find(L"PID_1000") != std::wstring::npos ||
-                     name.find(L"PID_106C") != std::wstring::npos);
-  const bool xsyd = (name.find(L"VID_1CA2") != std::wstring::npos &&
-                     name.find(L"PID_1901") != std::wstring::npos) ||
-                    (name.find(L"VID_1C4F") != std::wstring::npos &&
-                     name.find(L"PID_EE88") != std::wstring::npos) ||
-                    (name.find(L"VID_3554") != std::wstring::npos &&
-                     name.find(L"PID_FA09") != std::wstring::npos);
-  return hero || xsyd;
 }
 
 LRESULT CALLBACK rawWindow(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -327,14 +302,6 @@ bool io(
   return !!okay;
 }
 
-bool valid(const unsigned char* p, size_t n) {
-  unsigned sum = 0;
-  for (size_t i = 0; i < 64 && i < n; ++i) {
-    sum += p[i];
-  }
-  return n >= 64 && p[0] == 9 && p[6] <= 56 && (sum & 255) == 255;
-}
-
 struct ProcessMetrics {
   double at = 0;
   double cpu = 0;
@@ -365,51 +332,6 @@ struct ProcessMetrics {
   }
 };
 
-// Configuration commands used by OpenAula, plus volatile RGB and passive Hall.
-// Firmware update, reset and calibration commands remain excluded.
-bool allowed(const std::array<unsigned char, 64>& p) {
-  if (!valid(p.data(), p.size())) {
-    return false;
-  }
-  const auto c = p[1];
-  const auto z = p[2];
-  const auto n = p[6];
-  const bool config =
-      ((c == 3 || c == 0x83 || c == 0x12 || c == 0x92) && z <= 2) ||
-      ((c == 0x13 || c == 0x15 || c == 0x16 || c == 0x19 ||
-        c == 0x93 || c == 0x95 || c == 0x96 || c == 0x99) &&
-       z == 0 && n > 0) ||
-      (c == 0x10 && z == 0 && n == 1 && p[7] <= 2) ||
-      ((c == 0x90 || c == 0x87) && z == 0) ||
-      ((c == 0x1a || c == 0x9a) && z <= 2) ||
-      (c == 5 && z == 0) ||
-      ((c == 4 || c == 0x84) &&
-       (z == 1 || z == 6 || z == 17 || z == 19 || z == 21 ||
-        z == 23 || z == 24 || z == 25 || z == 29 || z == 30)) ||
-      ((c == 6 || c == 0x86) && z == 0) ||
-      (c == 0x82 && (z == 1 || z == 2 || z == 3 || z == 4 || z == 6 || z == 8 || z == 9));
-  return config ||
-         (p[1] == 8 && (p[2] == 1 || (p[2] == 2 && p[6] == 3))) ||
-         (p[1] == 0x98 && p[2] == 1 && p[6] > 0 && p[6] <= 18 && p[6] % 2 == 0);
-}
-
-bool parseHexPacket(const std::string& text, std::array<unsigned char, 64>& request) {
-  if (text.size() != 128) {
-    return false;
-  }
-  auto digit = [](char c) {
-    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
-  };
-  for (size_t i = 0; i < 64; ++i) {
-    int a = digit(text[i * 2]);
-    int b = digit(text[i * 2 + 1]);
-    if (a < 0 || b < 0) {
-      return false;
-    }
-    request[i] = static_cast<unsigned char>(a * 16 + b);
-  }
-  return allowed(request);
-}
 
 struct BridgeSession {
   ipc::Output& output;
@@ -1649,27 +1571,10 @@ int main() {
 
     std::string line;
     // Backlogged replies defer command consumption, never the frame deadline.
-    if (output.queue.canReply()) {
-      std::lock_guard<std::mutex> lock(queueMutex);
-      if (!queue.empty()) {
-        line = std::move(queue.front());
-        queue.pop_front();
-      }
-    }
+    hid_ipc::tryDequeueCommandLine(output.queue, queueMutex, queue, line);
     if (line.empty()) {
       if (timer) {
-        double deadline = session.nextGamepadPublish;
-        if (session.inputStreaming) {
-          deadline = std::min(deadline, session.nextInputPublish);
-        }
-        if ((session.rhythmActive || session.customActive) &&
-            !session.rhythmPaused &&
-            !powerSuspended.load()) {
-          deadline = std::min(deadline, session.nextFrame);
-        }
-        if (!session.rhythmPaused && !session.gamepadPaused && !powerSuspended.load()) {
-          deadline = std::min(deadline, session.hallScheduler.deadline());
-        }
+        const double deadline = hid_ipc::computeNextDeadlineMs(session, powerSuspended.load());
         LARGE_INTEGER due{};
         due.QuadPart = -std::max<LONGLONG>(1, LONGLONG((deadline - rhythm::clockMs()) * 10000));
         SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE);

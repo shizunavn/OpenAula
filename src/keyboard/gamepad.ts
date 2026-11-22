@@ -217,7 +217,8 @@ function isValidSuppressionMode(mode: unknown): mode is 'firmware' | 'hook' | un
 function isValidBindingRecord(
   b: GamepadBinding | undefined,
   validPositions: Readonly<Record<string, number>>,
-  seen: Set<string>
+  seen: Set<string>,
+  maxTravelMm = 3.4
 ): b is GamepadBinding {
   if (!b) {
     return false;
@@ -231,7 +232,7 @@ function isValidBindingRecord(
   if (!Number.isFinite(b.startMm) || !Number.isFinite(b.endMm)) {
     return false;
   }
-  if (b.startMm < 0 || b.endMm > 3.4 || b.endMm - b.startMm < 0.01 - 1e-9) {
+  if (b.startMm < 0 || b.endMm > maxTravelMm || b.endMm - b.startMm < 0.01 - 1e-9) {
     return false;
   }
   return true;

@@ -510,7 +510,11 @@ function App() {
                     handleActuationHallStreamToggle={hallVm.handleActuationHallStreamToggle}
                     actuationHallTriggered={hallVm.actuationHallTriggered}
                     actuationHallFocusKeyId={hallVm.actuationHallFocusKeyId}
-                    actuationHallTravelMm={hallVm.hallStreamFocusSample ? hallVm.actuationHallTravelMm : hallVm.actuationHallTravelMm}
+                    actuationHallTravelMm={
+                      hallVm.hallStreamFocusSample
+                        ? hallVm.actuationHallTravelMm
+                        : hallVm.actuationHallTravelMm
+                    }
                     actuationHallTravelPercent={hallVm.actuationHallTravelPercent}
                     actuationHallThresholdPercent={hallVm.actuationHallThresholdPercent}
                     actuationHallThresholdMm={hallVm.actuationHallThresholdMm}

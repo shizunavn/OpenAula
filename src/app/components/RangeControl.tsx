@@ -1,12 +1,6 @@
 import { useEffect, useState } from 'react';
 import type * as React from 'react';
-import {
-  clampNumber,
-  formatMillimeters,
-  RAPID_TRIGGER_VALUES_XS,
-  snapToAllowedValue,
-  snapToStep
-} from '../helpers';
+import { clampNumber, formatMillimeters, snapToAllowedValue, snapToStep } from '../helpers';
 import { useSliderPointerDrag } from './useSliderPointerDrag';
 
 function RangeControl({
@@ -36,12 +30,7 @@ function RangeControl({
   mixedPlaceholder?: string;
   onChange: (value: number) => void;
 }) {
-  // Only use 0.005 mm discrete table when step explicitly allows 5 µm resolution (HERO 68 XS).
-  // Non-XS keyboards (step = 0.01) must clamp at 0.01 mm and round .xx5 inputs to 0.01 mm steps.
-  const resolvedAllowedValues =
-    allowedValues?.length && step <= 0.005 && allowedValues.length < 680
-      ? RAPID_TRIGGER_VALUES_XS
-      : allowedValues;
+  const resolvedAllowedValues = allowedValues;
   const hasAllowedValues = Boolean(resolvedAllowedValues?.length);
   const effectiveValue = hasAllowedValues
     ? snapToAllowedValue(

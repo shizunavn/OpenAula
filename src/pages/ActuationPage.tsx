@@ -7,7 +7,7 @@ import Hero68Preview from '../components/Hero68Preview';
 import FeatureHelp from '../components/FeatureHelp';
 import type { HeroDeviceModelId } from '../keyboard/devices';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
-import { hallKeyLabel, isXsPrecisionModel } from '../app/helpers';
+import { hallKeyLabel, travelLimitsForModel } from '../app/helpers';
 import type { SwitchOption } from '../app/switchAssets';
 import { SwitchSimPreview } from '../app/components/SwitchSimPreview';
 import { Toggle } from '../app/components/Toggle';
@@ -198,31 +198,36 @@ function ActuationPage({
               </div>
             </div>
 
-            <div className="actuation-distance-control source-actuation-slider actuation-page-slider">
-              <VerticalRangeControl
-                value={actuation}
-                min={0.1}
-                max={3.4}
-                step={isXsPrecisionModel(model) ? 0.005 : 0.01}
-                dragStep={0.05}
-                suffix="mm"
-                direction="top"
-                disabled={!hasSelection}
-                mixed={actuationMixed}
-                mixedPlaceholder="MIXED"
-                onChange={setActuationForSelection}
-              />
-              <div className="actuation-distance-labels">
-                <span>
-                  <b>0.10 mm</b>
-                  <small>{tr('Shallow')}</small>
-                </span>
-                <span>
-                  <b>3.40 mm</b>
-                  <small>{tr('Deep')}</small>
-                </span>
-              </div>
-            </div>
+            {(() => {
+              const travelLimits = travelLimitsForModel(model, { switchId: selectedSwitch?.id });
+              return (
+                <div className="actuation-distance-control source-actuation-slider actuation-page-slider">
+                  <VerticalRangeControl
+                    value={actuation}
+                    min={travelLimits.actuationMinMm}
+                    max={travelLimits.actuationMaxMm}
+                    step={travelLimits.rapidTriggerStepMm}
+                    dragStep={0.05}
+                    suffix="mm"
+                    direction="top"
+                    disabled={!hasSelection}
+                    mixed={actuationMixed}
+                    mixedPlaceholder="MIXED"
+                    onChange={setActuationForSelection}
+                  />
+                  <div className="actuation-distance-labels">
+                    <span>
+                      <b>{travelLimits.actuationMinMm.toFixed(2)} mm</b>
+                      <small>{tr('Shallow')}</small>
+                    </span>
+                    <span>
+                      <b>{travelLimits.actuationMaxMm.toFixed(2)} mm</b>
+                      <small>{tr('Deep')}</small>
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </article>
 

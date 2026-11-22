@@ -65,8 +65,7 @@ export function CreateProfileWizard({
   const [error, setError] = useState<string | null>(null);
 
   const activeCategoryIcons =
-    WOOT_ICON_CATEGORIES.find(c => c.id === iconCategory)?.icons ??
-    WOOT_ICON_CATEGORIES[0].icons;
+    WOOT_ICON_CATEGORIES.find(c => c.id === iconCategory)?.icons ?? WOOT_ICON_CATEGORIES[0].icons;
 
   function handleSelectPreset(preset: WootPresetDefinition) {
     setSelectedPreset(preset);
@@ -171,7 +170,13 @@ export function CreateProfileWizard({
                       <img src={preset.imageSrc} alt={preset.title} draggable={false} />
                     </div>
                   )}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
                     <div
                       className="woot-profile-avatar"
                       style={
@@ -188,7 +193,14 @@ export function CreateProfileWizard({
                   <strong style={{ fontSize: 15, color: 'var(--woot-text-strong)' }}>
                     {tr(preset.title)}
                   </strong>
-                  <p style={{ margin: 0, fontSize: 12, color: 'var(--woot-text-subtle)', lineHeight: 1.45 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 12,
+                      color: 'var(--woot-text-subtle)',
+                      lineHeight: 1.45
+                    }}
+                  >
                     {tr(preset.description)}
                   </p>
                   <div style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 4 }}>
@@ -202,7 +214,10 @@ export function CreateProfileWizard({
             </div>
           ) : (
             /* Step 2: Profile details + Wootility Icon Picker + Storage Location + App Linking (oee, L61770-L61994) */
-            <div className="woot-slot-deepen" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div
+              className="woot-slot-deepen"
+              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
               <div className="woot-editor-top-row">
                 <div
                   className="woot-profile-avatar"
@@ -219,7 +234,14 @@ export function CreateProfileWizard({
                   {renderProfileAvatarIcon(icon, 22)}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: 12, color: 'var(--woot-text-subtle)', marginBottom: 4 }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: 12,
+                      color: 'var(--woot-text-subtle)',
+                      marginBottom: 4
+                    }}
+                  >
                     {tr('Profile name')}
                   </label>
                   <input
@@ -312,7 +334,14 @@ export function CreateProfileWizard({
 
               {/* Storage Destination Cards with usedSlots / totalSlots (yJ in Wootility L61905) */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--woot-text-subtle)', marginBottom: 6 }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: 12,
+                    color: 'var(--woot-text-subtle)',
+                    marginBottom: 6
+                  }}
+                >
                   {tr('Storage Namespace')}
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -322,7 +351,9 @@ export function CreateProfileWizard({
                     style={{ padding: 12 }}
                     onClick={() => setNamespace('onboard')}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <div
+                      style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}
+                    >
                       <strong style={{ fontSize: 13 }}>{tr('Onboard')}</strong>
                       <span className="woot-shortcut-pill">
                         {usedOnboardSlots} / {totalOnboardSlots}
@@ -340,7 +371,9 @@ export function CreateProfileWizard({
                     disabled={usedLinkedSlots >= MAX_LINKED_PROFILES}
                     onClick={() => setNamespace('linked')}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <div
+                      style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}
+                    >
                       <strong style={{ fontSize: 13 }}>{tr('Linked App')}</strong>
                       <span className="woot-shortcut-pill">
                         {usedLinkedSlots} / {MAX_LINKED_PROFILES}
@@ -358,7 +391,9 @@ export function CreateProfileWizard({
                     disabled={usedInactiveSlots >= MAX_INACTIVE_PROFILES}
                     onClick={() => setNamespace('inactive')}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <div
+                      style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}
+                    >
                       <strong style={{ fontSize: 13 }}>{tr('Inactive')}</strong>
                       <span className="woot-shortcut-pill">
                         {usedInactiveSlots} / {MAX_INACTIVE_PROFILES}
@@ -371,7 +406,9 @@ export function CreateProfileWizard({
                 </div>
               </div>
 
-              <div className={`woot-linked-apps-collapse ${namespace === 'linked' ? 'is-expanded' : ''}`}>
+              <div
+                className={`woot-linked-apps-collapse ${namespace === 'linked' ? 'is-expanded' : ''}`}
+              >
                 <div className="woot-linked-apps-collapse-inner">
                   <LinkedAppsList
                     currentProfileUid="new-profile"

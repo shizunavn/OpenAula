@@ -6,7 +6,11 @@ import FeatureHelp from '../components/FeatureHelp';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import { heroLayout } from '../keyboard/layout';
 import type { HeroDeviceModelId } from '../keyboard/devices';
-import { isXsPrecisionModel, rapidTriggerValuesForModel } from '../app/helpers';
+import {
+  isXsPrecisionModel,
+  rapidTriggerValuesForModel,
+  travelLimitsForModel
+} from '../app/helpers';
 import { Toggle } from '../app/components/Toggle';
 import { RangeControl } from '../app/components/RangeControl';
 import { VerticalRangeControl } from '../app/components/VerticalRangeControl';
@@ -114,7 +118,8 @@ function RapidPage({
   const [cardHovered, setCardHovered] = useState(false);
   const isXs = isXsPrecisionModel(model);
   const rapidTriggerValues = rapidTriggerValuesForModel(model);
-  const minRt = isXs ? 0.005 : 0.01;
+  const travelLimits = travelLimitsForModel(model);
+  const minRt = travelLimits.rapidTriggerMinMm;
   return (
     <div className="page quick-page rapid-page page-enter">
       <section className="keyboard-stage rapid-keyboard-stage">
@@ -233,8 +238,8 @@ function RapidPage({
               <RangeControl
                 value={rapidSensitivity}
                 min={minRt}
-                max={3.4}
-                step={isXs ? 0.005 : 0.01}
+                max={travelLimits.rapidTriggerMaxMm}
+                step={travelLimits.rapidTriggerStepMm}
                 dragStep={0.01}
                 allowedValues={rapidTriggerValues}
                 suffix="mm"
@@ -255,8 +260,8 @@ function RapidPage({
                 <RangeControl
                   value={pressSensitivity}
                   min={minRt}
-                  max={3.4}
-                  step={isXs ? 0.005 : 0.01}
+                  max={travelLimits.rapidTriggerMaxMm}
+                  step={travelLimits.rapidTriggerStepMm}
                   dragStep={0.01}
                   allowedValues={rapidTriggerValues}
                   suffix="mm"
@@ -271,8 +276,8 @@ function RapidPage({
                 <RangeControl
                   value={releaseSensitivity}
                   min={minRt}
-                  max={3.4}
-                  step={isXs ? 0.005 : 0.01}
+                  max={travelLimits.rapidTriggerMaxMm}
+                  step={travelLimits.rapidTriggerStepMm}
                   dragStep={0.01}
                   allowedValues={rapidTriggerValues}
                   suffix="mm"

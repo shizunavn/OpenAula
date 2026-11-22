@@ -70,8 +70,7 @@ export const EN_PROFILES_AND_SERVICE: Readonly<Record<string, string>> = {
   'Hardware Sync Mode': 'Hardware Sync Mode',
   'Onboard Slot Switch (Recommended - 0 Flash Wear)':
     'Onboard Slot Switch (Recommended - 0 Flash Wear)',
-  'Host RAM / Diff Stream (For >3 game profiles)':
-    'Host RAM / Diff Stream (For >3 game profiles)',
+  'Host RAM / Diff Stream (For >3 game profiles)': 'Host RAM / Diff Stream (For >3 game profiles)',
   '3 slots on your {device}': '3 slots on your {device}',
   '4 slots on your {device}': '4 slots on your {device}',
   'Background Service v1.8.0 is not running': 'Background Service v1.8.0 is not running',

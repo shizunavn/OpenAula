@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Check, Palette, ShieldCheck, X } from 'lucide-react';
 import { useI18n } from '../../i18n';
-import { isWin68HeMaxModel } from '../../keyboard/devices';
+import { getBoard, isBoardModelId } from '../../keyboard/registry';
 import type { ProfileSlot } from '../../protocol/hero68/types';
 import {
   MAX_PROFILE_NAME_BYTES,
@@ -57,14 +57,18 @@ export function ProfileEditorModal({
   const [error, setError] = useState<string | null>(null);
 
   const resolvedMaxSlots: 3 | 4 =
-    maxOnboardSlots ?? (isWin68HeMaxModel(profile.createdFor) ? 4 : 3);
+    maxOnboardSlots ??
+    (profile.createdFor && isBoardModelId(profile.createdFor)
+      ? getBoard(profile.createdFor).profiles.slots.length >= 4
+        ? 4
+        : 3
+      : 3);
   const slotOptions: readonly ProfileSlot[] =
     resolvedMaxSlots === 4 ? ([0, 1, 2, 3] as const) : ([0, 1, 2] as const);
 
   const nameBytes = utf8ByteLength(name.trim());
   const activeCategoryIcons =
-    WOOT_ICON_CATEGORIES.find(c => c.id === iconCategory)?.icons ??
-    WOOT_ICON_CATEGORIES[0].icons;
+    WOOT_ICON_CATEGORIES.find(c => c.id === iconCategory)?.icons ?? WOOT_ICON_CATEGORIES[0].icons;
 
   function handleSave() {
     if (!name.trim()) {
@@ -157,7 +161,13 @@ export function ProfileEditorModal({
                 type="color"
                 value={color}
                 onChange={e => setColor(e.target.value)}
-                style={{ width: 34, height: 28, border: 0, background: 'transparent', cursor: 'pointer' }}
+                style={{
+                  width: 34,
+                  height: 28,
+                  border: 0,
+                  background: 'transparent',
+                  cursor: 'pointer'
+                }}
               />
             </div>
           )}
@@ -323,7 +333,15 @@ export function ProfileEditorModal({
               </button>
             </div>
             {executionMode === 'slot-switch' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  flexWrap: 'wrap',
+                  fontSize: 12.5
+                }}
+              >
                 <span style={{ color: 'var(--woot-text-subtle)' }}>{tr('Profile slot')}:</span>
                 {slotOptions.map(s => (
                   <button
@@ -332,7 +350,8 @@ export function ProfileEditorModal({
                     className={`woot-icon-pill ${mappedOnboardSlot === s ? 'is-active' : ''}`}
                     onClick={() => setMappedOnboardSlot(s)}
                   >
-                    {tr('Slot {slot}', { slot: s + 1 })} (Fn+P{s + 1}) {s === 0 ? `· ${tr('DEFAULT')}` : ''}
+                    {tr('Slot {slot}', { slot: s + 1 })} (Fn+P{s + 1}){' '}
+                    {s === 0 ? `· ${tr('DEFAULT')}` : ''}
                   </button>
                 ))}
               </div>

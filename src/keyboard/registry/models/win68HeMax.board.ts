@@ -2,6 +2,7 @@ const win68Thumb = '/src/assets/win68HeMax.png';
 import { HERO68_LAYOUT, makeDemoLighting } from '../../hero68Layout';
 import { MAX_HE_IDS, MAX_HE_USAGE, MAX_HE_USAGE_PAGE } from '../../maxHe';
 import { XSYD_KEYS } from '../../../protocol/xsyd/keymap';
+import { XSYD_DEFAULT_SPECS } from '../shared/presets';
 import type { BoardDescriptor, BoardRemapLayers } from '../types';
 import { computeKeyCoordinates, keyIdsOf } from '../shared/bytetechCatalog';
 
@@ -32,7 +33,9 @@ function buildWin68FactoryRemapLayers(): BoardRemapLayers {
 const keyIds = keyIdsOf(HERO68_LAYOUT);
 
 export const WIN68_HE_MAX_BOARD: BoardDescriptor = {
+  ...XSYD_DEFAULT_SPECS,
   id: 'win68HeMax',
+  aliases: ['win68'],
   name: 'Win68HeMax',
   label: 'AULA WIN 68 HE MAX',
   layoutTag: '65%',

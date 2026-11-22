@@ -41,13 +41,18 @@ async function build(version,{unhealthy=false}={}){
  if(!worker.includes(JSON.stringify(pinned)))throw Error('Cannot inject smoke signing key')
  await writeFile(path.join(distro,'update-worker.cjs'),worker.replace(JSON.stringify(pinned),JSON.stringify(publicKey)))
  const entry=path.join(base,'fixture-'+version+'.mjs')
- await writeFile(entry,`import {createServer} from 'node:http';import {readFileSync,writeFileSync} from 'node:fs';import path from 'node:path';import {createSetupUpdater} from ${JSON.stringify(path.resolve('service/setupUpdater.ts').replaceAll('\\','/'))};
+  // The fixture runs outside this repo, where Node cannot resolve an absolute .ts specifier,
+  // so it embeds a bundle of the same source the installed service uses.
+  const source=await rolldown({input:'service/setupUpdater.ts',external:/^node:/});let updaterSource
+  try{const {output}=await source.generate({format:'esm',codeSplitting:false});updaterSource=output[0].code}finally{await source.close()}
+  await writeFile(entry,`${updaterSource}
+import {createServer} from 'node:http';import {readFileSync as readTestState} from 'node:fs';
  const state=process.env.OPENAULA_TEST_STATE,version=${JSON.stringify(version)},operationIndex=process.argv.indexOf('--update-operation');
  const updater=createSetupUpdater({version,stateDir:state,directory:__dirname,publicKey:${JSON.stringify(publicKey)},fetch:async url=>{
- const network=JSON.parse(readFileSync(path.join(state,'network.json'),'utf8'));
+ const network=JSON.parse(readTestState(path.join(state,'network.json'),'utf8'));
  if(url.endsWith('/latest'))return Response.json(network.release);
  const file=url.endsWith('.json')?network.manifest:network.setup;
- return new Response(readFileSync(file));}});
+ return new Response(readTestState(file));}});
  const server=createServer(async(req,res)=>{let text='';for await(const c of req)text+=c;res.setHeader('Content-Type','application/json');
  if(req.url==='/status')res.end(JSON.stringify({coreVersion:version,launcherVersion:version,apiVersion:6,pid:process.pid,supportsFullUpdate:true,updateOperation:operationIndex>=0?process.argv[operationIndex+1]:undefined}));
  else if(req.url==='/updates/apply'){res.statusCode=202;res.end(JSON.stringify(updater.start()));}
@@ -98,7 +103,7 @@ try{
  await update(next,'completed');await status('0.5.1')
  assert.equal(JSON.parse(await readFile(path.join(install,'installation.json'))).active,'0.5.1')
  await update(third,'completed');await status('0.5.2.1')
- const failed=await update(bad,'failed');assert.match(failed.error,/healthy/);await status('0.5.2.1')
+ const failed=await update(bad,'failed');assert.match(String(failed.error),/healthy/);await status('0.5.2.1')
  assert.equal(JSON.parse(await readFile(path.join(install,'installation.json'))).active,'0.5.2.1')
  assert.equal(JSON.parse(await readFile(path.join(state,'preset.json'))).saved,'preserved')
  assert.ok((await readFile(shortcut)).length>0)

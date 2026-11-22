@@ -134,4 +134,49 @@ export function assertBoardDescriptorValid(board: BoardDescriptor): void {
       throw new Error(`Board "${board.id}" posToKeyId mismatch for ${keyId} -> ${pos}`);
     }
   }
+  if (!(board.performance.distanceUnitMm > 0)) {
+    throw new Error(`Board "${board.id}" performance.distanceUnitMm must be > 0`);
+  }
+  const expectedHallUnits = Math.round(1 / board.performance.distanceUnitMm);
+  if (board.performance.hallUnitsPerMm !== expectedHallUnits) {
+    throw new Error(
+      `Board "${board.id}" hallUnitsPerMm=${board.performance.hallUnitsPerMm} does not match 1 / distanceUnitMm (${expectedHallUnits})`
+    );
+  }
+  if (Math.abs(board.performance.defaultMaxTravelMm - board.capabilities.maxTravelMm) > 1e-6) {
+    throw new Error(
+      `Board "${board.id}" performance.defaultMaxTravelMm (${board.performance.defaultMaxTravelMm}) does not match capabilities.maxTravelMm (${board.capabilities.maxTravelMm})`
+    );
+  }
+  if (!board.switches.switches.length) {
+    throw new Error(`Board "${board.id}" must declare at least one switch`);
+  }
+  for (const sw of board.switches.switches) {
+    if (!(sw.travelMm > board.performance.minActuationMm)) {
+      throw new Error(
+        `Board "${board.id}" switch "${sw.id}" travelMm (${sw.travelMm}) must exceed minActuationMm (${board.performance.minActuationMm})`
+      );
+    }
+  }
+  if (!board.switches.switches.some(sw => sw.id === board.switches.defaultSwitchId)) {
+    throw new Error(
+      `Board "${board.id}" defaultSwitchId "${board.switches.defaultSwitchId}" is not in switches catalog`
+    );
+  }
+  if (board.rgb.hasSideRgb !== board.capabilities.hasSideRgb) {
+    throw new Error(`Board "${board.id}" rgb.hasSideRgb disagrees with capabilities.hasSideRgb`);
+  }
+  if (board.rgb.sideLedCount !== board.capabilities.sideLedCount) {
+    throw new Error(
+      `Board "${board.id}" rgb.sideLedCount disagrees with capabilities.sideLedCount`
+    );
+  }
+  if (!board.rgb.keyModes.some(mode => mode.id === board.rgb.perKeyModeId)) {
+    throw new Error(
+      `Board "${board.id}" rgb.perKeyModeId (${board.rgb.perKeyModeId}) is not in rgb.keyModes`
+    );
+  }
+  if (!board.profiles.slots.length) {
+    throw new Error(`Board "${board.id}" profiles.slots must have at least one slot`);
+  }
 }

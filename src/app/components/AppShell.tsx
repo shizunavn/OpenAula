@@ -33,7 +33,8 @@ import { MyProfilesDrawer } from '../../components/profile/MyProfilesDrawer';
 import { renderProfileAvatarIcon } from '../../components/profile/ProfileCard';
 import { ProfileEditorModal } from '../../components/profile/ProfileEditorModal';
 import { useT } from '../../i18n';
-import { isWin68HeMaxModel, type HeroDeviceModelId } from '../../keyboard/devices';
+import type { HeroDeviceModelId } from '../../keyboard/devices';
+import { getBoard } from '../../keyboard/registry';
 import { useBgService } from '../../protocol/bgServiceClient';
 import type { ProfileSlot } from '../../protocol/hero68/types';
 import {
@@ -150,7 +151,7 @@ export function AppShell({
   const [importOpen, setImportOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState<WootProfileMetadata | null>(null);
   const showKeyboardArea = activeRail === 'keyboard';
-  const maxOnboardSlots: 3 | 4 = isWin68HeMaxModel(deviceModel) ? 4 : 3;
+  const maxOnboardSlots: 3 | 4 = getBoard(deviceModel).profiles.slots.length >= 4 ? 4 : 3;
 
   const resolvedOnboardMeta = useMemo<Record<ProfileSlot, WootProfileMetadata>>(
     () => ({

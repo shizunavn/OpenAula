@@ -9,7 +9,16 @@ import {
 import type { RgbTab } from '../../components/RgbSettingsPage';
 import type { LanguagePreference } from '../../i18n';
 import { heroLayout } from '../../keyboard/layout';
-import { isWin68HeMaxModel, type HeroDeviceModelId } from '../../keyboard/devices';
+import type { HeroDeviceModelId } from '../../keyboard/devices';
+import { getBoard } from '../../keyboard/registry';
+import {
+  autoConnectAnyProtocol,
+  disconnectAllProtocols,
+  getActiveConnectedDriver,
+  getProtocolDriver,
+  isAnyProtocolConnected
+} from '../../protocol/driver';
+import { useSlotHistory } from './useSlotHistory';
 import { makeKeyDeviceSettings, saveDeviceConfiguration } from '../../protocol/deviceBridge';
 import { gamepadService } from '../../protocol/gamepadService';
 import {
@@ -51,7 +60,6 @@ import {
   defaultXsydRgb,
   hydrateFromXsydDevice,
   loadXsydSavedRgb,
-  readXsydProfileSlot,
   readXsydRemapLayers,
   readXsydRgbProfile,
   saveXsydAdvancedBindings,
@@ -286,7 +294,7 @@ export function useDeviceSyncController({
 }: UseDeviceSyncControllerOptions) {
   const autoConnectStartedRef = useRef(false);
   const profileSwitchAllowedAtRef = useRef(0);
-  const isAnyDeviceConnected = () => hero68DeviceManager.connected || xsydDeviceManager.connected;
+  const isAnyDeviceConnected = () => isAnyProtocolConnected();
   function currentProfileDraft(): ProfileDraft {
     return {
       selectedKeys: Array.from(selectedKeys),
@@ -328,170 +336,7 @@ export function useDeviceSyncController({
     restoreWorkspaceDraft(draft, keyIds);
     restorePerformanceFromDraft(draft, keyIds);
   }
-  type SlotHistoryEntry = {
-    past: ProfileDraft[];
-    future: ProfileDraft[];
-    committed: ProfileDraft | null;
-    committedFp: string;
-    pendingBeforeBurst: ProfileDraft | null;
-  };
-  const slotHistoriesRef = useRef<Record<ProfileSlot, SlotHistoryEntry>>({
-    0: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null },
-    1: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null },
-    2: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null },
-    3: { past: [], future: [], committed: null, committedFp: '', pendingBeforeBurst: null }
-  });
-  const suppressHistoryRef = useRef(false);
-  const pointerDownRef = useRef(false);
-  const burstTimerRef = useRef<number | null>(null);
-  const [, setHistoryTick] = useState(0);
-
-  function draftEditableFingerprint(draft: ProfileDraft): string {
-    return JSON.stringify({
-      s: draft.assignedSwitchesByKey,
-      a: draft.actuationByKey,
-      rt: draft.rapidTriggerByKey,
-      sp: draft.splitSensitivityByKey,
-      rs: draft.rapidSensitivityByKey,
-      ps: draft.pressSensitivityByKey,
-      rls: draft.releaseSensitivityByKey,
-      dz: draft.deadzoneEnabledByKey,
-      tdz: draft.topDeadzoneByKey,
-      bdz: draft.bottomDeadzoneByKey,
-      rm: draft.remapLayers,
-      ab: draft.advancedBindings,
-      rgb: draft.rgb,
-      dk: draft.dirtyKeys,
-      dr: draft.dirtyRemaps,
-      ui: draft.uiScalarValues
-    });
-  }
-
-  function clearBurstTimer() {
-    if (burstTimerRef.current !== null && typeof window !== 'undefined') {
-      window.clearTimeout(burstTimerRef.current);
-      burstTimerRef.current = null;
-    }
-  }
-
-  function flushPendingBurst(slot: ProfileSlot, latestDraft: ProfileDraft, latestFp: string) {
-    clearBurstTimer();
-    const entry = slotHistoriesRef.current[slot];
-    if (entry.pendingBeforeBurst) {
-      entry.past = [...entry.past.slice(-49), entry.pendingBeforeBurst];
-      entry.pendingBeforeBurst = null;
-    }
-    entry.committed = structuredClone(latestDraft);
-    entry.committedFp = latestFp;
-    setHistoryTick(v => v + 1);
-  }
-
-  function resetSlotHistoryBaseline(slot: ProfileSlot, baselineDraft?: ProfileDraft) {
-    clearBurstTimer();
-    const snap = structuredClone(baselineDraft ?? currentProfileDraft());
-    const entry = slotHistoriesRef.current[slot];
-    entry.past = [];
-    entry.future = [];
-    entry.pendingBeforeBurst = null;
-    entry.committed = snap;
-    entry.committedFp = draftEditableFingerprint(snap);
-    setHistoryTick(v => v + 1);
-  }
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const onDown = (event: PointerEvent) => {
-      if (event.target instanceof HTMLInputElement && event.target.type === 'color') {
-        return;
-      }
-      pointerDownRef.current = true;
-    };
-    const onUp = () => {
-      if (!pointerDownRef.current) {
-        return;
-      }
-      pointerDownRef.current = false;
-      const entry = slotHistoriesRef.current[profileSlot];
-      if (entry.pendingBeforeBurst) {
-        clearBurstTimer();
-        burstTimerRef.current = window.setTimeout(() => {
-          const snap = currentProfileDraft();
-          flushPendingBurst(profileSlot, snap, draftEditableFingerprint(snap));
-        }, 120);
-      }
-    };
-    window.addEventListener('pointerdown', onDown, true);
-    window.addEventListener('pointerup', onUp, true);
-    window.addEventListener('pointercancel', onUp, true);
-    window.addEventListener('blur', onUp);
-    return () => {
-      window.removeEventListener('pointerdown', onDown, true);
-      window.removeEventListener('pointerup', onUp, true);
-      window.removeEventListener('pointercancel', onUp, true);
-      window.removeEventListener('blur', onUp);
-    };
-  });
-
-  useEffect(() => {
-    const draft = currentProfileDraft();
-    const fp = draftEditableFingerprint(draft);
-    const entry = slotHistoriesRef.current[profileSlot];
-    if (suppressHistoryRef.current || entry.committed === null) {
-      suppressHistoryRef.current = false;
-      clearBurstTimer();
-      entry.pendingBeforeBurst = null;
-      entry.committed = structuredClone(draft);
-      entry.committedFp = fp;
-      setHistoryTick(v => v + 1);
-      return;
-    }
-    if (fp === entry.committedFp) {
-      return;
-    }
-    if (!entry.pendingBeforeBurst) {
-      entry.pendingBeforeBurst = entry.committed;
-      entry.future = [];
-      setHistoryTick(v => v + 1);
-    }
-    clearBurstTimer();
-    if (!pointerDownRef.current && typeof window !== 'undefined') {
-      burstTimerRef.current = window.setTimeout(() => {
-        flushPendingBurst(profileSlot, draft, fp);
-      }, 240);
-    }
-  }, [
-    profileSlot,
-    assignedSwitchesByKey,
-    actuationByKey,
-    rapidTriggerByKey,
-    splitSensitivityByKey,
-    rapidSensitivityByKey,
-    pressSensitivityByKey,
-    releaseSensitivityByKey,
-    deadzoneEnabledByKey,
-    topDeadzoneByKey,
-    bottomDeadzoneByKey,
-    remapLayers,
-    rgb,
-    advancedBindings,
-    dirtyKeys,
-    dirtyRemaps,
-    actuation,
-    rapidTrigger,
-    splitSensitivity,
-    rapidSensitivity,
-    pressSensitivity,
-    releaseSensitivity,
-    deadzoneEnabled,
-    topDeadzone,
-    bottomDeadzone,
-    selectedSwitchId
-  ]);
-
   function applyHistorySnapshot(target: ProfileDraft) {
-    suppressHistoryRef.current = true;
     const cloned = structuredClone(target);
     if (setSelectedKeys && cloned.selectedKeys?.length) {
       setSelectedKeys(new Set(cloned.selectedKeys));
@@ -504,7 +349,7 @@ export function useDeviceSyncController({
     setAdvancedBindings(cloned.advancedBindings ?? []);
     if (cloned.rgb) {
       setRgb(cloned.rgb);
-      if (isWin68HeMaxModel(deviceModel)) {
+      if (getBoard(deviceModel).protocol === 'xsyd') {
         saveXsydSavedRgb(profileSlot, cloned.rgb);
       }
     }
@@ -512,50 +357,46 @@ export function useDeviceSyncController({
     setDeviceActionError(null);
   }
 
-  function undoProfileChange() {
-    if (profileBusyRef.current) {
-      return;
-    }
-    const entry = slotHistoriesRef.current[profileSlot];
-    if (entry.pendingBeforeBurst) {
-      const snap = currentProfileDraft();
-      flushPendingBurst(profileSlot, snap, draftEditableFingerprint(snap));
-    }
-    if (entry.past.length === 0 || !entry.committed) {
-      return;
-    }
-    const previous = entry.past[entry.past.length - 1];
-    entry.past = entry.past.slice(0, -1);
-    entry.future = [...entry.future, structuredClone(entry.committed)];
-    const prevClone = structuredClone(previous);
-    entry.committed = prevClone;
-    entry.committedFp = draftEditableFingerprint(prevClone);
-    applyHistorySnapshot(prevClone);
-    setHistoryTick(v => v + 1);
-  }
-
-  function redoProfileChange() {
-    if (profileBusyRef.current) {
-      return;
-    }
-    const entry = slotHistoriesRef.current[profileSlot];
-    if (entry.future.length === 0 || !entry.committed) {
-      return;
-    }
-    const next = entry.future[entry.future.length - 1];
-    entry.future = entry.future.slice(0, -1);
-    entry.past = [...entry.past, structuredClone(entry.committed)];
-    const nextClone = structuredClone(next);
-    entry.committed = nextClone;
-    entry.committedFp = draftEditableFingerprint(nextClone);
-    applyHistorySnapshot(nextClone);
-    setHistoryTick(v => v + 1);
-  }
-
-  const activeSlotHistory = slotHistoriesRef.current[profileSlot];
-  const canUndo =
-    activeSlotHistory.past.length > 0 || activeSlotHistory.pendingBeforeBurst !== null;
-  const canRedo = activeSlotHistory.future.length > 0;
+  const {
+    suppressHistoryRef,
+    resetSlotHistoryBaseline,
+    undoProfileChange,
+    redoProfileChange,
+    canUndo,
+    canRedo
+  } = useSlotHistory({
+    profileSlot,
+    currentProfileDraft,
+    applySnapshot: applyHistorySnapshot,
+    isBusy: () => profileBusyRef.current,
+    trackDeps: [
+      assignedSwitchesByKey,
+      actuationByKey,
+      rapidTriggerByKey,
+      splitSensitivityByKey,
+      rapidSensitivityByKey,
+      pressSensitivityByKey,
+      releaseSensitivityByKey,
+      deadzoneEnabledByKey,
+      topDeadzoneByKey,
+      bottomDeadzoneByKey,
+      remapLayers,
+      advancedBindings,
+      rgb,
+      dirtyKeys,
+      dirtyRemaps,
+      actuation,
+      rapidTrigger,
+      splitSensitivity,
+      rapidSensitivity,
+      pressSensitivity,
+      releaseSensitivity,
+      deadzoneEnabled,
+      topDeadzone,
+      bottomDeadzone,
+      selectedSwitchId
+    ]
+  });
   function buildPersistedSnapshot(): PersistedOpenHeroState {
     return {
       activeRail,
@@ -662,15 +503,8 @@ export function useDeviceSyncController({
     autoConnectStartedRef.current = true;
     void (async () => {
       try {
-        if (await xsydDeviceManager.hasAuthorizedDevice()) {
-          const restoredXsyd = await xsydDeviceManager.connect(false);
-          if (restoredXsyd) {
-            await hydrateConnectedDevice();
-            return;
-          }
-        }
-        const restored = await hero68DeviceManager.connect(false);
-        if (restored) {
+        const connectedDriver = await autoConnectAnyProtocol();
+        if (connectedDriver) {
           await hydrateConnectedDevice();
         }
       } catch (error) {
@@ -679,9 +513,11 @@ export function useDeviceSyncController({
     })();
   }, []);
   async function readCurrentProfileSlot(): Promise<ProfileSlot> {
-    if (xsydDeviceManager.connected) {
+    const activeDriver =
+      getActiveConnectedDriver() ?? getProtocolDriver(getBoard(deviceModel).protocol);
+    if (activeDriver.family === 'xsyd') {
       try {
-        const slot = await readXsydProfileSlot(xsydDeviceManager);
+        const slot = await activeDriver.readProfileSlot();
         if (slot === 0 || slot === 1 || slot === 2 || slot === 3) {
           return slot;
         }
@@ -690,20 +526,14 @@ export function useDeviceSyncController({
       }
       return profileSlot;
     }
-    const report = await hero68DeviceManager.request(readActiveProfile(), 0x90, 0, 1000);
-    const slot = report.data[0];
-    if (slot !== 0 && slot !== 1 && slot !== 2) {
-      throw new Error(`Unsupported active profile returned by HERO68: ${slot}`);
-    }
-    return slot;
+    return activeDriver.readProfileSlot();
   }
   async function hydrateConnectedDevice() {
     setDeviceActionError(null);
     setDeviceReadState('idle');
     setLoadedProfileSlot(null);
-    const detectedModel = xsydDeviceManager.connected
-      ? await xsydDeviceManager.detectConnectedModel().catch(() => null)
-      : await hero68DeviceManager.detectConnectedModel().catch(() => null);
+    const activeDriver = getActiveConnectedDriver() ?? getProtocolDriver('bytetech');
+    const detectedModel = await activeDriver.detectModel().catch(() => null);
     const unitMm =
       !xsydDeviceManager.connected && hero68DeviceManager.connected
         ? await syncDevicePrecision(hero68DeviceManager)
@@ -752,23 +582,20 @@ export function useDeviceSyncController({
           }
           setRgbStreamActive(false);
         }
-        if (xsydDeviceManager.connected) {
-          await xsydDeviceManager.disconnect();
-        }
-        if (hero68DeviceManager.connected) {
-          await hero68DeviceManager.disconnect();
-        }
+        await disconnectAllProtocols();
         setLoadedProfileSlot(null);
         setDeviceSettingsState('idle');
       } else {
-        if (isWin68HeMaxModel(deviceModel) || (await xsydDeviceManager.hasAuthorizedDevice())) {
-          await xsydDeviceManager.connect(true);
+        const preferredDriver = getProtocolDriver(getBoard(deviceModel).protocol);
+        const xsydDriver = getProtocolDriver('xsyd');
+        if (preferredDriver.family === 'xsyd' || (await xsydDriver.hasAuthorizedDevice())) {
+          await xsydDriver.connect(true);
         } else {
           try {
-            await hero68DeviceManager.connect(true);
+            await preferredDriver.connect(true);
           } catch (error) {
-            if (await xsydDeviceManager.hasAuthorizedDevice()) {
-              await xsydDeviceManager.connect(false);
+            if (await xsydDriver.hasAuthorizedDevice()) {
+              await xsydDriver.connect(false);
             } else {
               throw error;
             }
@@ -810,9 +637,8 @@ export function useDeviceSyncController({
     setDeviceActionError(null);
     setDeviceReadState('reading');
     setLoadedProfileSlot(null);
-    const detectedModel = xsydDeviceManager.connected
-      ? await xsydDeviceManager.detectConnectedModel().catch(() => null)
-      : await hero68DeviceManager.detectConnectedModel().catch(() => null);
+    const activeDriver = getActiveConnectedDriver() ?? getProtocolDriver('bytetech');
+    const detectedModel = await activeDriver.detectModel().catch(() => null);
     if (!detectedModel) {
       setDeviceReadState('error');
       setDeviceActionError(
@@ -833,7 +659,7 @@ export function useDeviceSyncController({
     }
     const activeKeyIds = heroLayout(targetModel).keyIds;
     try {
-      if (isWin68HeMaxModel(targetModel) && xsydDeviceManager.connected) {
+      if (getBoard(targetModel).protocol === 'xsyd' && xsydDeviceManager.connected) {
         const snapshotHall = hero68HallStream.getSnapshot();
         const shouldResumeHall = snapshotHall.active || snapshotHall.starting;
         const requestedHallKeys = hero68HallStream.getRequestedKeys();
@@ -1084,7 +910,11 @@ export function useDeviceSyncController({
     }
     setDirtyRemaps(nextDirtyRemaps);
     setAdvancedBindings(advancedBaseline.filter(b => b.kind === 'UNKNOWN'));
-    setRgb(isWin68HeMaxModel(deviceModel) ? defaultXsydRgb() : restoreStoredRgb(undefined));
+    setRgb(
+      getBoard(deviceModel).protocol === 'xsyd'
+        ? getProtocolDriver('xsyd').defaultRgb()
+        : restoreStoredRgb(undefined)
+    );
     setSaveState('idle');
     setDeviceActionError(null);
     return () => {
@@ -1133,7 +963,7 @@ export function useDeviceSyncController({
       return;
     }
     const customRgbChanged =
-      isWin68HeMaxModel(deviceModel) &&
+      getBoard(deviceModel).protocol === 'xsyd' &&
       JSON.stringify(rgb.custom ?? null) !== JSON.stringify(rgbBaseline.custom ?? null);
     if (
       dirtyKeys.size === 0 &&
@@ -1150,7 +980,7 @@ export function useDeviceSyncController({
       );
       return;
     }
-    if (rgbHydratedSlot !== profileSlot && !isWin68HeMaxModel(deviceModel)) {
+    if (rgbHydratedSlot !== profileSlot && getBoard(deviceModel).protocol !== 'xsyd') {
       setDeviceActionError('Read RGB from this profile before saving.');
       return;
     }
@@ -1182,7 +1012,7 @@ export function useDeviceSyncController({
       profileBusyRef.current = true;
       setProfileBusy(true);
       setDeviceActionError(null);
-      if (isWin68HeMaxModel(deviceModel) && xsydDeviceManager.connected) {
+      if (getBoard(deviceModel).protocol === 'xsyd' && xsydDeviceManager.connected) {
         const snapshotHall = hero68HallStream.getSnapshot();
         const shouldResumeHall = snapshotHall.active || snapshotHall.starting;
         const requestedHallKeys = hero68HallStream.getRequestedKeys();

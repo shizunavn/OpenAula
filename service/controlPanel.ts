@@ -1,3 +1,5 @@
+import { BRAND } from './brand';
+
 export const serviceControlPanel = `<!doctype html>
 <html lang="en">
 <head>
@@ -282,7 +284,7 @@ export const serviceControlPanel = `<!doctype html>
     <div class="badges">
       <span id="online-pill" class="pill is-online"><span class="dot"></span><span id="online-text">Online</span></span>
       <span id="device-pill" class="pill">Keyboard: Detecting…</span>
-      <a class="btn-link btn-primary" href="https://open-hero68.pages.dev/" target="_blank" rel="noreferrer">Open Web App ↗</a>
+      <a class="btn-link btn-primary" href="${BRAND.website}/" target="_blank" rel="noreferrer">Open Web App ↗</a>
     </div>
   </header>
 

@@ -973,7 +973,9 @@
   place-items: center;
   cursor: pointer;
   overflow: hidden;
-  transition: transform 140ms ease, border-color 140ms ease;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease;
 }
 .woot-icon-picker-btn:hover {
   transform: scale(1.08);

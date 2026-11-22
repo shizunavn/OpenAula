@@ -4,7 +4,11 @@ import type { Dispatch, SetStateAction } from 'react';
 import Hero68Preview from '../components/Hero68Preview';
 import type { AdvancedBinding } from '../protocol/hero68/advanced';
 import type { HeroDeviceModelId } from '../keyboard/devices';
-import { isXsPrecisionModel, rapidTriggerValuesForModel } from '../app/helpers';
+import {
+  isXsPrecisionModel,
+  rapidTriggerValuesForModel,
+  travelLimitsForModel
+} from '../app/helpers';
 import type { SwitchOption } from '../app/switchAssets';
 import { SwitchSimPreview } from '../app/components/SwitchSimPreview';
 import { Toggle } from '../app/components/Toggle';
@@ -131,7 +135,8 @@ function QuickSettingsPage({
   const { tr } = useI18n();
   const isXs = isXsPrecisionModel(model);
   const rapidTriggerValues = rapidTriggerValuesForModel(model);
-  const minRt = isXs ? 0.005 : 0.01;
+  const travelLimits = travelLimitsForModel(model, { switchId: selectedSwitch?.id });
+  const minRt = travelLimits.rapidTriggerMinMm;
   return (
     <div className="page quick-page page-enter">
       <section className="keyboard-stage">
@@ -204,9 +209,9 @@ function QuickSettingsPage({
             </div>
             <VerticalRangeControl
               value={actuation}
-              min={0.1}
-              max={3.4}
-              step={isXs ? 0.005 : 0.01}
+              min={travelLimits.actuationMinMm}
+              max={travelLimits.actuationMaxMm}
+              step={travelLimits.rapidTriggerStepMm}
               dragStep={0.05}
               suffix="mm"
               disabled={!hasSelection}
@@ -259,8 +264,8 @@ function QuickSettingsPage({
                 <RangeControl
                   value={rapidSensitivity}
                   min={minRt}
-                  max={3.4}
-                  step={isXs ? 0.005 : 0.01}
+                  max={travelLimits.rapidTriggerMaxMm}
+                  step={travelLimits.rapidTriggerStepMm}
                   dragStep={0.01}
                   allowedValues={rapidTriggerValues}
                   suffix="mm"
@@ -283,8 +288,8 @@ function QuickSettingsPage({
                   <RangeControl
                     value={pressSensitivity}
                     min={minRt}
-                    max={3.4}
-                    step={isXs ? 0.005 : 0.01}
+                    max={travelLimits.rapidTriggerMaxMm}
+                    step={travelLimits.rapidTriggerStepMm}
                     dragStep={0.01}
                     allowedValues={rapidTriggerValues}
                     suffix="mm"
@@ -305,8 +310,8 @@ function QuickSettingsPage({
                   <RangeControl
                     value={releaseSensitivity}
                     min={minRt}
-                    max={3.4}
-                    step={isXs ? 0.005 : 0.01}
+                    max={travelLimits.rapidTriggerMaxMm}
+                    step={travelLimits.rapidTriggerStepMm}
                     dragStep={0.01}
                     allowedValues={rapidTriggerValues}
                     suffix="mm"

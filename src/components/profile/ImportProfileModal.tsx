@@ -49,8 +49,7 @@ export function ImportProfileModal({
     reader.readAsText(file);
   }
 
-  const isDifferentModel =
-    parsedRecord && parsedRecord.metadata.createdFor !== currentDeviceModel;
+  const isDifferentModel = parsedRecord && parsedRecord.metadata.createdFor !== currentDeviceModel;
 
   return (
     <div className="woot-modal-backdrop" onClick={onClose}>

@@ -20,7 +20,8 @@ import { FirmwareRgbPreview } from '../keyboard/rgbPreview';
 import { XsydFirmwareRgbPreview } from '../keyboard/xsydRgbPreview';
 import { useCustomRgbPlayback } from './useCustomRgbPlayback';
 import { HERO68_KEY_IDS } from '../keyboard/hero68Layout';
-import { isWin68HeMaxModel, type HeroDeviceModelId } from '../keyboard/devices';
+import type { HeroDeviceModelId } from '../keyboard/devices';
+import { getBoard } from '../keyboard/registry';
 import { heroLayout } from '../keyboard/layout';
 import { acceptsRgbPreviewKey } from '../keyboard/rgbPreviewInput';
 import { BRAND } from '../brand';
@@ -62,44 +63,14 @@ const colorHex = (color: RgbColor) =>
   '#' + color.map(v => v.toString(16).padStart(2, '0')).join('');
 const hexColor = (hex: string): RgbColor =>
   [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as RgbColor;
-export type RgbTab = 'onboard' | 'custom' | 'rhythm';
-const SAVED_RGB_PRESETS_KEY = `${BRAND.storagePrefix}:saved-rgb-presets:v1`;
-export type SavedRgbPresetItem = {
-  id: string;
-  name: string;
-  profile: RgbProfile;
-};
-export function loadSavedRgbPresets(): SavedRgbPresetItem[] {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(SAVED_RGB_PRESETS_KEY) ?? '[]');
-    return Array.isArray(parsed)
-      ? parsed.filter(item => item && item.id && item.name && item.profile)
-      : [];
-  } catch {
-    return [];
-  }
-}
-export function persistSavedRgbPresets(list: SavedRgbPresetItem[]): void {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return;
-  }
-  try {
-    window.localStorage.setItem(SAVED_RGB_PRESETS_KEY, JSON.stringify(list));
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-function previousRgbTab(): RgbTab {
-  try {
-    const tab = sessionStorage.getItem(`${BRAND.storagePrefix}:rgb-tab`);
-    return tab === 'custom' || tab === 'rhythm' ? tab : 'onboard';
-  } catch {
-    return 'onboard';
-  }
-}
+import {
+  loadSavedRgbPresets,
+  persistSavedRgbPresets,
+  previousRgbTab,
+  type RgbTab,
+  type SavedRgbPresetItem
+} from './rgb/rgbPresetStorage';
+export { loadSavedRgbPresets, persistSavedRgbPresets, type RgbTab, type SavedRgbPresetItem };
 type RgbSettingsProps = {
   value: RgbProfile;
   onChange: (value: RgbProfile) => void;
@@ -164,7 +135,8 @@ function ActiveRgbSettingsPage({
   const { tr } = useI18n();
   const contextModel = useContext(DeviceModelContext);
   const model = modelProp ?? contextModel;
-  const isWin68 = isWin68HeMaxModel(model);
+  const board = getBoard(model);
+  const isWin68 = board.rgb.previewEngine === 'xsyd';
   const modelKeyIds = useMemo(
     () => (isWin68 ? heroLayout(model).keyIds : HERO68_KEY_IDS),
     [isWin68, model]
@@ -173,7 +145,7 @@ function ActiveRgbSettingsPage({
     onEntered?.();
   }, []);
   const [zone, setZone] = useState<'keys' | 'side'>('keys');
-  const activeZone: 'keys' | 'side' = isWin68 ? 'keys' : zone;
+  const activeZone: 'keys' | 'side' = board.rgb.hasSideRgb ? zone : 'keys';
   const [selected, setSelected] = useState(new Set<string>());
   const [paint, setPaint] = useState('#ffd95a');
   const [replay, setReplay] = useState(0);
@@ -242,8 +214,10 @@ function ActiveRgbSettingsPage({
     : undefined;
   const perKey = isWin68
     ? activeZone === 'keys' && isWin68PerKeyMode(config.mode)
-    : activeZone === 'keys' && (config.mode === 19 || (config.mode >= 221 && config.mode <= 226));
-  const brightnessMax = isWin68 ? XSYD_MAX_BRIGHTNESS : activeZone === 'side' ? 4 : 20;
+    : activeZone === 'keys' &&
+      (config.mode === board.rgb.perKeyModeId || (config.mode >= 221 && config.mode <= 226));
+  const brightnessMax =
+    activeZone === 'side' ? (board.rgb.sideMaxBrightness ?? 4) : board.rgb.maxBrightness;
   const effectiveBrightness = isWin68
     ? normalizeXsydBrightness(config.brightness)
     : config.brightness;

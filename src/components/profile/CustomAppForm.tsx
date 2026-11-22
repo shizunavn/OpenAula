@@ -43,7 +43,9 @@ export function validateCustomAppRule(
   if (filters.length > MAX_FILTERS_PER_APP) {
     return {
       valid: false,
-      error: t('You can use up to {count} detection methods per app.', { count: MAX_FILTERS_PER_APP }),
+      error: t('You can use up to {count} detection methods per app.', {
+        count: MAX_FILTERS_PER_APP
+      }),
       filters
     };
   }
@@ -64,12 +66,10 @@ export function CustomAppForm({
   onConfirm
 }: CustomAppFormProps) {
   const { tr } = useI18n();
-  const existingProcessName =
-    initialRule?.filters.find(f => f.kind === 'processName')?.value ?? '';
+  const existingProcessName = initialRule?.filters.find(f => f.kind === 'processName')?.value ?? '';
   const existingDirectory =
     initialRule?.filters.find(f => f.kind === 'processDirectory')?.value ?? '';
-  const existingWindowTitle =
-    initialRule?.filters.find(f => f.kind === 'windowTitle')?.value ?? '';
+  const existingWindowTitle = initialRule?.filters.find(f => f.kind === 'windowTitle')?.value ?? '';
 
   const [name, setName] = useState(initialRule?.name ?? '');
   const [matchType, setMatchType] = useState<AppFilterMatchType>(
@@ -106,10 +106,7 @@ export function CustomAppForm({
       return;
     }
     const inferredName =
-      name.trim() ||
-      values.processName.trim() ||
-      values.windowTitle.trim() ||
-      'Unknown App';
+      name.trim() || values.processName.trim() || values.windowTitle.trim() || 'Unknown App';
     onConfirm({
       id: initialRule?.id ?? `custom-app-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: inferredName,
@@ -148,7 +145,14 @@ export function CustomAppForm({
       </div>
 
       <div>
-        <label style={{ display: 'block', fontSize: 12, marginBottom: 4, color: 'var(--woot-text-subtle)' }}>
+        <label
+          style={{
+            display: 'block',
+            fontSize: 12,
+            marginBottom: 4,
+            color: 'var(--woot-text-subtle)'
+          }}
+        >
           {tr('App name')}
         </label>
         <input
@@ -174,8 +178,20 @@ export function CustomAppForm({
       </p>
 
       {/* 1. processName */}
-      <div className="woot-linked-app-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+      <div
+        className="woot-linked-app-row"
+        style={{ flexDirection: 'column', alignItems: 'stretch' }}
+      >
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 700
+          }}
+        >
           <input
             type="checkbox"
             checked={enabledKinds.processName}
@@ -211,8 +227,20 @@ export function CustomAppForm({
       </div>
 
       {/* 2. processDirectory */}
-      <div className="woot-linked-app-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+      <div
+        className="woot-linked-app-row"
+        style={{ flexDirection: 'column', alignItems: 'stretch' }}
+      >
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 700
+          }}
+        >
           <input
             type="checkbox"
             checked={enabledKinds.processDirectory}
@@ -248,8 +276,20 @@ export function CustomAppForm({
       </div>
 
       {/* 3. windowTitle */}
-      <div className="woot-linked-app-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+      <div
+        className="woot-linked-app-row"
+        style={{ flexDirection: 'column', alignItems: 'stretch' }}
+      >
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 700
+          }}
+        >
           <input
             type="checkbox"
             checked={enabledKinds.windowTitle}

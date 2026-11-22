@@ -15,11 +15,8 @@ import {
 } from 'lucide-react';
 import type { ProfileSlot } from '../protocol/hero68/types';
 import { useI18n } from '../i18n';
-import {
-  heroDeviceModel,
-  isWin68HeMaxModel,
-  type HeroDeviceModelId
-} from '../keyboard/devices';
+import { heroDeviceModel, type HeroDeviceModelId } from '../keyboard/devices';
+import { getBoard } from '../keyboard/registry';
 import { useBgService } from '../protocol/bgServiceClient';
 import {
   createDefaultOnboardMetadata,
@@ -115,16 +112,11 @@ export default function MyProfilePage({
   onOpenBgServiceSettings
 }: Props) {
   const { tr } = useI18n();
-  const {
-    hasBgService,
-    isServiceOutdated,
-    serviceVersion,
-    requiredServiceVersion,
-    autoProfile
-  } = useBgService();
+  const { hasBgService, isServiceOutdated, serviceVersion, requiredServiceVersion, autoProfile } =
+    useBgService();
   const device = heroDeviceModel(model);
   const onboardSlots = useMemo<readonly ProfileSlot[]>(
-    () => (isWin68HeMaxModel(model) ? ([0, 1, 2, 3] as const) : ([0, 1, 2] as const)),
+    () => getBoard(model).profiles.slots,
     [model]
   );
 
@@ -394,14 +386,11 @@ export default function MyProfilePage({
             </div>
             <small style={{ color: 'var(--woot-text-subtle)', fontSize: 12 }}>
               {hasBgService
-                ? tr(
-                    'Active window: {app} · Switches: {switches} · Flash writes saved: {saved}',
-                    {
-                      app: autoProfile.activeApp?.exe || tr('Desktop'),
-                      switches: autoProfile.switchCount,
-                      saved: autoProfile.flashWritesSaved
-                    }
-                  )
+                ? tr('Active window: {app} · Switches: {switches} · Flash writes saved: {saved}', {
+                    app: autoProfile.activeApp?.exe || tr('Desktop'),
+                    switches: autoProfile.switchCount,
+                    saved: autoProfile.flashWritesSaved
+                  })
                 : isServiceOutdated
                   ? `${tr('Detected service')} v${serviceVersion} — ${tr('update to')} v${requiredServiceVersion} ${tr('for Auto-Profile & Zero-Flash-Wear.')}`
                   : tr(
@@ -550,7 +539,11 @@ export default function MyProfilePage({
             </p>
           )}
           {notice && (
-            <div className="profile-notice-row" role="status" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              className="profile-notice-row"
+              role="status"
+              style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}
+            >
               <span style={{ fontSize: 12.5, color: 'var(--woot-text-primary)' }}>{notice}</span>
               {undoReset && (
                 <button type="button" className="ghost-button" onClick={handleUndoReset}>
@@ -638,8 +631,7 @@ export default function MyProfilePage({
         {onboardSlots
           .filter(
             id =>
-              !normalizedSearch ||
-              resolvedOnboard[id].name.toLowerCase().includes(normalizedSearch)
+              !normalizedSearch || resolvedOnboard[id].name.toLowerCase().includes(normalizedSearch)
           )
           .map(id => {
             const meta = resolvedOnboard[id];
@@ -709,9 +701,7 @@ export default function MyProfilePage({
               onExport={() => onExportAnyProfile?.(rec.metadata)}
               onMoveToInactive={() => onMoveToInactive?.(rec.metadata)}
               onMoveToOnboard={() => onMoveToOnboard?.(rec, slot)}
-              onUnlinkProfile={() =>
-                onUpdateProfileMetadata?.({ ...rec.metadata, linkedApps: [] })
-              }
+              onUnlinkProfile={() => onUpdateProfileMetadata?.({ ...rec.metadata, linkedApps: [] })}
               onDelete={() => setDeletingProfile(rec.metadata)}
               onDragStart={() => setDragSourceUid(rec.metadata.uid)}
               onDragEnd={() => {
@@ -780,9 +770,7 @@ export default function MyProfilePage({
       {/* Drag Hint Toast at bottom of screen (L63400-L63434) */}
       {dragSourceUid && (
         <div className="woot-drag-hint-toast" role="status">
-          {ctrlPressedDuringDrag
-            ? tr('Release to copy profile')
-            : tr('Hold Ctrl to copy profile')}
+          {ctrlPressedDuringDrag ? tr('Release to copy profile') : tr('Hold Ctrl to copy profile')}
         </div>
       )}
 

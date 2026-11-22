@@ -103,7 +103,14 @@ export default function BackgroundServicePage({
   const { language, tr } = useI18n();
   const t = (text: string) => (language === 'vi' ? (VI[text] ?? tr(text)) : text);
   const { checking, status, reconnecting } = useRgbServiceState();
-  const { autoProfile, openWindows, refreshApps, isServiceOutdated, serviceVersion, requiredServiceVersion } = useBgService();
+  const {
+    autoProfile,
+    openWindows,
+    refreshApps,
+    isServiceOutdated,
+    serviceVersion,
+    requiredServiceVersion
+  } = useBgService();
   const heroDevice = useHero68Device();
   const xsydDevice = useXsydDevice();
   const { permission } = useLocalServiceAccess();
@@ -279,7 +286,8 @@ export default function BackgroundServicePage({
             className="woot-shortcut-pill"
             style={{
               color: online && !isServiceOutdated ? '#4ade80' : '#facc15',
-              borderColor: online && !isServiceOutdated ? 'rgba(74,222,128,0.35)' : 'rgba(250,204,21,0.35)'
+              borderColor:
+                online && !isServiceOutdated ? 'rgba(74,222,128,0.35)' : 'rgba(250,204,21,0.35)'
             }}
           >
             {online
@@ -310,7 +318,15 @@ export default function BackgroundServicePage({
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5 }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              cursor: 'pointer',
+              fontSize: 13.5
+            }}
+          >
             <input
               type="checkbox"
               checked={autoProfileEnabled}
@@ -318,7 +334,15 @@ export default function BackgroundServicePage({
             />
             <span>{tr('Auto-Profile Switching (Zero Flash Wear)')}</span>
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5 }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              cursor: 'pointer',
+              fontSize: 13.5
+            }}
+          >
             <input
               type="checkbox"
               checked={revertToDefaultOnFocusLoss}
@@ -326,7 +350,15 @@ export default function BackgroundServicePage({
             />
             <span>{tr('Revert to Default Profile (Slot 1) when leaving linked apps')}</span>
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13.5 }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              cursor: 'pointer',
+              fontSize: 13.5
+            }}
+          >
             <input
               type="checkbox"
               checked={notifyOnProfileSwitch}

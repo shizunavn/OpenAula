@@ -34,6 +34,7 @@ int main() {
     ok = ok && current.valid && current.kind == "none" && current.version == L"0.2.1";
     ok = ok && package.valid && package.kind == "package" && package.file == L"C:\\Updates\\Aula.zip";
     ok = ok && !parseUpdateReply({400, "error"}).valid && !parseUpdateReply({200, "none"}).valid;
+    ok = ok && std::wstring(OPENAULA_WEB_APP_URL) == L"https://open-aula.pages.dev/";
     std::cout << (ok ? "PASS: auto-start, H icon, and update reply parsing\n" : "FAIL: native tray checks\n");
     return ok ? 0 : 1;
 }

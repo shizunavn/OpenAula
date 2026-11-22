@@ -1,6 +1,14 @@
 import { HERO68_KEY_IDS, HERO68_LAYOUT } from '../keyboard/hero68Layout';
 import { HERO84_ONLY_KEYS } from '../keyboard/hero84Layout';
-import { allRegisteredKeyIds, getBoards } from '../keyboard/registry';
+import {
+  allRegisteredKeyIds,
+  generateRapidTriggerValues,
+  getBoard,
+  getBoards,
+  isBoardModelId,
+  resolveEffectiveTravelLimits,
+  type ResolveTravelLimitsOptions
+} from '../keyboard/registry';
 import { defaultRemapLayers } from '../protocol/hero68/remap';
 import type { HydratedKeySettings } from '../protocol/hero68/hero68Encoder';
 import { getHero68DistanceUnitMm } from '../protocol/hero68/precision';
@@ -49,23 +57,42 @@ export const RAPID_TRIGGER_VALUES_XS = Array.from({ length: 680 }, (_, index) =>
 );
 
 export function isXsPrecisionModel(model?: HeroDeviceModelId | string | null): boolean {
-  if (model != null && model !== '') {
-    return model === 'hero68Xs';
+  if (model != null && model !== '' && isBoardModelId(model)) {
+    return getBoard(model).performance.distanceUnitMm <= 0.005;
   }
   return getHero68DistanceUnitMm() === 0.005;
 }
 
+export function travelLimitsForModel(
+  model?: HeroDeviceModelId | string | null,
+  options?: ResolveTravelLimitsOptions
+) {
+  const board = model && isBoardModelId(model) ? getBoard(model) : getBoard('hero68');
+  return resolveEffectiveTravelLimits(board, options);
+}
+
 export function rapidTriggerValuesForModel(
-  model?: HeroDeviceModelId | string | null
+  model?: HeroDeviceModelId | string | null,
+  options?: ResolveTravelLimitsOptions
 ): readonly number[] {
+  if (model != null && model !== '' && isBoardModelId(model)) {
+    const board = getBoard(model);
+    if (!options) {
+      return board.performance.distanceUnitMm <= 0.005
+        ? RAPID_TRIGGER_VALUES_XS
+        : RAPID_TRIGGER_VALUES_STANDARD;
+    }
+    return generateRapidTriggerValues(board, resolveEffectiveTravelLimits(board, options));
+  }
   return isXsPrecisionModel(model) ? RAPID_TRIGGER_VALUES_XS : RAPID_TRIGGER_VALUES_STANDARD;
 }
 
 export function clampRapidTriggerForModel(
   value: number,
-  model?: HeroDeviceModelId | string | null
+  model?: HeroDeviceModelId | string | null,
+  options?: ResolveTravelLimitsOptions
 ): number {
-  const allowedValues = rapidTriggerValuesForModel(model);
+  const allowedValues = rapidTriggerValuesForModel(model, options);
   const clamped = clampNumber(value, allowedValues[0], allowedValues[allowedValues.length - 1]);
   return snapToAllowedValue(clamped, allowedValues);
 }

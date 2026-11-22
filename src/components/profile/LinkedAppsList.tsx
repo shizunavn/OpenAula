@@ -26,12 +26,8 @@ export function LinkedAppsList({
   onOpenBgServiceSettings
 }: LinkedAppsListProps) {
   const { tr } = useI18n();
-  const {
-    hasBgService,
-    isServiceOutdated,
-    serviceVersion,
-    requiredServiceVersion
-  } = useBgService();
+  const { hasBgService, isServiceOutdated, serviceVersion, requiredServiceVersion } =
+    useBgService();
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [cachedApps, setCachedApps] = useState<LinkedAppRule[]>(() => loadCachedLinkedApps());
@@ -78,11 +74,17 @@ export function LinkedAppsList({
 
   return (
     <div className="woot-linked-apps-panel">
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap'
+        }}
+      >
         <div>
-          <h3 style={{ margin: '0 0 4px', fontSize: 15 }}>
-            {tr('Linked Applications')}
-          </h3>
+          <h3 style={{ margin: '0 0 4px', fontSize: 15 }}>{tr('Linked Applications')}</h3>
           <p style={{ margin: 0, fontSize: 12.5, color: 'var(--woot-text-subtle)' }}>
             {tr(
               'Your device will automatically switch to this profile when a linked application is your active window.'
@@ -100,9 +102,7 @@ export function LinkedAppsList({
             borderRadius: 999,
             fontSize: 11.5,
             fontWeight: 700,
-            background: hasBgService
-              ? 'rgba(74, 222, 128, 0.12)'
-              : 'rgba(250, 204, 21, 0.12)',
+            background: hasBgService ? 'rgba(74, 222, 128, 0.12)' : 'rgba(250, 204, 21, 0.12)',
             color: hasBgService ? '#4ade80' : '#facc15',
             whiteSpace: 'nowrap'
           }}
@@ -202,9 +202,7 @@ export function LinkedAppsList({
           onClick={() => setSelectorOpen(true)}
         >
           <Plus size={16} />
-          {linkedApps.length === 0
-            ? tr('Link an application')
-            : tr('Link another application')}
+          {linkedApps.length === 0 ? tr('Link an application') : tr('Link another application')}
         </button>
       )}
 

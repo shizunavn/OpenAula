@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { performance } from 'node:perf_hooks';
 import { rgbHallKeys } from '../../src/keyboard/customRgb';
 import { detectHeroDeviceModelFromUuid, heroDeviceModel } from '../../src/keyboard/devices';
+import { getBoard } from '../../src/keyboard/registry';
 import { HERO68_KEY_IDS } from '../../src/keyboard/hero68Layout';
 import { HERO84_COLOR_SOURCES } from '../../src/keyboard/hero84Layout';
 import { buildReport } from '../../src/protocol/hero68/codec';
@@ -169,9 +170,13 @@ export function createRgbController({
     ctx.log(heroDeviceModel(resolvedModel).name.toUpperCase() + ' connected');
   }
 
-  async function stop() {
+  async function stop(options: { persist?: boolean } = {}) {
     const bridge = getBridge();
+    const shouldPersist = options.persist !== false;
     const previousMode = ctx.mode;
+    if (!shouldPersist) {
+      ctx.presetSave.cancel();
+    }
     ctx.mode = 'onboard';
     if (previousMode === 'rhythm') {
       await bridge.stopRhythm();
@@ -201,8 +206,10 @@ export function createRgbController({
     ctx.engine?.releaseAll();
     ctx.outputHeld.clear();
     ctx.pendingInputs.length = 0;
-    ctx.persist();
-    ctx.log('Onboard RGB restored');
+    if (shouldPersist) {
+      ctx.persist();
+    }
+    ctx.log(shouldPersist ? 'Onboard RGB restored' : 'RGB suspended for shutdown');
     publishFrame({
       enabled: false,
       connected: false,
@@ -234,7 +241,7 @@ export function createRgbController({
         ([id]) => ids.has(id) && performance.now() - (ctx.hallReceivedAt.get(id) ?? 0) < 100,
       );
       ctx.engine!.setTravel(
-        Object.fromEntries(samples.map(([id, s]) => [id, s.distanceUnits / (ctx.deviceModel === 'hero68Xs' ? 200 : 100)])),
+        Object.fromEntries(samples.map(([id, s]) => [id, s.distanceUnits / getBoard(ctx.deviceModel ?? 'hero68').performance.hallUnitsPerMm])),
         Object.fromEntries(
           samples.map(([id, s]) => [
             id,
@@ -642,8 +649,8 @@ export function createRgbController({
   async function handleRgbModeRequest(url: string, input: RgbModeRequestInput) {
     const bridge = getBridge();
     await exclusive(async () => {
-      if (url === '/stop' || url === '/shutdown' || (url === '/mode' && input.mode === 'onboard')) {
-        await stop();
+      if (url === '/stop' || (url === '/mode' && input.mode === 'onboard')) {
+        await stop({ persist: true });
         return;
       }
       if (ctx.tachyon) {

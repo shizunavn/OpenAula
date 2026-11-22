@@ -31,11 +31,7 @@ export function isServiceVersionAtLeast(
 }
 
 export type BgServiceConnectionState =
-  | 'idle'
-  | 'connecting'
-  | 'connected'
-  | 'permission-denied'
-  | 'service-down';
+  'idle' | 'connecting' | 'connected' | 'permission-denied' | 'service-down';
 
 export interface OpenWindowApp {
   pid: number;
@@ -290,11 +286,7 @@ export function subscribeBgService(listener: () => void) {
 
 export function useBgService() {
   const rgbServiceState = useRgbServiceState();
-  const snap = useSyncExternalStore(
-    subscribeBgService,
-    getBgServiceSnapshot,
-    getBgServiceSnapshot
-  );
+  const snap = useSyncExternalStore(subscribeBgService, getBgServiceSnapshot, getBgServiceSnapshot);
   const perm = getLocalServicePermission();
 
   let connectionState: BgServiceConnectionState = snap.connectionState;
@@ -308,7 +300,8 @@ export function useBgService() {
     connectionState = 'service-down';
   }
 
-  const serviceVersion = rgbServiceState.status?.coreVersion ?? rgbServiceState.status?.version ?? null;
+  const serviceVersion =
+    rgbServiceState.status?.coreVersion ?? rgbServiceState.status?.version ?? null;
   const isServiceConnected = connectionState === 'connected';
   const isServiceOutdated =
     isServiceConnected &&

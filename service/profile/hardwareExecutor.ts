@@ -1,7 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import type { HeroDeviceModelId } from '../../src/keyboard/devices';
-import { HERO68_KEY_IDS } from '../../src/keyboard/hero68Layout';
-import { HERO84_KEY_IDS } from '../../src/keyboard/hero84Layout';
+import { getBoard } from '../../src/keyboard/registry';
 import {
   selectProfile,
   writeActuationBatch,
@@ -91,10 +90,13 @@ export function buildXsydSramColorIndicatorPacket(hexColor: string): Uint8Array 
  * Computes a deterministic hardware signature of a profile's Hall parameters
  * so XSYD Slot 3 Virtualization can detect exact cache hits across Alt-Tabs.
  */
-export function computeProfileHallSignature(profile: SavedKeyboardProfile): string {
+export function computeProfileHallSignature(
+  profile: SavedKeyboardProfile,
+  model: HeroDeviceModelId | null | undefined = 'hero68'
+): string {
   const d = profile.draft;
   const parts: string[] = [];
-  for (const keyId of HERO68_KEY_IDS) {
+  for (const keyId of getBoard(model ?? 'hero68').keyIds) {
     const sw = (d.assignedSwitchesByKey?.[keyId] ?? 'white') as SwitchProfileId;
     const act = (d.actuationByKey?.[keyId] ?? 1.6).toFixed(3);
     const rt = d.rapidTriggerByKey?.[keyId] ? '1' : '0';
@@ -199,11 +201,12 @@ export class ZeroWearHardwareExecutor {
   }> {
     const model: HeroDeviceModelId =
       transport.deviceModel ?? profile.metadata.createdFor ?? 'hero68';
+    const board = getBoard(model);
     const targetSlot = profile.metadata.mappedOnboardSlot ?? 0;
     const packets: Uint8Array[] = [];
 
     // Strategy A: AULA XSYD 0x5C (WIN 68 HE MAX)
-    if (model === 'win68HeMax') {
+    if (board.protocol === 'xsyd') {
       const effectiveGuardTimestamp = Math.max(
         transport.lastManualSaveAt ?? 0,
         this.lastXsydSlot3CommitAt
@@ -235,7 +238,7 @@ export class ZeroWearHardwareExecutor {
       }
 
       // Tier 2: Dynamic Overflow Profile (#4..#N) on Smart Scratchpad Slot 3
-      const signature = computeProfileHallSignature(profile);
+      const signature = computeProfileHallSignature(profile, transport.deviceModel);
       const slot3Packet = xsydSelectProfileSlot(3);
       validateAutoSwitchRequest(slot3Packet, 'xsyd');
       await transport.sendReport(slot3Packet);
@@ -283,8 +286,8 @@ export class ZeroWearHardwareExecutor {
     // Strategy C: Guarded Diff-Based ApplyPlan (when user explicitly selects ram-stream for >3 profiles on ByteTech)
     // Hard-locked `includeKeymap = false` (0x03 Remap and 0x05 Macro are strictly excluded)
     // Enforces strict write order: 0x15 (Switch) -> 0x13 (Actuation) -> 0x19 (RT) -> 0x16 (Deadzone)
-    const keyIds = model === 'hero84' ? HERO84_KEY_IDS : HERO68_KEY_IDS;
-    const precisionMm = model === 'hero68Xs' ? 0.005 : 0.01;
+    const keyIds = board.keyIds;
+    const precisionMm = board.performance.distanceUnitMm;
     const draft = profile.draft;
 
     const changedKeys: string[] = [];
@@ -403,7 +406,7 @@ export class ZeroWearHardwareExecutor {
     packetsSent: number;
     packets: Uint8Array[];
   }> {
-    const signature = computeProfileHallSignature(profile);
+    const signature = computeProfileHallSignature(profile, transport.deviceModel);
     if (this.cachedXsydSlot3Signature === signature) {
       this.cachedXsydSlot3ProfileUid = profile.metadata.uid;
       this.cachedXsydSlot3ProfileName = profile.metadata.name;
@@ -431,7 +434,7 @@ export class ZeroWearHardwareExecutor {
     const draft = profile.draft;
     const writes: XsydFieldWrite[] = [];
 
-    for (const keyId of HERO68_KEY_IDS) {
+    for (const keyId of getBoard(transport.deviceModel ?? 'win68HeMax').keyIds) {
       const pos = keyValueForCode(keyId);
       if (pos === undefined) continue;
 

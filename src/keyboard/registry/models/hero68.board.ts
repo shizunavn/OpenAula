@@ -1,6 +1,7 @@
 const hero68Thumb = '/src/assets/hero68.png';
 const hero68XsThumb = '/src/assets/hero68xs.png';
 import { HERO68_LAYOUT, makeDemoLighting } from '../../hero68Layout';
+import { BYTETECH_DEFAULT_SPECS, BYTETECH_XS_SPECS } from '../shared/presets';
 import type { BoardDescriptor } from '../types';
 import {
   BYTETECH_REPORT_ID,
@@ -94,6 +95,7 @@ export const HERO68_BOARD_POS_TO_KEY_ID: ReadonlyMap<number, string> = new Map(
 const keyIds = keyIdsOf(HERO68_LAYOUT);
 
 export const HERO68_BOARD: BoardDescriptor = {
+  ...BYTETECH_DEFAULT_SPECS,
   id: 'hero68',
   name: 'Hero68',
   label: 'AULA Hero68',
@@ -134,6 +136,7 @@ export const HERO68_BOARD: BoardDescriptor = {
 
 export const HERO68_XS_BOARD: BoardDescriptor = {
   ...HERO68_BOARD,
+  ...BYTETECH_XS_SPECS,
   id: 'hero68Xs',
   name: 'Hero68 XS',
   label: 'AULA HERO 68 XS',

@@ -1,6 +1,7 @@
 import { Toggle } from '../app/components/Toggle';
 import { useT } from '../i18n';
-import { isWin68HeMaxModel, type HeroDeviceModel } from '../keyboard/devices';
+import type { HeroDeviceModel } from '../keyboard/devices';
+import { getBoard } from '../keyboard/registry';
 import type { BoardDescriptor } from '../keyboard/registry/types';
 import {
   POLLING_RATES,
@@ -60,12 +61,13 @@ export function GeneralSettingsPage({
   applyBooleanDeviceSetting
 }: GeneralSettingsPageProps) {
   const tr = useT();
-  const isWin68 = isWin68HeMaxModel(model.id);
+  const board = getBoard(model.id);
+  const isWin68 = board.protocol === 'xsyd';
   const busyOrDisconnected =
     !deviceConnected || deviceSettingsState === 'reading' || deviceSettingsState === 'saving';
   const osAndWinLockDisabled = busyOrDisconnected;
   const controlsDisabled = busyOrDisconnected || isWin68;
-  const pollingDisabled = busyOrDisconnected || !model.capabilities.writablePollingRate;
+  const pollingDisabled = busyOrDisconnected || !board.deviceSettings.writablePollingRate;
 
   return (
     <div className="page settings-page general-device-settings page-enter">

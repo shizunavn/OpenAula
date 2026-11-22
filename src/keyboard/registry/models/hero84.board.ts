@@ -1,4 +1,5 @@
 const hero84Thumb = '/src/assets/hero84.png';
+import { BYTETECH_DEFAULT_SPECS } from '../shared/presets';
 import type { BoardDescriptor, HeroKeyDefinition, HeroKeyRow } from '../types';
 import {
   BYTETECH_REPORT_ID,
@@ -365,8 +366,13 @@ const keyIds = HERO84_LAYOUT.flat()
   .map(key => key.id);
 
 export const HERO84_BOARD: BoardDescriptor = {
+  ...BYTETECH_DEFAULT_SPECS,
   id: 'hero84',
   name: 'Hero84',
+  deviceSettings: {
+    ...BYTETECH_DEFAULT_SPECS.deviceSettings,
+    writablePollingRate: false
+  },
   label: 'AULA Hero84',
   layoutTag: '75%',
   sideTab: true,

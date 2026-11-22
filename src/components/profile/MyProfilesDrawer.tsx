@@ -54,12 +54,8 @@ export function MyProfilesDrawer({
   onOpenBgServiceSettings
 }: MyProfilesDrawerProps) {
   const { tr } = useI18n();
-  const {
-    hasBgService,
-    isServiceOutdated,
-    serviceVersion,
-    requiredServiceVersion
-  } = useBgService();
+  const { hasBgService, isServiceOutdated, serviceVersion, requiredServiceVersion } =
+    useBgService();
   const [query, setQuery] = useState('');
 
   // Reset search query when drawer closes (wootility.readable.js L92870)

@@ -221,6 +221,18 @@ export function buildFieldReadPayload(
 }
 
 /** Full 64-byte report body for an `0x23` readback request (`payload[0] = 0x00`). */
+/**
+ * Decode a key code (`KeyA`, `Fn`, …) to its XSYD HID usage / `pos`, or throw for
+ * keys the WIN 68 HE MAX firmware does not address.
+ */
+export function requireXsydKeyValue(keyId: string): number {
+  const pos = keyValueForCode(keyId);
+  if (pos === undefined) {
+    throw new RangeError(`Unsupported WIN 68 HE MAX key "${keyId}"`);
+  }
+  return pos;
+}
+
 export function buildFieldReadFrame(
   queries: readonly { pos: number; field: number }[] = []
 ): Uint8Array {

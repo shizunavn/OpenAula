@@ -536,11 +536,14 @@ export function createServiceServer({
         return;
       }
 
+      if (req.url === '/shutdown') {
+        json(200, status());
+        void shutdown();
+        return;
+      }
+
       await rgbController.handleRgbModeRequest(req.url ?? '', input);
       json(200, status());
-      if (req.url === '/shutdown') {
-        void shutdown();
-      }
     } catch (e) {
       json(
         (e as { status?: number }).status === 409 ? 409 : 400,

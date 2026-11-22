@@ -23,7 +23,7 @@ export const BRAND = {
   fullPackageAsset: 'OpenAula-RGB-Windows-x64.zip',
   releaseRepo: 'https://github.com/shizunavn/OpenAula',
   legacyReleaseRepo: 'https://github.com/shizunavn/OpenHero68-RGB-Service',
-  website: 'https://open-hero68.pages.dev',
+  website: 'https://open-aula.pages.dev',
   /** Names used before 1.0, read only so an upgrade can migrate them. */
   legacy: {
     dataDir: 'OpenHero68',

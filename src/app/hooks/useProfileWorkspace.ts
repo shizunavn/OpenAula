@@ -8,10 +8,7 @@ import {
   type RgbProfile
 } from '../../protocol/hero68/rgb';
 import type { ProfileSlot } from '../../protocol/hero68/types';
-import {
-  fetchBgProfilesHydration,
-  syncProfilesToBgService
-} from '../../protocol/bgServiceClient';
+import { fetchBgProfilesHydration, syncProfilesToBgService } from '../../protocol/bgServiceClient';
 import type { PersistedOpenHeroState, ProfileDraft } from '../../state/persistence';
 import { resolveHydratedProfilesFromService } from '../../state/profileHydration';
 import {
@@ -135,8 +132,7 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
   const [inactiveProfiles, setInactiveProfiles] = useState<StoredProfileRecord[]>(
     () => persistedState?.inactiveProfiles ?? []
   );
-  const [activeProfileNamespace, setActiveProfileNamespace] =
-    useState<ProfileNamespace>('onboard');
+  const [activeProfileNamespace, setActiveProfileNamespace] = useState<ProfileNamespace>('onboard');
   const [activeProfileUid, setActiveProfileUid] = useState<string>(
     () => `onboard-${persistedState?.profileSlot ?? 1}`
   );
@@ -308,10 +304,10 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
     userMutatedRef.current = true;
     const draft = buildPresetDraft(preset);
     if (namespace === 'onboard') {
-      const targetSlot: ProfileSlot = (Math.max(
+      const targetSlot: ProfileSlot = Math.max(
         0,
         Math.min(2, metadata.mappedOnboardSlot ?? profileSlot)
-      )) as ProfileSlot;
+      ) as ProfileSlot;
       const onboardMeta: WootProfileMetadata = {
         ...metadata,
         uid: `onboard-${targetSlot}`,
@@ -387,7 +383,10 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
     }
   }
 
-  function moveProfileToOnboard(record: StoredProfileRecord, targetSlot: ProfileSlot = profileSlot) {
+  function moveProfileToOnboard(
+    record: StoredProfileRecord,
+    targetSlot: ProfileSlot = profileSlot
+  ) {
     userMutatedRef.current = true;
     const nextMeta: WootProfileMetadata = {
       ...record.metadata,

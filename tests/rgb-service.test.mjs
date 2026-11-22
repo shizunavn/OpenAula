@@ -66,3 +66,78 @@ test('encoded Multicolor Scan over Aurora stays continuous at turns and within t
     assert.ok(maxJump<=24,`encoded turn caused a ${maxJump}-level jump`)
   }
 })
+
+test('rgbController.stop({ persist: false }) preserves custom and rhythm modes across restart while explicit stop persists onboard', async () => {
+  const { mkdtempSync, rmSync, readFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const path = await import('node:path')
+  const { createServiceContext } = await (async () => {
+    const b = await rolldown({ input: 'service/context.ts', external: /^node:/ })
+    try {
+      const c = await b.generate({ format: 'esm' })
+      return import(`data:text/javascript;base64,${Buffer.from(c.output[0].code).toString('base64')}`)
+    } finally {
+      await b.close()
+    }
+  })()
+  const { createRgbController } = await (async () => {
+    const b = await rolldown({ input: 'service/rgb/rgbController.ts', external: /^node:/ })
+    try {
+      const c = await b.generate({ format: 'esm' })
+      return import(`data:text/javascript;base64,${Buffer.from(c.output[0].code).toString('base64')}`)
+    } finally {
+      await b.close()
+    }
+  })()
+
+  const stateDir = mkdtempSync(path.join(tmpdir(), 'openaula-rgb-persist-'))
+  try {
+    const stubBridge = {
+      stopCustom: async () => {},
+      stopRhythm: async () => {},
+      startCustom: async () => {},
+      configureRhythm: async () => {},
+      request: async () => ({ command: 8, zone: 2, data: [] }),
+      syncModel: async () => {},
+      queueFrame: async () => {},
+    }
+    const makeController = ctx =>
+      createRgbController({
+        ctx,
+        getBridge: () => stubBridge,
+        exclusive: fn => fn(),
+        syncHall: async () => {},
+        onRgbStateChange: () => {},
+      })
+
+    // 1. Custom mode survives shutdown stop({ persist: false })
+    const ctx1 = createServiceContext({ stateDir, log: () => {} })
+    ctx1.mode = 'custom'
+    ctx1.savedMode = 'custom'
+    ctx1.persist()
+    const ctrl1 = makeController(ctx1)
+    await ctrl1.stop({ persist: false })
+    const savedCustom = JSON.parse(readFileSync(path.join(stateDir, 'preset.json'), 'utf8'))
+    assert.equal(savedCustom.mode, 'custom')
+    assert.equal(savedCustom.enabled, true)
+    const reloadedCustom = createServiceContext({ stateDir, log: () => {} })
+    assert.equal(reloadedCustom.mode, 'custom')
+
+    // 2. Rhythm mode survives shutdown stop({ persist: false })
+    reloadedCustom.mode = 'rhythm'
+    reloadedCustom.savedMode = 'rhythm'
+    reloadedCustom.persist()
+    const ctrl2 = makeController(reloadedCustom)
+    await ctrl2.stop({ persist: false })
+    const reloadedRhythm = createServiceContext({ stateDir, log: () => {} })
+    assert.equal(reloadedRhythm.mode, 'rhythm')
+
+    // 3. Explicit user stop({ persist: true }) persists onboard
+    const ctrl3 = makeController(reloadedRhythm)
+    await ctrl3.stop({ persist: true })
+    const reloadedOnboard = createServiceContext({ stateDir, log: () => {} })
+    assert.equal(reloadedOnboard.mode, 'onboard')
+  } finally {
+    rmSync(stateDir, { recursive: true, force: true })
+  }
+})

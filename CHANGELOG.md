@@ -3,6 +3,28 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.9.0 — Board Registry Source of Truth, Protocol Driver Layer, and Module Split
+
+- Board Registry (`src/keyboard/registry/types.ts`, `shared/presets.ts`, `shared/bytetechCatalog.ts`, `performance.ts`):
+  - Boards declare `protocol`, `keyIds`, `performance`, `switches`, `rgb`, `profiles`, `advancedKeys`, and `deviceSettings` once; shared `BYTETECH_DEFAULT_SPECS` / `XSYD_DEFAULT_SPECS` remove duplicated constants.
+  - `service/profile/hardwareExecutor.ts` now reads `getBoard(model).keyIds` and `board.performance.distanceUnitMm`; XSYD detection uses `board.protocol === 'xsyd'`.
+  - `HERO_DEVICE_MODELS` filters to ByteTech boards and `ALL_DEVICE_MODELS` is derived from the registry.
+- XSYD Module Split (`src/protocol/xsyd/`):
+  - `device.ts` is now a barrel over `commands`, `advancedBindings`, `remap`, `hydrate`, `webhid`, `hall`, `rgb`, `features`, `codec`, `keymap`, `advanced`.
+  - `requireXsydKeyValue` moved to `features.ts` to break the `hydrate` ↔ `advancedBindings` import cycle; the written-field cache moved into `remap.ts`.
+- Protocol Driver Layer (`src/protocol/driver.ts`):
+  - Added `KeyboardProtocolDriver` with `bytetechDriver` / `xsydDriver`, plus `getProtocolDriver`, `getActiveConnectedDriver`, `isAnyProtocolConnected`, `disconnectAllProtocols`, and `autoConnectAnyProtocol`.
+  - `useDeviceSyncController.ts` routes connect, hydrate, profile-slot read, and disconnect through the driver layer.
+- Frontend Split (`src/components/advanced-keys/`, `custom-rgb/`, `macro/`, `rgb/`):
+  - `AdvancedKeysPage.tsx` slimmed by extracting `DksGrid`, `ActionPicker`, `OutputTester`, and `DksUnsupportedModal`.
+  - Added `useSlotHistory` with per-slot undo/redo, burst commits, and slot isolation.
+- Native HID Helpers (`service/native/hid_device_catalog.h`, `hid_packet_policy.h`, `hid_ipc_router.h`):
+  - Raw-input filtering and VID/PID catalogs, packet validation and command allowlists, and IPC queueing/timer-deadline logic extracted from `hid_bridge.cpp`.
+- Fixes:
+  - XSYD Slot 3 overflow warm-up failed on WIN 68 HE MAX because `computeProfileHallSignature` referenced a removed key table; the signature now uses the target board's keys.
+  - RGB hydration guard in `useDeviceSyncController.ts` used `!x === 'xsyd'` (always false); corrected to an inequality check.
+  - Service shutdown calls `rgbController.stop({ persist: false })` and re-applies custom/rhythm RGB on start when the service comes up offline.
+
 ## 1.8.1 — Gamepad Hall Bottom-Out Normalization, Auto-Profile Persistence & Hydration, and 1:1 Slider Precision
 
 - Gamepad Mode & Hall Distance Normalization (`service/native/gamepad_core.h`, `service/native/hid_bridge.cpp`, `service/gamepad/gamepadController.ts`):

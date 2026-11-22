@@ -17,10 +17,10 @@ import { AppSelect } from './AppSelect';
 import { useT } from '../../i18n';
 import {
   ALL_DEVICE_MODELS,
-  isWin68HeMaxModel,
   type HeroDeviceModel,
   type HeroDeviceModelId
 } from '../../keyboard/devices';
+import { getBoard } from '../../keyboard/registry';
 import type { Hero68ConnectionState } from '../../protocol/hero68/webhid';
 import type { ProfileSlot } from '../../protocol/hero68/types';
 
@@ -57,11 +57,13 @@ export function DeviceConnectionPanel({
 }: DeviceConnectionPanelProps) {
   const tr = useT();
   const deviceConnected = deviceConnectionState === 'connected';
+  const activeBoard = getBoard(deviceModel);
   const showHero68XsThumb =
-    deviceModel === 'hero68Xs' || (deviceConnected && Boolean(isXs) && deviceModel === 'hero68');
+    activeBoard.performance.distanceUnitMm <= 0.005 ||
+    (deviceConnected && Boolean(isXs) && activeBoard.id === 'hero68');
   const activeThumbnail = showHero68XsThumb
     ? hero68XsThumb
-    : (BUILTIN_THUMBNAILS[deviceModel] ?? selectedModel.thumbnail);
+    : (BUILTIN_THUMBNAILS[activeBoard.id] ?? activeBoard.thumbnail ?? selectedModel.thumbnail);
   const deviceConnecting = deviceConnectionState === 'connecting';
   const deviceStatusLabel =
     deviceConnectionState === 'connected'
@@ -90,8 +92,8 @@ export function DeviceConnectionPanel({
     []
   );
   const onboardSlots = useMemo<readonly ProfileSlot[]>(
-    () => (isWin68HeMaxModel(deviceModel) ? ([0, 1, 2, 3] as const) : ([0, 1, 2] as const)),
-    [deviceModel]
+    () => activeBoard.profiles.slots,
+    [activeBoard]
   );
   // A connected keyboard decides the model by its UUID or handshake. Letting the selector
   // switch it would write another model's key tables into this board.

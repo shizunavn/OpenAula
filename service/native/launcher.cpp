@@ -563,7 +563,7 @@ void executeTrayAction(HWND ownerWindow, int action) {
   switch (action) {
     case ACT_WEB_APP:
       ShowWindow(flyoutWindow, SW_HIDE);
-      open(L"https://open-hero68.pages.dev/");
+      open(OPENAULA_WEB_APP_URL);
       break;
     case ACT_CONTROL_PANEL:
       ShowWindow(flyoutWindow, SW_HIDE);

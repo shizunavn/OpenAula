@@ -22,7 +22,8 @@ import nickFront from '../assets/switches/nick-front.png';
 import nickTop from '../assets/switches/nick-top.png';
 import ashwoodFront from '../assets/switches/ashwood-front.png';
 import ashwoodTop from '../assets/switches/ashwood-top.png';
-import { isWin68HeMaxModel, type HeroDeviceModelId } from '../keyboard/devices';
+import type { HeroDeviceModelId } from '../keyboard/devices';
+import { getBoard, isBoardModelId } from '../keyboard/registry';
 import {
   ALL_HERO68_SWITCH_PROFILES,
   HERO68_XS_SWITCH_PROFILES,
@@ -105,8 +106,16 @@ const WIN68_SWITCH_OPTIONS: SwitchOption[] = WIN68_SWITCH_PROFILES.map(option =>
 }));
 
 function switchOptionsForModel(model?: HeroDeviceModelId): SwitchOption[] {
-  if (model && isWin68HeMaxModel(model)) {
-    return WIN68_SWITCH_OPTIONS;
+  if (model && isBoardModelId(model)) {
+    const board = getBoard(model);
+    if (board.protocol === 'xsyd') {
+      return WIN68_SWITCH_OPTIONS;
+    }
+    const allowedIds = new Set(board.switches.switches.map(sw => sw.id));
+    const filtered = SWITCH_OPTIONS.filter(opt => allowedIds.has(opt.id));
+    if (filtered.length) {
+      return filtered;
+    }
   }
   return SWITCH_OPTIONS;
 }

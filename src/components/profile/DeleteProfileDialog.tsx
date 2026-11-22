@@ -39,7 +39,14 @@ export function DeleteProfileDialog({
         </div>
 
         <div className="woot-editor-body">
-          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--woot-text-primary)', lineHeight: 1.5 }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13.5,
+              color: 'var(--woot-text-primary)',
+              lineHeight: 1.5
+            }}
+          >
             {tr('Are you sure you want to remove this profile? This action cannot be undone.')}
           </p>
           <div className="woot-linked-app-row">
