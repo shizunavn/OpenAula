@@ -8,15 +8,15 @@ OpenAula: browser configurator for AULA Hall-effect keyboards (`HERO68`, `HERO 6
 
 Scale local checks to the scope of your change before finishing:
 
-| Changed area                                                                                  | Required local checks                                                                                                             |
-| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend UI (`src/` only, not shared with `service/`)                                         | `node --test tests/<affected>.test.mjs` while iterating; then `npm run build`, `npm test`, `npm run lint`, `npm run format:check` |
-| Shared `src/` (`src/protocol/`, `src/keyboard/`, `src/state/`)                                | Frontend checks **plus** `npm run typecheck:service` (and `npm run build:service` if runtime code changed)                        |
-| Service TypeScript (`service/**/*.ts`)                                                        | `npm run typecheck:service`, `npm test`, `npm run build:service`                                                                  |
-| Installer, updater, or packaging (`service/installer/`, `service/setup*.ts`, `tools/*setup*`) | Service checks **plus** `npm run prepare:setup`, `npm run build:setup`, `npm run test:setup`                                      |
-| Native C++ (`service/native/`)                                                                | Every affected `cmd /c tools\check-native-*.cmd` (and `node tools/check-native-ipc.mjs` for IPC) + `.clang-format` check          |
-| Landing site (`landing/`)                                                                     | `npm run package:landing`, `npm run check:landing`                                                                                |
-| Cloudflare (`functions/`, `worker/`)                                                          | `npm run build`, `npm run typecheck:service`                                                                                      |
+| Changed area                                                                                                                                              | Required local checks                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend UI (`src/` only, not shared with `service/`)                                                                                                     | `node --test tests/<affected>.test.mjs` while iterating; then `npm run build`, `npm test`, `npm run lint`, `npm run format:check` |
+| Shared `src/` (`src/protocol/`, `src/keyboard/`, `src/state/`)                                                                                            | Frontend checks **plus** `npm run typecheck:service` (and `npm run build:service` if runtime code changed)                        |
+| Service TypeScript (`service/**/*.ts`)                                                                                                                    | `npm run typecheck:service`, `npm test`, `npm run build:service`                                                                  |
+| Installer, updater, or packaging (`service/installer/`, `service/setup*.ts`, `service/installTransaction.ts`, `service/updateWorker.ts`, `tools/*setup*`) | Service checks **plus** `npm run prepare:setup`, `npm run build:setup`, `npm run test:setup`                                      |
+| Native C++ (`service/native/`)                                                                                                                            | Every affected `cmd /c tools\check-native-*.cmd` (and `node tools/check-native-ipc.mjs` for IPC) + `.clang-format` check          |
+| Landing site (`landing/`)                                                                                                                                 | `npm run package:landing`, `npm run check:landing`                                                                                |
+| Cloudflare (`functions/`, `worker/`)                                                                                                                      | `npm run build`, `npm run typecheck:service`                                                                                      |
 
 Full Windows CI (`.github/workflows/windows.yml`) runs these in order:
 
@@ -100,7 +100,9 @@ Order the sections by audience:
 
 - Tests are `.mjs` files that bundle TypeScript sources with `rolldown` and import them via `data:text/javascript;base64,...`; they use a compact style and are excluded from Prettier.
 - Bundling a `service/` module (anything importing `worker/` or shared parts) requires `codeSplitting: false`, otherwise the `data:` URL import fails.
-- `tools/smoke-service-setup.mjs` writes its fixture **outside** the repo (`.refactor/setup-smoke/`) and cannot import an absolute `.ts` path — Node rejects the `E:` scheme and service imports are extensionless. It embeds a `rolldown` bundle of `service/setupUpdater.ts` instead; avoid re-declaring names the bundle already exports (`path`, `createServer`, `readFileSync`, ...). It uses its own install dir, state dir, port `17868`, and an ephemeral signing key, and never touches the real install.
+- `tools/smoke-service-setup.mjs` writes its fixture **outside** the repo (`.refactor/setup-smoke/`) and cannot import an absolute `.ts` path - Node rejects the `E:` scheme and service imports are extensionless. It embeds a `rolldown` bundle of `service/setupUpdater.ts` instead; avoid re-declaring names the bundle already exports (`path`, `createServer`, `readFileSync`, ...). It uses its own install dir, state dir, port `17868`, and an ephemeral signing key, and never touches the real install.
+- `test:setup` polls `state/updates/status.json` every 250 ms and asserts on the `error` field. Writing the same status twice - once without `error`, then again with it - is a race: it passes on fast CI runners and fails on slower local machines with `Input: 'undefined'`. Write each status once (`phase(next, error?)`, not `phase()` followed by `actions.phase(next, error)`).
+- `npm test` bundles sources with `rolldown` and **does not typecheck**. A refactor that moves a function between files can leave a missing import, a wrong prop type, or a `Set`/`Map` mismatch that only `npx tsc --noEmit` (and `npm run typecheck:service` for `service/`) will catch.
 
 ## Environment
 
