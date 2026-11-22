@@ -3,6 +3,18 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
+## 1.8.1 — Gamepad Hall Bottom-Out Normalization, Auto-Profile Persistence & Hydration, and 1:1 Slider Precision
+
+- Gamepad Mode & Hall Distance Normalization (`service/native/gamepad_core.h`, `service/native/hid_bridge.cpp`, `service/gamepad/gamepadController.ts`):
+  - Fixed Issue #4: Preserved true bottom-out travel (> 3.40 mm) on standard 0.01 mm boards without halving; restricted travel halving exclusively to HERO 68 XS (`halfScaleUnits = true`).
+  - Added `await bridge.syncModel()` prior to native gamepad startup to ensure model identity is verified.
+- Auto-Profile Persistence & Hydration (`service/server/router.ts`, `src/App.tsx`, `useDeviceSyncController.ts`, `useProfileWorkspace.ts`, `src/state/profileHydration.ts`):
+  - Fixed Issue #5: Increased `/profiles/sync` max body limit from 64 KB to 1 MB to prevent `Preset too large` errors during sync.
+  - Persisted all 3 profile tiers and auto-switch toggles to `localStorage`.
+  - Implemented safe hydration of linked profiles and auto-switch rules from background service `profiles.json` on fresh browser sessions.
+- 1:1 Slider Precision & DragStep Snapping (`sliderDrag.ts`, `useSliderPointerDrag.ts`, `RangeControl.tsx`, `VerticalRangeControl.tsx`):
+  - Simplified slider dragging to 1:1 track coordinate mapping with `dragStep` snapping (0.05 mm actuation, 0.01 mm RT).
+
 ## 1.8.0 — Wootility v5 Visual Icon Picker, Auto-Profile Switcher, 4 Onboard Slots, XSYD Smart Slot 3 Virtualization & Non-XS 0.01 mm RT Clamping
 
 - Rapid Trigger `0.01 mm` Clamping & Rounding on Non-XS Boards (`src/app/helpers.ts`, `RangeControl.tsx`, `VerticalRangeControl.tsx`, `usePerKeyPerformance.ts`, `hero68Encoder.ts`, `xsyd/device.ts`):
