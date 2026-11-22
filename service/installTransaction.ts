@@ -22,10 +22,10 @@ export async function rollbackTransaction(tx: UpdateTransaction, actions: Transa
   await actions.launch(tx.previous.active);
 }
 export async function executeTransaction(tx: UpdateTransaction, actions: TransactionActions) {
-  const phase = (next: UpdateTransaction['phase']) => {
+  const phase = (next: UpdateTransaction['phase'], error?: string) => {
     tx.phase = next;
     writeJson(transactionFile(tx.root), tx);
-    actions.phase(next);
+    actions.phase(next, error);
   };
   try {
     phase('stopping');
@@ -53,7 +53,6 @@ export async function executeTransaction(tx: UpdateTransaction, actions: Transac
       // Retain the journal so the launcher can retry recovery.
       throw rollbackError;
     }
-    phase('failed');
-    actions.phase('failed', error instanceof Error ? error.message : String(error));
+    phase('failed', error instanceof Error ? error.message : String(error));
   }
 }

@@ -3,7 +3,17 @@
 UI and Windows service versions are independent. Historical notes below retain
 their original validation scope; they are not claims of new hardware testing.
 
-## 1.9.0 — Board Registry Source of Truth, Protocol Driver Layer, and Module Split
+## 1.9.1 - Component Split, No Behaviour Change
+
+- Editing pages split into focused modules (`src/components/advanced-keys/`, `custom-rgb/`, `macro/`, `rgb/`):
+  - `AdvancedKeysPage`, `CustomRgbEditor`, `MacroPage` and `RgbSettingsPage` lose their inline panels, modals, toolbars and parameter cards to sibling files.
+  - `AdvancedKeysPage` no longer accesses `hero68DeviceManager` / `xsydDeviceManager` directly; it goes through the protocol driver.
+- `useDeviceSyncController` shrinks as page-level read/write paths move behind the driver.
+- Fixes:
+  - `service/installTransaction.ts` wrote the `failed` update status twice, the first time with no `error` field, so a reader hitting that window saw a failure with no reason. `phase()` now accepts an optional error and the duplicate write is gone.
+- Not re-validated on physical keyboards; `npm run test:setup` passes.
+
+## 1.9.0 - Board Registry Source of Truth, Protocol Driver Layer, and Module Split
 
 - Board Registry (`src/keyboard/registry/types.ts`, `shared/presets.ts`, `shared/bytetechCatalog.ts`, `performance.ts`):
   - Boards declare `protocol`, `keyIds`, `performance`, `switches`, `rgb`, `profiles`, `advancedKeys`, and `deviceSettings` once; shared `BYTETECH_DEFAULT_SPECS` / `XSYD_DEFAULT_SPECS` remove duplicated constants.
@@ -414,7 +424,6 @@ Responsive scaling pass based on the Wootility source bundle supplied in the con
 - Keyboard preview keeps its own container-based ResizeObserver fitting, matching the pattern used by Wootility's keyboard renderer.
 - Mobile keeps the existing native responsive layout instead of desktop zoom scaling.
 
-
 ### v0.9.39 — Wootility-style Actuation + embedded Hall Test
 
 - Reworked **Actuation Point** into the Wootility-style keyboard + three-card layout.
@@ -424,7 +433,6 @@ Responsive scaling pass based on the Wootility source bundle supplied in the con
 - The test card follows the most recently moving selected key, displays live travel, the selected key's AP threshold, ACTUATED/READY state, and measured refresh rate.
 - Hall streaming is now allowed from Actuation Point even when Advanced Pages are hidden, and is stopped automatically when leaving Actuation/Hall Stream pages.
 
-
 ### v0.9.40 — deterministic Select All
 
 - `Select all keys` rebuilds selection from the canonical 68-key layout via a functional state update.
@@ -432,7 +440,6 @@ Responsive scaling pass based on the Wootility source bundle supplied in the con
 - Key toggles normalize away stale/invalid IDs before applying the click.
 - Selection action buttons explicitly use `type="button"`.
 - Repeated partial → Select all → Discard cycles now converge to exactly 68 / 0 keys even while Hall telemetry is causing frequent UI renders.
-
 
 ### v0.9.42 — Actuation deselect stops Live Hall
 
