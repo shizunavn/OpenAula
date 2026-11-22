@@ -425,9 +425,10 @@ export function createServiceServer({
 
       let body = '';
       let size = 0;
+      const maxBodyBytes = req.url === '/profiles/sync' ? 1024 * 1024 : 65536;
       for await (const chunk of req) {
         size += chunk.length;
-        if (size > 65536) {
+        if (size > maxBodyBytes) {
           throw Error('Preset too large');
         }
         body += chunk;

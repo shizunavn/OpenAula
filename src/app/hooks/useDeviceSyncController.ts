@@ -69,6 +69,7 @@ import {
   type PersistedOpenHeroState,
   type ProfileDraft
 } from '../../state/persistence';
+import type { StoredProfileRecord, WootProfileMetadata } from '../../state/profileTypes';
 import type { SwitchTone } from '../switchAssets';
 /**
  * Coordinates two-way synchronization between the React UI state, browser LocalStorage drafts,
@@ -145,6 +146,12 @@ export type UseDeviceSyncControllerOptions = {
   setProfileNames: Dispatch<SetStateAction<Record<ProfileSlot, string>>>;
   profileDrafts: Partial<Record<ProfileSlot, ProfileDraft>>;
   setProfileDrafts: Dispatch<SetStateAction<Partial<Record<ProfileSlot, ProfileDraft>>>>;
+  onboardMetadata?: Record<ProfileSlot, WootProfileMetadata>;
+  linkedProfiles?: StoredProfileRecord[];
+  inactiveProfiles?: StoredProfileRecord[];
+  autoProfileEnabled?: boolean;
+  revertToDefaultOnFocusLoss?: boolean;
+  notifyOnProfileSwitch?: boolean;
   profileBusyRef: MutableRefObject<boolean>;
   setProfileBusy: Dispatch<SetStateAction<boolean>>;
   saveState: 'idle' | 'sent';
@@ -240,6 +247,12 @@ export function useDeviceSyncController({
   setProfileNames,
   profileDrafts,
   setProfileDrafts,
+  onboardMetadata,
+  linkedProfiles,
+  inactiveProfiles,
+  autoProfileEnabled,
+  revertToDefaultOnFocusLoss,
+  notifyOnProfileSwitch,
   profileBusyRef,
   setProfileBusy,
   setSaveState,
@@ -582,7 +595,13 @@ export function useDeviceSyncController({
       profileDrafts: {
         ...profileDrafts,
         [profileSlot]: currentProfileDraft()
-      }
+      },
+      onboardMetadata,
+      linkedProfiles,
+      inactiveProfiles,
+      autoProfileEnabled,
+      revertToDefaultOnFocusLoss,
+      notifyOnProfileSwitch
     };
   }
   useEffect(() => {
@@ -623,6 +642,12 @@ export function useDeviceSyncController({
     profileNames,
     remapLayers,
     profileDrafts,
+    onboardMetadata,
+    linkedProfiles,
+    inactiveProfiles,
+    autoProfileEnabled,
+    revertToDefaultOnFocusLoss,
+    notifyOnProfileSwitch,
     dirtyKeys,
     dirtyRemaps,
     rgb,

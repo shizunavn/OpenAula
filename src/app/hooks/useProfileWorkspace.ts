@@ -8,8 +8,12 @@ import {
   type RgbProfile
 } from '../../protocol/hero68/rgb';
 import type { ProfileSlot } from '../../protocol/hero68/types';
-import { syncProfilesToBgService } from '../../protocol/bgServiceClient';
+import {
+  fetchBgProfilesHydration,
+  syncProfilesToBgService
+} from '../../protocol/bgServiceClient';
 import type { PersistedOpenHeroState, ProfileDraft } from '../../state/persistence';
+import { resolveHydratedProfilesFromService } from '../../state/profileHydration';
 import {
   createDefaultOnboardMetadata,
   encodeProfileShareCode,
@@ -136,15 +140,74 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
   const [activeProfileUid, setActiveProfileUid] = useState<string>(
     () => `onboard-${persistedState?.profileSlot ?? 1}`
   );
-  const [autoProfileEnabled, setAutoProfileEnabled] = useState<boolean>(
+  const [autoProfileEnabled, setAutoProfileEnabledState] = useState<boolean>(
     () => persistedState?.autoProfileEnabled ?? true
   );
-  const [revertToDefaultOnFocusLoss, setRevertToDefaultOnFocusLoss] = useState<boolean>(
+  const [revertToDefaultOnFocusLoss, setRevertToDefaultOnFocusLossState] = useState<boolean>(
     () => persistedState?.revertToDefaultOnFocusLoss ?? true
   );
-  const [notifyOnProfileSwitch, setNotifyOnProfileSwitch] = useState<boolean>(
+  const [notifyOnProfileSwitch, setNotifyOnProfileSwitchState] = useState<boolean>(
     () => persistedState?.notifyOnProfileSwitch ?? true
   );
+  const [bgHydrated, setBgHydrated] = useState(false);
+  const userMutatedRef = useRef(false);
+  const onboardMetadataRef = useRef(onboardMetadata);
+  onboardMetadataRef.current = onboardMetadata;
+  const linkedProfilesRef = useRef(linkedProfiles);
+  linkedProfilesRef.current = linkedProfiles;
+
+  const setAutoProfileEnabled: typeof setAutoProfileEnabledState = value => {
+    userMutatedRef.current = true;
+    setAutoProfileEnabledState(value);
+  };
+  const setRevertToDefaultOnFocusLoss: typeof setRevertToDefaultOnFocusLossState = value => {
+    userMutatedRef.current = true;
+    setRevertToDefaultOnFocusLossState(value);
+  };
+  const setNotifyOnProfileSwitch: typeof setNotifyOnProfileSwitchState = value => {
+    userMutatedRef.current = true;
+    setNotifyOnProfileSwitchState(value);
+  };
+
+  // Hydrate auto-switch rules from the background service before pushing local state back.
+  // Prevents a fresh browser session (or cleared localStorage) from wiping saved profiles.json rules.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const payload = await fetchBgProfilesHydration();
+        if (cancelled || !payload || userMutatedRef.current) {
+          return;
+        }
+        const resolved = resolveHydratedProfilesFromService({
+          localOnboardMetadata: onboardMetadataRef.current,
+          localLinkedProfiles: linkedProfilesRef.current,
+          serviceProfiles: payload.profiles,
+          serviceAutoProfile: payload.autoProfile
+        });
+        if (resolved.shouldHydrate) {
+          setOnboardMetadata(resolved.onboardMetadata);
+          setLinkedProfiles(resolved.linkedProfiles);
+          if (typeof resolved.autoProfileEnabled === 'boolean') {
+            setAutoProfileEnabledState(resolved.autoProfileEnabled);
+          }
+          if (typeof resolved.revertToDefaultOnFocusLoss === 'boolean') {
+            setRevertToDefaultOnFocusLossState(resolved.revertToDefaultOnFocusLoss);
+          }
+          if (typeof resolved.notifyOnProfileSwitch === 'boolean') {
+            setNotifyOnProfileSwitchState(resolved.notifyOnProfileSwitch);
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setBgHydrated(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Keep onboardMetadata names in sync when profileNames updates from hardware readback
   useEffect(() => {
@@ -158,6 +221,9 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
 
   // Automatically sync Linked + Onboard profiles to Local Background Service whenever rules change
   useEffect(() => {
+    if (!bgHydrated && !userMutatedRef.current) {
+      return;
+    }
     const onboardRecords: StoredProfileRecord[] = ([0, 1, 2, 3] as const).map(slot => ({
       metadata: onboardMetadata[slot],
       draft: profileDrafts[slot] ?? {}
@@ -170,6 +236,7 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
       profiles: [...linkedProfiles, ...onboardRecords]
     });
   }, [
+    bgHydrated,
     autoProfileEnabled,
     revertToDefaultOnFocusLoss,
     notifyOnProfileSwitch,
@@ -179,6 +246,7 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
   ]);
 
   function updateProfileMetadata(updated: WootProfileMetadata) {
+    userMutatedRef.current = true;
     if (updated.uid.startsWith('onboard-')) {
       const slot = Number(updated.uid.replace('onboard-', '')) as ProfileSlot;
       if (slot === 0 || slot === 1 || slot === 2 || slot === 3) {
@@ -237,6 +305,7 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
     metadata: WootProfileMetadata,
     preset: WootPresetDefinition
   ) {
+    userMutatedRef.current = true;
     const draft = buildPresetDraft(preset);
     if (namespace === 'onboard') {
       const targetSlot: ProfileSlot = (Math.max(
@@ -293,6 +362,7 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
   }
 
   function moveProfileToInactive(sourceMeta: WootProfileMetadata, sourceSlot?: ProfileSlot) {
+    userMutatedRef.current = true;
     if (typeof sourceSlot === 'number') {
       const draft = structuredClone(profileDrafts[sourceSlot] ?? {});
       const movedMeta: WootProfileMetadata = {
@@ -318,6 +388,7 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
   }
 
   function moveProfileToOnboard(record: StoredProfileRecord, targetSlot: ProfileSlot = profileSlot) {
+    userMutatedRef.current = true;
     const nextMeta: WootProfileMetadata = {
       ...record.metadata,
       uid: `onboard-${targetSlot}`,
@@ -336,6 +407,7 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
   }
 
   function swapDefaultSlot(slot: ProfileSlot) {
+    userMutatedRef.current = true;
     if (slot === 0) return;
     setOnboardMetadata(prev => {
       const slot0 = { ...prev[slot], uid: 'onboard-0', mappedOnboardSlot: 0 as ProfileSlot };
@@ -359,6 +431,7 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
   }
 
   function deleteStoredProfile(uid: string) {
+    userMutatedRef.current = true;
     if (uid === 'onboard-0') return;
     setLinkedProfiles(prev => prev.filter(p => p.metadata.uid !== uid));
     setInactiveProfiles(prev => prev.filter(p => p.metadata.uid !== uid));
@@ -369,6 +442,7 @@ export function useProfileWorkspace({ persistedState, modelKeyIds }: UseProfileW
   }
 
   function importProfileRecord(record: StoredProfileRecord) {
+    userMutatedRef.current = true;
     if (record.metadata.linkedApps.length > 0) {
       setLinkedProfiles(prev => [...prev, record]);
       setActiveProfileNamespace('linked');

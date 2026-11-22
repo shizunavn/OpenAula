@@ -62,6 +62,14 @@ inline bool analog(int action) {
   return action >= FirstAnalogAction && action < ActionCount;
 }
 
+// HERO 68 XS reports Hall distance in 0.005 mm units (200 units/mm) while standard
+// HERO 68 / HERO 84 boards report in 0.01 mm units (100 units/mm) and can physically
+// exceed 340 units (3.40 mm) when a key is fully bottomed out. Only halve when the
+// board is explicitly identified as HERO 68 XS.
+inline uint16_t normalizeDistanceUnits(uint16_t rawDistance, bool halfScaleUnits) {
+  return halfScaleUnits ? uint16_t((rawDistance + 1) / 2) : rawDistance;
+}
+
 inline std::vector<std::string> split(const std::string& value, char sep) {
   std::vector<std::string> out;
   std::istringstream in(value);

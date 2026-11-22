@@ -194,7 +194,12 @@ export async function syncProfilesToBgService(payload: {
   }
 }
 
-export async function fetchBgProfilesState(): Promise<AutoProfileServiceState | null> {
+export interface BgProfilesHydrationPayload {
+  autoProfile: AutoProfileServiceState;
+  profiles: StoredProfileRecord[];
+}
+
+export async function fetchBgProfilesHydration(): Promise<BgProfilesHydrationPayload | null> {
   try {
     const res = await fetch(`${SERVICE_BASE_URL}/profiles/state`, {
       method: 'GET',
@@ -203,7 +208,10 @@ export async function fetchBgProfilesState(): Promise<AutoProfileServiceState | 
     if (!res.ok) {
       return null;
     }
-    const data = (await res.json()) as { autoProfile?: AutoProfileServiceState };
+    const data = (await res.json()) as {
+      autoProfile?: AutoProfileServiceState;
+      profiles?: StoredProfileRecord[];
+    };
     if (data.autoProfile) {
       currentSnapshot = {
         ...currentSnapshot,
@@ -212,12 +220,20 @@ export async function fetchBgProfilesState(): Promise<AutoProfileServiceState | 
         lastUpdated: Date.now()
       };
       emitChange();
-      return data.autoProfile;
+      return {
+        autoProfile: data.autoProfile,
+        profiles: Array.isArray(data.profiles) ? data.profiles : []
+      };
     }
     return null;
   } catch {
     return null;
   }
+}
+
+export async function fetchBgProfilesState(): Promise<AutoProfileServiceState | null> {
+  const payload = await fetchBgProfilesHydration();
+  return payload?.autoProfile ?? null;
 }
 
 function connectProfileEventsStream() {

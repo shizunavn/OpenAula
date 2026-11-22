@@ -1,3 +1,8 @@
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 #include "../service/native/gamepad_core.h"
 #include "../service/native/gamepad_digital.h"
 #include <cassert>
@@ -55,6 +60,18 @@ int main(){
   r=gamepad::map(c,samples,110,stale,resting);assert(r.buttons==4096);
   samples[44].distance=340;r=gamepad::map(c,samples,110,stale,resting);assert(r.ly==0);
   c.snappy=false;samples[44].distance=175;r=gamepad::map(c,samples,110,stale,resting);assert(r.ly==16384);
+  // Regression test for Issue #4: standard 0.01 mm boards (halfScaleUnits=false) must NOT halve
+  // bottom-out travel above 340 units (3.40 mm); HERO 68 XS (halfScaleUnits=true) halves cleanly.
+  assert(gamepad::normalizeDistanceUnits(340,false)==340);
+  assert(gamepad::normalizeDistanceUnits(341,false)==341);
+  assert(gamepad::normalizeDistanceUnits(380,false)==380);
+  assert(gamepad::normalizeDistanceUnits(680,true)==340);
+  assert(gamepad::normalizeDistanceUnits(700,true)==350);
+  samples[30].distance=gamepad::normalizeDistanceUnits(380,false);samples[44].distance=0;samples[29].distance=gamepad::normalizeDistanceUnits(380,false);
+  r=gamepad::map(c,samples,110,stale,resting);assert(!stale&&r.ly==32767&&r.lt==255);
+  auto slowCurve=gamepad::parse("200;1;0;0;45;0,0|0.7,0.25|1,1;30,15,0.1,3.4");
+  samples[30].distance=gamepad::normalizeDistanceUnits(360,false);
+  r=gamepad::map(slowCurve,samples,110,stale,resting);assert(!stale&&r.ly==32767);
   r=gamepad::map(c,samples,150,stale,resting);assert(stale&&r.ly==0&&r.lt==0&&r.buttons==0);
   assert(gamepad::parse("200;1;0;0;45;0,0|1,1;2,15,0.1,3.4|100,16,0.1,3.4").bindings.size()==2);
   for(const auto& payload:{"200;1;0;0;45;0,0|1,1;96,15,0.1,3.4","200;1;0;0;45;0,0|1,1;30,15,0.1,3.4|30,1,0.1,3.4","200;1;0;0;45;0,0|.5,.8|.7,.1|1,1;","200;1;0;0;45;0,0|1,1;30,15,0.1,4"}){bool rejected=false;try{gamepad::parse(payload);}catch(...){rejected=true;}assert(rejected);}

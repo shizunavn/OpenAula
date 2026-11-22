@@ -242,6 +242,7 @@ export function createGamepadController({
 
   async function configureNativeGamepad(config: GamepadConfiguration, running: boolean) {
     const bridge = getBridge();
+    await bridge.syncModel();
     const actual =
       running && config.suppressMappedKeys && config.keyboardSuppressionMode === 'hook'
         ? await hookConfiguration(config, packet => bridge.request(packet))

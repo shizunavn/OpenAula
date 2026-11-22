@@ -723,9 +723,7 @@ struct BridgeSession {
           !!(word & 0x8000),
           at);
       auto gpSample = hallScheduler.samples[ids[i]];
-      if (hero68XsHall || gpSample.distance > 340) {
-        gpSample.distance = uint16_t((gpSample.distance + 1) / 2);
-      }
+      gpSample.distance = gamepad::normalizeDistanceUnits(gpSample.distance, hero68XsHall);
       gamepadOutput.sample(ids[i], gpSample);
     }
   }
