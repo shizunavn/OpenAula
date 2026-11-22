@@ -68,6 +68,34 @@ npm run test:setup                     # isolated install/update/rollback smoke 
 3. `git tag v<version>` **must** equal `service/version.json` `version`, or `Validate release tag` throws `Tag/version mismatch`.
 4. Pushing a `v*` tag triggers the `release` job: `npm run sign:setup` (needs `RELEASE_SIGNING_KEY`, or a local PEM at `%LOCALAPPDATA%/OpenHero68/`) -> `npm run verify:setup` -> `node tools/publish-service-setup.mjs`, which refuses to run unless `GITHUB_REF=refs/tags/v<version>` and `HEAD` equals the tag commit. The pre-rename `tools/publish-service-release.*` scripts are historical and unused by CI.
 
+## Writing `docs/releases/v<version>.md`
+
+`tools/publish-service-setup.mjs` reads this file verbatim as the **GitHub Release body**, so it is public documentation for the whole project, not a commit log. `src/` and `service/` share one version, so every note must cover **both** the web app and the tray service.
+
+Order the sections by audience:
+
+```markdown
+# OpenAula v<version>
+
+<1-2 sentence summary of what a user gets from this build>
+
+## Web app # user-visible changes, or "No visible UI changes."
+
+## Windows tray service # user-visible changes, or "No functional changes."
+
+## Fixes # one bullet per user-facing bug, in plain language
+
+## Under the hood # files/modules/architecture - optional, keep short
+
+## Validation # what actually ran; state the scope honestly
+```
+
+- Lead with what changed **for the user** ("Smart Slot 3 auto-switching fails during warm-up", not "`computeProfileHallSignature` referenced a removed key table"). Name files and functions only under `Under the hood`.
+- Reference the issue number when a fix comes from one, as `v1.8.1.md` does (`Issue #4`).
+- Never claim hardware verification you did not do. Existing notes close with a "not covered" line when only automated suites ran.
+- Prettier-formatted markdown (`npx prettier --write`); `format:check` does not cover `docs/` so it will not catch drift.
+- After a release is published, correcting the body **never** needs a new tag or rebuild: commit the edited file, then `gh release edit v<version> --notes-file docs/releases/v<version>.md`. Never move or re-create an existing `v*` tag — the signed installer and `OpenAula-update.json` are pinned to its commit. A real code fix needs a new patch version instead.
+
 ## Test quirks
 
 - Tests are `.mjs` files that bundle TypeScript sources with `rolldown` and import them via `data:text/javascript;base64,...`; they use a compact style and are excluded from Prettier.
