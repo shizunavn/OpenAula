@@ -1,7 +1,6 @@
 import {
   useEffect,
   useRef,
-  useState,
   type Dispatch,
   type MutableRefObject,
   type SetStateAction
@@ -16,58 +15,25 @@ import {
   disconnectAllProtocols,
   getActiveConnectedDriver,
   getProtocolDriver,
-  isAnyProtocolConnected
+  isAnyProtocolConnected,
+  type KeyboardProtocolDriver
 } from '../../protocol/driver';
 import { useSlotHistory } from './useSlotHistory';
-import { makeKeyDeviceSettings, saveDeviceConfiguration } from '../../protocol/deviceBridge';
+import { makeKeyDeviceSettings } from '../../protocol/deviceBridge';
 import { gamepadService } from '../../protocol/gamepadService';
-import {
-  mergeAdvanced,
-  readAdvancedBindings,
-  saveAdvancedBindings,
-  type AdvancedBinding
-} from '../../protocol/hero68/advanced';
-import { liveIdle, readActiveProfile, selectProfile } from '../../protocol/hero68/commands';
+import { mergeAdvanced, type AdvancedBinding } from '../../protocol/hero68/advanced';
 import { hero68HallStream, type Hero68HallStreamState } from '../../protocol/hero68/hallStream';
-import {
-  hydrateFromDevice,
-  syncDevicePrecision,
-  type HydratedKeySettings
-} from '../../protocol/hero68/hero68Encoder';
-import { syncHero68MacroLibrary } from '../../protocol/hero68/macroDevice';
+import type { HydratedKeySettings } from '../../protocol/hero68/hero68Encoder';
 import {
   defaultRemapLayers,
   isMacroRemapValue,
-  readOnboardProfileName,
-  readRemapLayers,
   REMAP_LAYERS,
-  saveOnboardProfileName,
-  saveRemapChanges,
   type RemapLayer,
   type RemapLayers
 } from '../../protocol/hero68/remap';
-import {
-  mergeRgb,
-  readRgbProfile,
-  restoreStoredRgb,
-  saveRgbProfile,
-  type RgbChanges,
-  type RgbProfile
-} from '../../protocol/hero68/rgb';
+import { restoreStoredRgb, type RgbChanges, type RgbProfile } from '../../protocol/hero68/rgb';
 import type { PollingRate, ProfileSlot } from '../../protocol/hero68/types';
-import { hero68DeviceManager, type Hero68ConnectionState } from '../../protocol/hero68/webhid';
-import {
-  defaultXsydRgb,
-  hydrateFromXsydDevice,
-  loadXsydSavedRgb,
-  readXsydRemapLayers,
-  readXsydRgbProfile,
-  saveXsydAdvancedBindings,
-  saveXsydRemapChanges,
-  saveXsydRgbProfile,
-  saveXsydSavedRgb,
-  xsydDeviceManager
-} from '../../protocol/xsyd/device';
+import type { Hero68ConnectionState } from '../../protocol/hero68/webhid';
 import { rgbService } from '../../protocol/rgbService';
 import { publishRgbServiceStatus } from '../../protocol/rgbServiceState';
 import { BRAND } from '../../brand';
@@ -79,6 +45,7 @@ import {
 } from '../../state/persistence';
 import type { StoredProfileRecord, WootProfileMetadata } from '../../state/profileTypes';
 import type { SwitchTone } from '../switchAssets';
+
 /**
  * Coordinates two-way synchronization between the React UI state, browser LocalStorage drafts,
  * and the keyboard's 3 onboard profile slots (P1–P3).
@@ -194,6 +161,31 @@ export type UseDeviceSyncControllerOptions = {
   setDeviceActionError: Dispatch<SetStateAction<string | null>>;
   readDeviceGeneralSettings: () => Promise<void>;
 };
+
+async function withHallStreamPaused<T>(
+  driver: KeyboardProtocolDriver,
+  keyIds: readonly string[],
+  work: () => Promise<T>
+): Promise<T> {
+  if (!driver.pausesHallStreamDuringProfileIo) {
+    return work();
+  }
+  const snapshotHall = hero68HallStream.getSnapshot();
+  const shouldResumeHall = snapshotHall.active || snapshotHall.starting;
+  const requestedHallKeys = hero68HallStream.getRequestedKeys();
+  const hallSource = snapshotHall.source;
+  if (shouldResumeHall) {
+    await hero68HallStream.stop();
+  }
+  try {
+    return await work();
+  } finally {
+    if (shouldResumeHall && driver.connected) {
+      await hero68HallStream.start(requestedHallKeys, hallSource, keyIds).catch(() => {});
+    }
+  }
+}
+
 export function useDeviceSyncController({
   deviceConnectionState,
   deviceModel,
@@ -295,6 +287,9 @@ export function useDeviceSyncController({
   const autoConnectStartedRef = useRef(false);
   const profileSwitchAllowedAtRef = useRef(0);
   const isAnyDeviceConnected = () => isAnyProtocolConnected();
+  const resolveActiveDriver = (model: HeroDeviceModelId = deviceModel) =>
+    getActiveConnectedDriver() ?? getProtocolDriver(getBoard(model).protocol);
+
   function currentProfileDraft(): ProfileDraft {
     return {
       selectedKeys: Array.from(selectedKeys),
@@ -332,10 +327,12 @@ export function useDeviceSyncController({
       }
     };
   }
+
   function restoreProfileDraft(draft?: ProfileDraft, keyIds: readonly string[] = modelKeyIds) {
     restoreWorkspaceDraft(draft, keyIds);
     restorePerformanceFromDraft(draft, keyIds);
   }
+
   function applyHistorySnapshot(target: ProfileDraft) {
     const cloned = structuredClone(target);
     if (setSelectedKeys && cloned.selectedKeys?.length) {
@@ -349,9 +346,7 @@ export function useDeviceSyncController({
     setAdvancedBindings(cloned.advancedBindings ?? []);
     if (cloned.rgb) {
       setRgb(cloned.rgb);
-      if (getBoard(deviceModel).protocol === 'xsyd') {
-        saveXsydSavedRgb(profileSlot, cloned.rgb);
-      }
+      getProtocolDriver(getBoard(deviceModel).protocol).cacheSlotRgb?.(profileSlot, cloned.rgb);
     }
     setSaveState('idle');
     setDeviceActionError(null);
@@ -397,6 +392,7 @@ export function useDeviceSyncController({
       selectedSwitchId
     ]
   });
+
   function buildPersistedSnapshot(): PersistedOpenHeroState {
     return {
       activeRail,
@@ -445,6 +441,7 @@ export function useDeviceSyncController({
       notifyOnProfileSwitch
     };
   }
+
   useEffect(() => {
     saveOpenHeroState(buildPersistedSnapshot());
   }, [
@@ -496,6 +493,7 @@ export function useDeviceSyncController({
     advancedBindings,
     advancedBaseline
   ]);
+
   useEffect(() => {
     if (autoConnectStartedRef.current) {
       return;
@@ -512,9 +510,9 @@ export function useDeviceSyncController({
       }
     })();
   }, []);
+
   async function readCurrentProfileSlot(): Promise<ProfileSlot> {
-    const activeDriver =
-      getActiveConnectedDriver() ?? getProtocolDriver(getBoard(deviceModel).protocol);
+    const activeDriver = resolveActiveDriver();
     if (activeDriver.family === 'xsyd') {
       try {
         const slot = await activeDriver.readProfileSlot();
@@ -528,20 +526,15 @@ export function useDeviceSyncController({
     }
     return activeDriver.readProfileSlot();
   }
+
   async function hydrateConnectedDevice() {
     setDeviceActionError(null);
     setDeviceReadState('idle');
     setLoadedProfileSlot(null);
     const activeDriver = getActiveConnectedDriver() ?? getProtocolDriver('bytetech');
     const detectedModel = await activeDriver.detectModel().catch(() => null);
-    const unitMm =
-      !xsydDeviceManager.connected && hero68DeviceManager.connected
-        ? await syncDevicePrecision(hero68DeviceManager)
-        : 0.01;
-    const targetModel: HeroDeviceModelId =
-      detectedModel === 'hero68' && (hero68DeviceManager.getSnapshot().isXs || unitMm === 0.005)
-        ? 'hero68Xs'
-        : (detectedModel ?? deviceModel);
+    const unitMm = activeDriver.connected ? await activeDriver.syncPrecision() : 0.01;
+    const targetModel = activeDriver.resolveConnectedModel(detectedModel, deviceModel, unitMm);
     setDeviceActionError(
       detectedModel
         ? null
@@ -568,6 +561,7 @@ export function useDeviceSyncController({
     await handleReadFromDevice(activeSlot, draft, targetModel);
     await readDeviceGeneralSettings();
   }
+
   async function handleDeviceConnection() {
     setDeviceActionError(null);
     setDeviceReadState('idle');
@@ -577,9 +571,8 @@ export function useDeviceSyncController({
           await hero68HallStream.stop();
         }
         if (rgbStreamActive) {
-          if (hero68DeviceManager.connected && !hero68DeviceManager.viaService) {
-            await hero68DeviceManager.send(liveIdle()).catch(() => {});
-          }
+          const activeDriver = getActiveConnectedDriver();
+          await activeDriver?.sendLiveIdle();
           setRgbStreamActive(false);
         }
         await disconnectAllProtocols();
@@ -607,6 +600,7 @@ export function useDeviceSyncController({
       setDeviceActionError(error instanceof Error ? error.message : String(error));
     }
   }
+
   async function handleReadFromDevice(
     slot: ProfileSlot = profileSlot,
     draft?: ProfileDraft,
@@ -628,6 +622,7 @@ export function useDeviceSyncController({
       setProfileBusy(false);
     }
   }
+
   async function readAndApplyProfile(
     slot: ProfileSlot,
     draft?: ProfileDraft,
@@ -646,169 +641,94 @@ export function useDeviceSyncController({
       );
       return false;
     }
-    const unitMm =
-      !xsydDeviceManager.connected && hero68DeviceManager.connected
-        ? await syncDevicePrecision(hero68DeviceManager)
-        : 0.01;
-    targetModel =
-      detectedModel === 'hero68' && (hero68DeviceManager.getSnapshot().isXs || unitMm === 0.005)
-        ? 'hero68Xs'
-        : detectedModel;
+    const unitMm = activeDriver.connected ? await activeDriver.syncPrecision() : 0.01;
+    targetModel = activeDriver.resolveConnectedModel(detectedModel, targetModel, unitMm);
     if (targetModel !== deviceModel) {
       selectDeviceModel(targetModel);
     }
     const activeKeyIds = heroLayout(targetModel).keyIds;
     try {
-      if (getBoard(targetModel).protocol === 'xsyd' && xsydDeviceManager.connected) {
-        const snapshotHall = hero68HallStream.getSnapshot();
-        const shouldResumeHall = snapshotHall.active || snapshotHall.starting;
-        const requestedHallKeys = hero68HallStream.getRequestedKeys();
-        const hallSource = snapshotHall.source;
-        if (shouldResumeHall) {
-          await hero68HallStream.stop();
+      return await withHallStreamPaused(activeDriver, activeKeyIds, async () => {
+        if (!activeDriver.pausesHallStreamDuringProfileIo) {
+          await activeDriver.syncPrecision();
         }
-        try {
-          const hydrated = await hydrateFromXsydDevice(xsydDeviceManager, slot, activeKeyIds);
-          const mappings = await readXsydRemapLayers(xsydDeviceManager, activeKeyIds);
-          const savedSlotRgb = loadXsydSavedRgb(slot);
-          const rawFreshRgb = await readXsydRgbProfile(xsydDeviceManager, activeKeyIds).catch(
-            () => savedSlotRgb ?? defaultXsydRgb(activeKeyIds)
-          );
-          const freshRgb = savedSlotRgb
-            ? {
-                ...rawFreshRgb,
-                keys: savedSlotRgb.keys ?? rawFreshRgb.keys,
-                colors: {
-                  ...rawFreshRgb.colors,
-                  ...(savedSlotRgb.colors ?? {})
-                },
-                ...(savedSlotRgb.custom ? { custom: savedSlotRgb.custom } : {})
-              }
-            : rawFreshRgb;
+        const hydrated = await activeDriver.hydrate(slot, activeKeyIds, targetModel);
+        const mappings = await activeDriver.readRemapLayers(activeKeyIds, targetModel);
+        const hydratedRgb = await activeDriver.readRgbProfile(slot, activeKeyIds, targetModel, {
+          rgb: draft?.rgb,
+          rgbDirty: draft?.rgbDirty
+        });
+        if (activeDriver.readAdvancedBindings) {
+          setAdvancedHydratedSlot(null);
+          try {
+            const freshAdvanced = await activeDriver.readAdvancedBindings(targetModel);
+            setAdvancedBindings(
+              mergeAdvanced(freshAdvanced, draft?.advancedBindings, draft?.advancedBaseline)
+            );
+            setAdvancedBaseline(freshAdvanced);
+            setAdvancedHydratedSlot(slot);
+            setAdvancedReadError(null);
+          } catch (error) {
+            setAdvancedReadError(error instanceof Error ? error.message : String(error));
+          }
+        } else {
           setAdvancedHydratedSlot(slot);
           setAdvancedReadError(null);
           if (draft?.advancedBindings) {
             setAdvancedBindings(draft.advancedBindings);
           }
-          setRgbBaseline(freshRgb);
-          setRgb(savedSlotRgb ? mergeRgb(freshRgb, savedSlotRgb) : freshRgb);
-          setRgbHydratedSlot(slot);
-          remapBaselineRef.current = structuredClone(mappings);
-          applyHydratedPerformance(hydrated, draft);
-          for (const layer of REMAP_LAYERS) {
-            for (const keyId of activeKeyIds) {
-              if (
-                draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) &&
-                draft.remapLayers?.[layer][keyId] !== undefined
-              ) {
-                mappings[layer][keyId] = draft.remapLayers[layer][keyId];
-              }
+        }
+        setRgbBaseline(hydratedRgb.baseline);
+        setRgb(hydratedRgb.current);
+        setRgbHydratedSlot(slot);
+        remapBaselineRef.current = structuredClone(mappings);
+        if (activeDriver.readProfileName) {
+          const names: Partial<Record<ProfileSlot, string>> = {};
+          for (const nameSlot of REMAP_LAYERS) {
+            try {
+              names[nameSlot] =
+                (await activeDriver.readProfileName(nameSlot)) ?? `Onboard Profile ${nameSlot}`;
+            } catch {} /* performance/remap reads remain authoritative */
+          }
+          setProfileNames(previous => ({
+            ...previous,
+            ...names
+          }));
+        }
+        applyHydratedPerformance(hydrated, draft);
+        for (const layer of REMAP_LAYERS) {
+          for (const keyId of activeKeyIds) {
+            if (
+              draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) &&
+              draft.remapLayers?.[layer][keyId] !== undefined
+            ) {
+              mappings[layer][keyId] = draft.remapLayers[layer][keyId];
             }
           }
-          setRemapLayers(mappings);
-          setDirtyRemaps(
-            new Set(
-              (draft?.dirtyRemaps ?? []).filter(change => {
-                const [layer, keyId] = change.split(':');
-                return (
-                  mappings[Number(layer) as RemapLayer]?.[keyId] !==
-                  remapBaselineRef.current[Number(layer) as RemapLayer]?.[keyId]
-                );
-              })
-            )
-          );
-          suppressHistoryRef.current = true;
-          resetSlotHistoryBaseline(slot);
-          setLoadedProfileSlot(slot);
-          setSaveState('idle');
-          setDeviceReadState('success');
-          window.setTimeout(
-            () => setDeviceReadState(current => (current === 'success' ? 'idle' : current)),
-            1800
-          );
-          return true;
-        } finally {
-          if (shouldResumeHall && xsydDeviceManager.connected) {
-            await hero68HallStream
-              .start(requestedHallKeys, hallSource, activeKeyIds)
-              .catch(() => {});
-          }
         }
-      }
-      await syncDevicePrecision(hero68DeviceManager);
-      const hydrated = await hydrateFromDevice(
-        hero68DeviceManager,
-        slot,
-        activeKeyIds,
-        targetModel
-      );
-      const mappings = await readRemapLayers(hero68DeviceManager, activeKeyIds, targetModel);
-      const freshRgb = await readRgbProfile(hero68DeviceManager, activeKeyIds, targetModel);
-      setAdvancedHydratedSlot(null);
-      try {
-        const freshAdvanced = await readAdvancedBindings(hero68DeviceManager, targetModel);
-        setAdvancedBindings(
-          mergeAdvanced(freshAdvanced, draft?.advancedBindings, draft?.advancedBaseline)
+        setRemapLayers(mappings);
+        setDirtyRemaps(
+          new Set(
+            (draft?.dirtyRemaps ?? []).filter(change => {
+              const [layer, keyId] = change.split(':');
+              return (
+                mappings[Number(layer) as RemapLayer]?.[keyId] !==
+                remapBaselineRef.current[Number(layer) as RemapLayer]?.[keyId]
+              );
+            })
+          )
         );
-        setAdvancedBaseline(freshAdvanced);
-        setAdvancedHydratedSlot(slot);
-        setAdvancedReadError(null);
-      } catch (error) {
-        setAdvancedReadError(error instanceof Error ? error.message : String(error));
-      }
-      const baselineRgb = draft?.rgb?.custom
-        ? { ...freshRgb, custom: structuredClone(draft.rgb.custom) }
-        : freshRgb;
-      setRgbBaseline(baselineRgb);
-      setRgb(mergeRgb(freshRgb, draft?.rgb, draft?.rgbDirty));
-      setRgbHydratedSlot(slot);
-      remapBaselineRef.current = structuredClone(mappings);
-      const names: Partial<Record<ProfileSlot, string>> = {};
-      for (const nameSlot of REMAP_LAYERS) {
-        try {
-          names[nameSlot] =
-            (await readOnboardProfileName(hero68DeviceManager, nameSlot)) ??
-            `Onboard Profile ${nameSlot}`;
-        } catch {} /* performance/remap reads remain authoritative */
-      }
-
-      setProfileNames(previous => ({
-        ...previous,
-        ...names
-      }));
-      applyHydratedPerformance(hydrated, draft);
-      for (const layer of REMAP_LAYERS) {
-        for (const keyId of activeKeyIds) {
-          if (
-            draft?.dirtyRemaps?.includes(`${layer}:${keyId}`) &&
-            draft.remapLayers?.[layer][keyId] !== undefined
-          ) {
-            mappings[layer][keyId] = draft.remapLayers[layer][keyId];
-          }
-        }
-      }
-      setRemapLayers(mappings);
-      setDirtyRemaps(
-        new Set(
-          (draft?.dirtyRemaps ?? []).filter(change => {
-            const [layer, keyId] = change.split(':');
-            return (
-              mappings[Number(layer) as RemapLayer]?.[keyId] !==
-              remapBaselineRef.current[Number(layer) as RemapLayer]?.[keyId]
-            );
-          })
-        )
-      );
-      suppressHistoryRef.current = true;
-      resetSlotHistoryBaseline(slot);
-      setLoadedProfileSlot(slot);
-      setSaveState('idle');
-      setDeviceReadState('success');
-      window.setTimeout(
-        () => setDeviceReadState(current => (current === 'success' ? 'idle' : current)),
-        1800
-      );
-      return true;
+        suppressHistoryRef.current = true;
+        resetSlotHistoryBaseline(slot);
+        setLoadedProfileSlot(slot);
+        setSaveState('idle');
+        setDeviceReadState('success');
+        window.setTimeout(
+          () => setDeviceReadState(current => (current === 'success' ? 'idle' : current)),
+          1800
+        );
+        return true;
+      });
     } catch (error) {
       setLoadedProfileSlot(null);
       setDeviceReadState('error');
@@ -816,6 +736,7 @@ export function useDeviceSyncController({
       return false;
     }
   }
+
   async function selectOnboardProfile(slot: ProfileSlot) {
     if (profileBusyRef.current || slot === profileSlot) {
       return;
@@ -825,7 +746,8 @@ export function useDeviceSyncController({
       return;
     }
     profileSwitchAllowedAtRef.current = now + 200;
-    if (hero68DeviceManager.viaService) {
+    const activeDriver = getActiveConnectedDriver();
+    if (activeDriver?.viaService) {
       await gamepadService.profile(slot).catch(e => setDeviceActionError(String(e)));
     }
     setProfileDrafts(previous => ({
@@ -843,11 +765,13 @@ export function useDeviceSyncController({
       await handleReadFromDevice(slot, draft);
     }
   }
+
   async function renameProfile(name: string) {
     if (profileBusyRef.current) {
       return false;
     }
-    if (xsydDeviceManager.connected || !hero68DeviceManager.connected) {
+    const activeDriver = getActiveConnectedDriver();
+    if (!activeDriver?.saveProfileName) {
       setProfileNames(previous => ({
         ...previous,
         [profileSlot]: name
@@ -861,7 +785,7 @@ export function useDeviceSyncController({
     setProfileBusy(true);
     setDeviceActionError(null);
     try {
-      await saveOnboardProfileName(hero68DeviceManager, profileSlot, name);
+      await activeDriver.saveProfileName(profileSlot, name);
       setProfileNames(previous => ({
         ...previous,
         [profileSlot]: name
@@ -875,6 +799,7 @@ export function useDeviceSyncController({
       setProfileBusy(false);
     }
   }
+
   function exportProfile() {
     const data = {
       schema: `${BRAND.exportSchemaPrefix}-profile`,
@@ -894,6 +819,7 @@ export function useDeviceSyncController({
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+
   function resetProfileToDefaults(): () => void {
     const previousDraft = structuredClone(currentProfileDraft());
     restorePerformanceFromDraft(undefined, modelKeyIds);
@@ -930,6 +856,7 @@ export function useDeviceSyncController({
       setSaveState('idle');
     };
   }
+
   function discardProfileDraftChanges() {
     if (profileBusyRef.current) {
       return;
@@ -946,11 +873,13 @@ export function useDeviceSyncController({
     setDirtyKeys(new Set());
     setSaveState('idle');
   }
+
   async function handleSaveAll() {
     if (profileBusyRef.current) {
       return;
     }
-    if (!isAnyDeviceConnected()) {
+    const activeDriver = getActiveConnectedDriver();
+    if (!activeDriver) {
       setDeviceActionError('Connect HERO68 before saving.');
       return;
     }
@@ -958,12 +887,10 @@ export function useDeviceSyncController({
       setDeviceActionError(
         `Profile ${profileSlot} has not been read from the keyboard yet. Read it before saving to avoid overwriting unknown per-key values.`
       );
-    }
-    if (loadedProfileSlot !== profileSlot) {
       return;
     }
     const customRgbChanged =
-      getBoard(deviceModel).protocol === 'xsyd' &&
+      activeDriver.family === 'xsyd' &&
       JSON.stringify(rgb.custom ?? null) !== JSON.stringify(rgbBaseline.custom ?? null);
     if (
       dirtyKeys.size === 0 &&
@@ -980,7 +907,7 @@ export function useDeviceSyncController({
       );
       return;
     }
-    if (rgbHydratedSlot !== profileSlot && getBoard(deviceModel).protocol !== 'xsyd') {
+    if (rgbHydratedSlot !== profileSlot && activeDriver.requiresRgbHydrationBeforeSave) {
       setDeviceActionError('Read RGB from this profile before saving.');
       return;
     }
@@ -1012,155 +939,69 @@ export function useDeviceSyncController({
       profileBusyRef.current = true;
       setProfileBusy(true);
       setDeviceActionError(null);
-      if (getBoard(deviceModel).protocol === 'xsyd' && xsydDeviceManager.connected) {
-        const snapshotHall = hero68HallStream.getSnapshot();
-        const shouldResumeHall = snapshotHall.active || snapshotHall.starting;
-        const requestedHallKeys = hero68HallStream.getRequestedKeys();
-        const hallSource = snapshotHall.source;
-        if (shouldResumeHall) {
-          await hero68HallStream.stop();
+      await withHallStreamPaused(activeDriver, modelKeyIds, async () => {
+        if (dirtyKeys.size) {
+          const readback = await activeDriver.savePerformanceAndVerify(snapshot);
+          applyHydratedPerformance(readback);
         }
-        try {
-          if (dirtyKeys.size) {
-            await saveDeviceConfiguration(snapshot);
-            const readback = await hydrateFromXsydDevice(xsydDeviceManager, profileSlot, [
-              ...dirtyKeys
-            ]);
-            applyHydratedPerformance(readback);
+        if (dirtyRemaps.size) {
+          const hasMacroRemap = [...dirtyRemaps].some(change => {
+            const [layerText, keyId] = change.split(':');
+            const remapLayer = Number(layerText) as RemapLayer;
+            return isMacroRemapValue(remapLayers[remapLayer]?.[keyId]);
+          });
+          if (hasMacroRemap && activeDriver.syncMacroLibrary) {
+            const macroLibrary = loadMacroLibrary();
+            if (!macroLibrary.length) {
+              throw new Error(
+                'This mapping references a macro, but the local macro library is empty.'
+              );
+            }
+            await activeDriver.syncMacroLibrary(profileSlot, macroLibrary);
           }
-          if (dirtyRemaps.size) {
-            await saveXsydRemapChanges(xsydDeviceManager, profileSlot, remapLayers, dirtyRemaps);
+          await activeDriver.saveRemapChanges(
+            profileSlot,
+            remapLayers,
+            dirtyRemaps,
+            modelKeyIds,
+            deviceModel
+          );
+        }
+        if (advancedPending) {
+          const verified = await activeDriver.saveAdvancedBindings(
+            profileSlot,
+            advancedBindings,
+            advancedBaseline,
+            deviceModel
+          );
+          setAdvancedBaseline(verified);
+        }
+        if ((rgbPending || customRgbChanged) && !tachyon) {
+          if (activePage === 'rgb' && activeRgbTab === 'onboard' && activeDriver.viaService) {
+            const result = await rgbService.mode('onboard');
+            publishRgbServiceStatus(result);
           }
-          if (advancedPending) {
-            const verified = await saveXsydAdvancedBindings(
-              xsydDeviceManager,
-              profileSlot,
-              advancedBindings,
-              advancedBaseline
-            );
-            setAdvancedBaseline(verified);
-          }
-          if ((rgbPending || customRgbChanged) && !tachyon) {
-            const savedRgb = await saveXsydRgbProfile(
-              xsydDeviceManager,
-              rgb,
-              rgbBaseline,
-              setRgbBaseline,
-              modelKeyIds,
-              profileSlot
-            );
+          const savedRgb = await activeDriver.saveRgb(rgb, {
+            baseline: rgbBaseline,
+            slot: profileSlot,
+            keyIds: modelKeyIds,
+            model: deviceModel,
+            onBaselineUpdate: setRgbBaseline
+          });
+          if (activeDriver.family === 'xsyd') {
             setRgb(savedRgb);
           }
-          if (dirtyKeys.size) {
-            setDirtyKeys(new Set());
-          }
-          if (dirtyRemaps.size) {
-            remapBaselineRef.current = structuredClone(remapLayers);
-            setDirtyRemaps(new Set());
-          }
-          setSaveState('sent');
-          window.setTimeout(() => setSaveState('idle'), 1200);
-          return;
-        } finally {
-          if (shouldResumeHall && xsydDeviceManager.connected) {
-            await hero68HallStream
-              .start(requestedHallKeys, hallSource, modelKeyIds)
-              .catch(() => {});
-          }
         }
-      }
-      if (dirtyKeys.size) {
-        await saveDeviceConfiguration(snapshot);
-        const readback = await hydrateFromDevice(
-          hero68DeviceManager,
-          profileSlot,
-          [...dirtyKeys],
-          deviceModel
-        );
-        const near = (actual: number | undefined, wanted: number) =>
-          actual !== undefined && Math.abs(actual - wanted) <= 0.025;
-        for (const expected of snapshot.keys) {
-          const actual = readback.get(expected.keyId);
-          const expectedRelease = expected.rapidTriggerEnabled
-            ? expected.splitSensitivity
-              ? expected.releaseSensitivityMm
-              : expected.rapidSensitivityMm
-            : 0;
-          const expectedPress = expected.rapidTriggerEnabled
-            ? expected.splitSensitivity
-              ? expected.pressSensitivityMm
-              : expected.rapidSensitivityMm
-            : 0;
-          const rtMismatch =
-            expected.rapidTriggerEnabled &&
-            (!near(actual?.pressSensitivityMm, expectedPress) ||
-              !near(actual?.releaseSensitivityMm, expectedRelease));
-          if (
-            !actual ||
-            !near(actual.actuationMm, expected.actuationMm) ||
-            actual.rapidTriggerEnabled !== expected.rapidTriggerEnabled ||
-            rtMismatch
-          ) {
-            throw Error(`Key setting readback mismatch: ${expected.keyId}`);
-          }
+        if (dirtyKeys.size) {
+          setDirtyKeys(new Set());
         }
-        applyHydratedPerformance(readback);
-      }
-      if (
-        [...dirtyRemaps].some(change => {
-          const [layerText, keyId] = change.split(':');
-          const remapLayer = Number(layerText) as RemapLayer;
-          return isMacroRemapValue(remapLayers[remapLayer]?.[keyId]);
-        })
-      ) {
-        const macroLibrary = loadMacroLibrary();
-        if (!macroLibrary.length) {
-          throw new Error('This mapping references a macro, but the local macro library is empty.');
+        if (dirtyRemaps.size) {
+          remapBaselineRef.current = structuredClone(remapLayers);
+          setDirtyRemaps(new Set());
         }
-        await hero68DeviceManager.request(selectProfile(profileSlot), 0x10, 0);
-        await syncHero68MacroLibrary(hero68DeviceManager, macroLibrary);
-      }
-      await saveRemapChanges(
-        hero68DeviceManager,
-        profileSlot,
-        remapLayers,
-        dirtyRemaps,
-        modelKeyIds,
-        deviceModel
-      );
-      if (advancedPending) {
-        const verified = await saveAdvancedBindings(
-          hero68DeviceManager,
-          profileSlot,
-          advancedBindings,
-          advancedBaseline,
-          deviceModel
-        );
-        setAdvancedBaseline(verified);
-      }
-      if ((rgbPending || customRgbChanged) && !tachyon) {
-        if (activePage === 'rgb' && activeRgbTab === 'onboard' && hero68DeviceManager.viaService) {
-          const result = await rgbService.mode('onboard');
-          publishRgbServiceStatus(result);
-        }
-        await saveRgbProfile(
-          hero68DeviceManager,
-          rgb,
-          rgbBaseline,
-          setRgbBaseline,
-          modelKeyIds,
-          deviceModel
-        );
-      }
-      if (dirtyKeys.size) {
-        setDirtyKeys(new Set());
-      }
-      if (dirtyRemaps.size) {
-        remapBaselineRef.current = structuredClone(remapLayers);
-        setDirtyRemaps(new Set());
-      }
-      setSaveState('sent');
-      window.setTimeout(() => setSaveState('idle'), 1200);
+        setSaveState('sent');
+        window.setTimeout(() => setSaveState('idle'), 1200);
+      });
     } catch (error) {
       setSaveState('idle');
       setDeviceActionError(error instanceof Error ? error.message : String(error));
@@ -1169,6 +1010,7 @@ export function useDeviceSyncController({
       setProfileBusy(false);
     }
   }
+
   return {
     handleDeviceConnection,
     handleReadFromDevice,

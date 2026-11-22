@@ -1,37 +1,13 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowDown,
-  ArrowUp,
-  Download,
-  Layers,
-  Plus,
-  Play,
-  Square,
-  RotateCcw,
-  Sparkles,
-  Trash2,
-  Waves,
-  Save
-} from 'lucide-react';
-import Hero68Preview from './Hero68Preview';
-import RgbColorPicker from './RgbColorPicker';
-import RgbKeyPaintTools, { RgbKeySelectionTools } from './RgbKeyPaintTools';
-import { RgbPreviewPanel, RgbToolbarSlot } from './RgbWorkspace';
-import { UndoRedoButtons } from '../app/components/UndoRedoButtons';
-import {
-  CUSTOM_RGB_DIRECTIONS,
   CUSTOM_RGB_EFFECTS,
   CustomRgbEngine,
-  MAX_RGB_LAYERS,
   RGB_EFFECT_METADATA,
-  RGB_GRADIENT_PALETTES,
   createRgbLayer,
   restoreCustomRgb,
   type CustomRgbConfiguration,
-  type CustomRgbDirection,
   type CustomRgbEffect,
-  type CustomRgbLayer,
-  type RgbGradientPalette
+  type CustomRgbLayer
 } from '../keyboard/customRgb';
 import { HERO68_KEY_IDS } from '../keyboard/hero68Layout';
 import { isWin68HeMaxModel } from '../keyboard/devices';
@@ -56,7 +32,6 @@ import {
   normalizeXsydBrightness,
   saveXsydSavedRgb,
   useXsydDevice,
-  XSYD_COLOR_SLOTS,
   xsydDeviceManager,
   XsydCustomRgbStreamer
 } from '../protocol/xsyd/device';
@@ -72,17 +47,17 @@ import { useI18n } from '../i18n';
 const hex = (color: RgbColor) => '#' + color.map(c => c.toString(16).padStart(2, '0')).join('');
 const rgb = (value: string): RgbColor =>
   [1, 3, 5].map(i => parseInt(value.slice(i, i + 2), 16)) as RgbColor;
-const normalizeDirection9 = (
-  dir?: CustomRgbDirection
-): (typeof CUSTOM_RGB_DIRECTIONS)[number]['id'] => {
-  if (dir === 'horizontal') return 'right';
-  if (dir === 'vertical') return 'bottom';
-  if (dir && CUSTOM_RGB_DIRECTIONS.some(d => d.id === dir)) {
-    return dir;
-  }
-  return 'left';
-};
-import { Slider } from './custom-rgb/Slider';
+import { CustomRgbToolbar } from './custom-rgb/CustomRgbToolbar';
+import { CustomRgbPreviewSection } from './custom-rgb/CustomRgbPreviewSection';
+import { CustomRgbLayerStack } from './custom-rgb/CustomRgbLayerStack';
+import { CustomRgbEffectSelector } from './custom-rgb/CustomRgbEffectSelector';
+import { CustomRgbBaseParameters } from './custom-rgb/CustomRgbBaseParameters';
+import { CustomRgbLayerParameters } from './custom-rgb/CustomRgbLayerParameters';
+import {
+  CustomRgbLockOverlay,
+  CustomRgbServiceDetails
+} from './custom-rgb/CustomRgbServiceDetails';
+import { SavedRgbPresetsSection } from './rgb/SavedRgbPresetsSection';
 type Props = {
   value: RgbProfile;
   onChange: (v: RgbProfile) => void;
@@ -149,7 +124,7 @@ export default function CustomRgbEditor({
   const engineRef = useRef<CustomRgbEngine | null>(null);
   const streamerRef = useRef<XsydCustomRgbStreamer | null>(null);
   const replayRef = useRef(-1);
-  const { status, checking, applied, session, updateRequired } = playback;
+  const { status, checking, applied, session } = playback;
   function previewDemo(enabled: boolean) {
     playback.demo(enabled);
     setDemo(enabled);
@@ -713,259 +688,94 @@ export default function CustomRgbEditor({
   const layerHex = layer ? hex(layer.color) : '#ffffff';
   return (
     <div className="custom-rgb-gate" hidden={!visible}>
-      <RgbToolbarSlot visible={visible}>
-        <span
-          className="rgb-sync-note"
-          data-attention={
-            playback.reconnecting ||
-            playback.conflict ||
-            (!applied && status?.mode === 'custom') ||
-            undefined
-          }
-          role="status"
-        >
-          {playback.reconnecting
-            ? tr('Reconnecting to background app…')
-            : playback.conflict
-              ? tr('Changes paused')
-              : applied
-                ? tr(playback.syncing ? 'Syncing changes…' : 'Auto sync')
-                : status?.mode === 'custom'
-                  ? tr('Joining running Custom…')
-                  : demo
-                    ? tr('Simulation')
-                    : null}
-        </span>
-        {onUndo && onRedo && (
-          <UndoRedoButtons
-            canUndo={canUndo}
-            canRedo={canRedo}
-            onUndo={onUndo}
-            onRedo={onRedo}
-            disabled={disabled}
-            enableShortcuts={visible && enableUndoShortcuts}
-          />
-        )}
-        {!applied && (
-          <button
-            className="apply-button"
-            disabled={disabled || (!isWin68 && (checking || locked))}
-            onClick={() =>
-              void playback.start().then(ok => {
-                if (ok) {
-                  previewDemo(false);
-                }
-              })
+      <CustomRgbToolbar
+        visible={visible}
+        isWin68={isWin68}
+        demo={demo}
+        disabled={disabled}
+        locked={locked}
+        playback={playback}
+        previewError={previewError}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        enableUndoShortcuts={enableUndoShortcuts}
+        onUndo={onUndo}
+        onRedo={onRedo}
+        onStartCustom={() =>
+          void playback.start().then(ok => {
+            if (ok) {
+              previewDemo(false);
             }
-          >
-            <Play size={15} />
-            {playback.busy
-              ? tr('Working…')
-              : !isWin68 && updateRequired
-                ? tr('Update app')
-                : tr('Start Custom')}
-          </button>
-        )}
-        {(status?.enabled || (isWin68 && applied)) && (
-          <button
-            className="secondary-button"
-            title={tr('Return to onboard')}
-            disabled={disabled}
-            onClick={() => void playback.onboard()}
-          >
-            <Square size={14} />
-            {tr('Back to onboard')}
-          </button>
-        )}
-        {onSaveRgbPreset && (
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={disabled}
-            onClick={onSaveRgbPreset}
-          >
-            <Save size={15} /> {savedNotice ?? tr('Save')}
-          </button>
-        )}
-      </RgbToolbarSlot>
-      <RgbToolbarSlot visible={visible} notice>
-        {playback.backup && (
-          <div className="rgb-draft-recovery">
-            <span>
-              {tr(
-                playback.conflict
-                  ? 'Changes paused · restore your draft to continue'
-                  : 'Your previous draft is available.'
-              )}
-            </span>
-            <button
-              className="secondary-button"
-              disabled={disabled}
-              onClick={playback.restoreDraft}
-            >
-              {tr('Restore draft')}
-            </button>
-          </div>
-        )}
-        {(playback.error || previewError) && (
-          <p className="stream-error" role="alert">
-            {tr(playback.error || previewError || '')}
-          </p>
-        )}
-        {status?.enabled &&
-          status.mode === 'custom' &&
-          status.lastError &&
-          !(isWin68 && status.lastError.includes('RGB write failed')) && (
-            <p className="stream-error" role="alert">
-              {status.lastError}
-            </p>
-          )}
-      </RgbToolbarSlot>
+          })
+        }
+        onSaveRgbPreset={onSaveRgbPreset}
+        savedNotice={savedNotice}
+      />
       <div className={`custom-rgb-content ${locked ? 'is-locked' : ''}`} inert={locked}>
-        <RgbPreviewPanel
-          source={
-            demo
-              ? tr('Simulation')
-              : live
-                ? synced
-                  ? tr('Live keyboard')
-                  : tr('Waiting for live frames')
-                : tr('Draft preview')
-          }
-          hint={
-            perKey
-              ? tr('Select keys on the preview to paint.')
-              : layer
-                ? tr('Select the LED region for this layer.')
-                : tr('Side lights keep their onboard effect.')
-          }
-          actions={
-            !live && samplePreview ? (
-              <button
-                className="secondary-button"
-                disabled={disabled}
-                onClick={() => setReplay(n => n + 1)}
-              >
-                <RotateCcw size={15} />
-                {tr('Try effect')}
-              </button>
-            ) : undefined
-          }
-          footer={
-            perKey ? (
-              <RgbKeyPaintTools
-                selected={selected}
-                onSelect={setSelected}
-                color={paint}
-                onColor={setPaint}
-                disabled={disabled}
-                onPaint={() => {
-                  const colors = {
-                    ...value.colors
-                  };
-                  const paintRgb = rgb(paint);
-                  for (const id of selected) {
-                    colors[id] = paintRgb;
-                    if (isWin68 && xsydDeviceManager.connected && !live) {
-                      const kv = keyValueForCode(id);
-                      if (kv !== undefined) {
-                        void xsydDeviceManager
-                          .request(buildXsydPerKeyWriteFrame(kv, paintRgb))
-                          .catch(() => {});
-                      }
-                    }
-                  }
-                  const currentMode = config.base.mode;
-                  const canonical = normalizeGamingPresetMode(currentMode);
-                  const nextPresetColors: Record<number, Record<string, RgbColor>> = {
-                    ...(value.presetColors ?? {}),
-                    ...(config.presetColors ?? {}),
-                    [canonical]: { ...colors }
-                  };
-                  const nextConfig: CustomRgbConfiguration = {
-                    ...config,
-                    presetColors: nextPresetColors
-                  };
-                  const nextProfile: RgbProfile = {
-                    ...value,
-                    keys: {
-                      ...value.keys,
-                      mode: currentMode
-                    },
-                    colors,
-                    presetColors: nextPresetColors,
-                    custom: nextConfig
-                  };
-                  onChange(nextProfile);
-                  if (isWin68 && slot !== undefined) {
-                    saveXsydSavedRgb(slot, nextProfile);
-                  }
-                }}
-              />
-            ) : layer && !adding ? (
-              <div className="rgb-key-scope-tools">
-                <RgbKeySelectionTools
-                  selected={selected}
-                  onSelect={setSelected}
-                  disabled={disabled}
-                />
-                <div className="rgb-key-scope-actions">
-                  <small>
-                    {tr('Layer affects {count}', {
-                      count: layer.keys.length
-                    })}
-                  </small>
-                  <button
-                    className="apply-button"
-                    disabled={disabled || !selected.size}
-                    onClick={() =>
-                      patchLayer({
-                        keys: [...selected]
-                      })
-                    }
-                  >
-                    {tr('Use selection')}
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={disabled}
-                    onClick={() =>
-                      patchLayer({
-                        keys: [...modelKeyIds]
-                      })
-                    }
-                  >
-                    {tr('Affect all keys')}
-                  </button>
-                </div>
-              </div>
-            ) : undefined
-          }
-        >
-          <Hero68Preview
-            advancedBindings={advancedBindings}
-            showAdvancedIcons={false}
-            selectedKeys={selectable ? selected : new Set()}
-            onToggleKey={toggle}
-            onSelectKeys={setSelected}
-            lightingFrame={frame.keys}
-            lightingSource="local"
-            selectionEnabled={selectable}
-          />
-          {!isWin68 && (
-            <div className="rgb-side-preview" aria-label={tr('18 side light positions')}>
-              {(frame.side.length ? frame.side : Array(18).fill('#35393b')).map((color, i) => (
-                <span
-                  key={i}
-                  style={{
-                    background: color,
-                    color
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </RgbPreviewPanel>
+        <CustomRgbPreviewSection
+          demo={demo}
+          live={live}
+          synced={synced}
+          perKey={perKey}
+          layer={layer}
+          adding={adding}
+          samplePreview={samplePreview}
+          disabled={disabled}
+          isWin68={isWin68}
+          selectable={selectable}
+          selected={selected}
+          paint={paint}
+          modelKeyIds={modelKeyIds}
+          advancedBindings={advancedBindings}
+          frame={frame}
+          onSelect={setSelected}
+          onToggleKey={toggle}
+          onPaintColorChange={setPaint}
+          onPaintSelected={() => {
+            const colors = {
+              ...value.colors
+            };
+            const paintRgb = rgb(paint);
+            for (const id of selected) {
+              colors[id] = paintRgb;
+              if (isWin68 && xsydDeviceManager.connected && !live) {
+                const kv = keyValueForCode(id);
+                if (kv !== undefined) {
+                  void xsydDeviceManager
+                    .request(buildXsydPerKeyWriteFrame(kv, paintRgb))
+                    .catch(() => {});
+                }
+              }
+            }
+            const currentMode = config.base.mode;
+            const canonical = normalizeGamingPresetMode(currentMode);
+            const nextPresetColors: Record<number, Record<string, RgbColor>> = {
+              ...(value.presetColors ?? {}),
+              ...(config.presetColors ?? {}),
+              [canonical]: { ...colors }
+            };
+            const nextConfig: CustomRgbConfiguration = {
+              ...config,
+              presetColors: nextPresetColors
+            };
+            const nextProfile: RgbProfile = {
+              ...value,
+              keys: {
+                ...value.keys,
+                mode: currentMode
+              },
+              colors,
+              presetColors: nextPresetColors,
+              custom: nextConfig
+            };
+            onChange(nextProfile);
+            if (isWin68 && slot !== undefined) {
+              saveXsydSavedRgb(slot, nextProfile);
+            }
+          }}
+          onReplay={() => setReplay(n => n + 1)}
+          onPatchLayerKeys={keys => patchLayer({ keys })}
+        />
         <section className="rgb-custom-editor">
           {darkReason && (
             <div className="rgb-dark-preview-note" role="status">
@@ -990,123 +800,43 @@ export default function CustomRgbEditor({
             </div>
           )}
           <div className="custom-rgb-columns">
-            <aside className="settings-card custom-rgb-stack">
-              <h3>{tr('Base layer')}</h3>
-              <button
-                className={`custom-rgb-layer ${active === 'base' && !adding ? 'active' : ''}`}
-                disabled={disabled}
-                onClick={() => {
-                  setActive('base');
-                  setAdding(false);
-                  setChoosing(false);
-                }}
-              >
-                <Waves size={16} />
-                <span>
-                  {auroraBase ? tr('Aurora') : waveBase ? tr('Dynamic Wave') : tr(mode.name)}
-                </span>
-              </button>
-              <h3>{tr('Effect layers')}</h3>
-              <p className="custom-rgb-stack-note">{tr('Lower layers blend over earlier ones.')}</p>
-              {config.layers.map((item, i) => (
-                <div
-                  key={item.id}
-                  className={`custom-rgb-layer ${active === item.id && !adding ? 'active' : ''} ${!item.enabled ? 'muted' : ''}`}
-                >
-                  <button
-                    className="custom-rgb-layer-select"
-                    disabled={disabled}
-                    onClick={() => {
-                      setActive(item.id);
-                      setAdding(false);
-                      setChoosing(false);
-                    }}
-                  >
-                    <span
-                      className={`layer-color-dot ${item.multicolor ? 'is-rainbow' : ''}`}
-                      style={
-                        item.multicolor
-                          ? undefined
-                          : {
-                              background: hex(item.color)
-                            }
-                      }
-                    />
-                    <span>
-                      {tr(CUSTOM_RGB_EFFECTS.find(e => e.id === item.effect)?.name ?? '')}
-                    </span>
-                    <small>{i + 1}</small>
-                  </button>
-                  <input
-                    type="checkbox"
-                    aria-label={`Enable ${CUSTOM_RGB_EFFECTS.find(e => e.id === item.effect)?.name} layer ${i + 1}`}
-                    checked={item.enabled}
-                    disabled={disabled}
-                    onChange={e =>
-                      change({
-                        ...config,
-                        layers: config.layers.map(l =>
-                          l.id === item.id
-                            ? {
-                                ...l,
-                                enabled: e.target.checked
-                              }
-                            : l
-                        )
-                      })
-                    }
-                  />
-                </div>
-              ))}
-              <button
-                className="custom-rgb-add"
-                disabled={disabled || config.layers.length >= MAX_RGB_LAYERS}
-                onClick={() => {
-                  setAdding(true);
-                  setChoosing(true);
-                }}
-              >
-                <Plus size={16} /> {tr('Add layer')}
-              </button>
-              {!config.layers.length && (
-                <p className="custom-rgb-empty">
-                  {tr('Choose a layer to bring your base colors to life.')}
-                </p>
-              )}
-              {layer && !adding && (
-                <div className="custom-rgb-order">
-                  <button
-                    className="secondary-button"
-                    aria-label={tr('Move layer up')}
-                    disabled={disabled || config.layers[0]?.id === active}
-                    onClick={() => move(-1)}
-                  >
-                    <ArrowUp size={15} />
-                  </button>
-                  <button
-                    className="secondary-button"
-                    aria-label={tr('Move layer down')}
-                    disabled={disabled || config.layers.at(-1)?.id === active}
-                    onClick={() => move(1)}
-                  >
-                    <ArrowDown size={15} />
-                  </button>
-                  <button
-                    className="secondary-button"
-                    aria-label={tr('Delete selected layer')}
-                    disabled={disabled}
-                    onClick={() =>
-                      change({
-                        ...config,
-                        layers: config.layers.filter(l => l.id !== active)
-                      })
-                    }
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              )}
-            </aside>
+            <CustomRgbLayerStack
+              config={config}
+              active={active}
+              adding={adding}
+              auroraBase={auroraBase}
+              waveBase={waveBase}
+              baseModeName={mode.name}
+              activeLayer={layer}
+              disabled={disabled}
+              onSelectBase={() => {
+                setActive('base');
+                setAdding(false);
+                setChoosing(false);
+              }}
+              onSelectLayer={id => {
+                setActive(id);
+                setAdding(false);
+                setChoosing(false);
+              }}
+              onToggleLayerEnabled={(id, enabled) =>
+                change({
+                  ...config,
+                  layers: config.layers.map(l => (l.id === id ? { ...l, enabled } : l))
+                })
+              }
+              onStartAddLayer={() => {
+                setAdding(true);
+                setChoosing(true);
+              }}
+              onMoveLayer={move}
+              onDeleteActiveLayer={() =>
+                change({
+                  ...config,
+                  layers: config.layers.filter(l => l.id !== active)
+                })
+              }
+            />
             <div className="settings-card custom-rgb-inspector">
               <div className="custom-inspector-heading">
                 <h2>
@@ -1133,661 +863,61 @@ export default function CustomRgbEditor({
                 </div>
               </div>
               {(adding || choosing) && (
-                <section className="custom-rgb-selection">
-                  <div className="custom-inspector-heading">
-                    <h3>{tr(adding ? 'Add an effect' : 'Choose effect')}</h3>
-                    <button
-                      className="secondary-button"
-                      onClick={() => {
-                        setAdding(false);
-                        setChoosing(false);
-                      }}
-                    >
-                      {tr('Cancel')}
-                    </button>
-                  </div>
-                  <div className="custom-rgb-effect-grid">
-                    {active === 'base' && !adding ? (
-                      <>
-                        <button
-                          disabled={disabled}
-                          aria-pressed={auroraBase}
-                          onClick={() => chooseBase('aurora')}
-                        >
-                          <Sparkles size={15} />
-                          {tr('Aurora')}
-                        </button>
-                        <button
-                          disabled={disabled}
-                          aria-pressed={waveBase}
-                          onClick={() => chooseBase('wave')}
-                        >
-                          <Waves size={15} />
-                          {tr('Dynamic Wave')}
-                        </button>
-                        {baseCatalog.map(item => (
-                          <button
-                            key={item.id}
-                            disabled={disabled}
-                            aria-pressed={!customBase && config.base.mode === item.id}
-                            onClick={() => chooseBase(item.id)}
-                          >
-                            <Waves size={15} />
-                            {tr(item.name)}
-                          </button>
-                        ))}
-                      </>
-                    ) : (
-                      CUSTOM_RGB_EFFECTS.filter(
-                        effect => effect.id !== 'aurora' || (layer?.effect === 'aurora' && !adding)
-                      ).map(effect => (
-                        <button
-                          key={effect.id}
-                          disabled={disabled}
-                          aria-pressed={!adding && layer?.effect === effect.id}
-                          onClick={() => choose(effect.id)}
-                        >
-                          <Sparkles size={15} />
-                          {tr(effect.name)}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </section>
+                <CustomRgbEffectSelector
+                  isBaseSelection={active === 'base' && !adding}
+                  adding={adding}
+                  auroraBase={auroraBase}
+                  waveBase={waveBase}
+                  customBase={customBase}
+                  baseModeId={config.base.mode}
+                  baseCatalog={baseCatalog}
+                  activeLayerEffect={layer?.effect}
+                  disabled={disabled}
+                  onCancel={() => {
+                    setAdding(false);
+                    setChoosing(false);
+                  }}
+                  onChooseBase={chooseBase}
+                  onChooseLayerEffect={choose}
+                />
               )}
               {!adding && !choosing && (
                 <div className="custom-rgb-parameters">
                   <h3>{active === 'base' ? tr('Base parameters') : tr('Effect parameters')}</h3>
                   {active === 'base' ? (
-                    <>
-                      <Slider
-                        label="Brightness"
-                        value={isWin68 ? effectiveBaseBrightness * 25 : config.base.brightness * 5}
-                        min={0}
-                        max={100}
-                        step={isWin68 ? 25 : 5}
-                        unit="%"
-                        disabled={disabled}
-                        onChange={v =>
-                          base({
-                            brightness: isWin68 ? v / 25 : v / 5
-                          })
-                        }
-                      />
-                      {customBase && config.baseEffect ? (
-                        <>
-                          <p className="custom-rgb-description">
-                            {waveBase
-                              ? tr(
-                                  'Multi-directional color waves across all 9 directions. Add FX layers for key reactions.'
-                                )
-                              : tr(
-                                  'Soft color curtains across all keys. Add FX layers for key reactions.'
-                                )}
-                          </p>
-                          <div className="custom-slider-grid">
-                            <Slider
-                              label={waveBase ? 'Wave width' : 'Ribbon width'}
-                              value={config.baseEffect.width}
-                              min={waveBase ? 0.5 : 0.25}
-                              max={waveBase ? 8 : 12}
-                              step={0.25}
-                              unit="keys"
-                              disabled={disabled}
-                              onChange={v =>
-                                animation({
-                                  width: v
-                                })
-                              }
-                            />
-                            <Slider
-                              label="Speed"
-                              value={config.baseEffect.speed}
-                              min={waveBase ? 0.25 : 0.5}
-                              max={waveBase ? 6 : 3}
-                              step={waveBase ? 0.25 : 0.5}
-                              unit="×"
-                              disabled={disabled}
-                              onChange={v =>
-                                animation({
-                                  speed: v
-                                })
-                              }
-                            />
-                          </div>
-                          {waveBase && (
-                            <div className="custom-rgb-direction is-grid">
-                              <span>{tr('Direction')}</span>
-                              <div className="custom-rgb-direction-grid">
-                                {CUSTOM_RGB_DIRECTIONS.map(dirItem => (
-                                  <button
-                                    key={dirItem.id}
-                                    type="button"
-                                    disabled={disabled}
-                                    aria-pressed={
-                                      normalizeDirection9(config.baseEffect?.direction) ===
-                                      dirItem.id
-                                    }
-                                    onClick={() =>
-                                      animation({
-                                        direction: dirItem.id
-                                      })
-                                    }
-                                  >
-                                    {tr(dirItem.label)}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          <div className="custom-palette-options">
-                            {Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => (
-                              <button
-                                key={id}
-                                disabled={disabled}
-                                aria-pressed={config.baseEffect?.palette === id}
-                                onClick={() =>
-                                  animation({
-                                    palette: id as RgbGradientPalette
-                                  })
-                                }
-                              >
-                                <span
-                                  style={{
-                                    background: `linear-gradient(90deg,${palette.colors.join(',')})`
-                                  }}
-                                />
-                                {tr(palette.name)}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {mode.speed && (
-                            <Slider
-                              label="Base speed"
-                              value={config.base.speed + 1}
-                              min={1}
-                              max={5}
-                              unit="/ 5"
-                              disabled={disabled}
-                              onChange={v =>
-                                base({
-                                  speed: v - 1
-                                })
-                              }
-                            />
-                          )}{' '}
-                          {mode.color && (
-                            <div className="rgb-color-controls">
-                              <div className="rgb-color-header">
-                                <span className="rgb-color-label">{tr('Base color')}</span>
-                                <div
-                                  className={`rgb-custom-color-box ${!config.base.mix ? 'is-active' : 'is-multicolor'}`}
-                                >
-                                  <label
-                                    className="rgb-color-picker-trigger"
-                                    title={tr('Base effect color')}
-                                  >
-                                    <RgbColorPicker
-                                      label={tr('Base effect color')}
-                                      value={baseHex}
-                                      disabled={disabled}
-                                      onChange={v =>
-                                        base({
-                                          rgb: rgb(v),
-                                          mix: false,
-                                          colorIndex: closestXsydColorSlot(rgb(v))
-                                        })
-                                      }
-                                    />
-                                  </label>
-                                  <span className="rgb-color-hex-readout">
-                                    {baseHex.toUpperCase()}
-                                  </span>
-                                </div>
-                              </div>
-                              <div
-                                className="rgb-swatch-grid"
-                                role="group"
-                                aria-label={tr('Color slot')}
-                              >
-                                {XSYD_COLOR_SLOTS.map(slotInfo => {
-                                  const isMulticolor = slotInfo.index === 0;
-                                  const presetHex = hex(slotInfo.rgb);
-                                  const selectedSlot = isMulticolor
-                                    ? Boolean(config.base.mix)
-                                    : !config.base.mix &&
-                                      baseHex.toLowerCase() === presetHex.toLowerCase();
-                                  return (
-                                    <button
-                                      key={slotInfo.index}
-                                      type="button"
-                                      className={`rgb-swatch-chip ${isMulticolor ? 'is-multicolor' : ''}`}
-                                      disabled={disabled}
-                                      aria-pressed={selectedSlot}
-                                      title={tr(slotInfo.name)}
-                                      onClick={() => {
-                                        if (isMulticolor) {
-                                          base({ mix: true, colorIndex: 0 });
-                                        } else {
-                                          base({
-                                            mix: false,
-                                            colorIndex: slotInfo.index,
-                                            rgb: [...slotInfo.rgb] as RgbColor
-                                          });
-                                        }
-                                      }}
-                                    >
-                                      <span
-                                        className={`rgb-swatch-dot ${isMulticolor ? 'is-rainbow' : ''}`}
-                                        style={isMulticolor ? undefined : { background: presetHex }}
-                                        aria-hidden="true"
-                                      />
-                                      <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </>
+                    <CustomRgbBaseParameters
+                      config={config}
+                      isWin68={isWin68}
+                      effectiveBaseBrightness={effectiveBaseBrightness}
+                      customBase={customBase}
+                      waveBase={waveBase}
+                      mode={mode}
+                      baseHex={baseHex}
+                      disabled={disabled}
+                      onPatchBase={base}
+                      onPatchAnimation={animation}
+                    />
                   ) : (
                     layer &&
                     metadata && (
-                      <>
-                        <p className="custom-rgb-description">{tr(definition?.detail ?? '')}</p>
-                        {layer.effect === 'aurora' && (
-                          <div className="custom-rgb-base-migration">
-                            <p>
-                              {tr(
-                                'Aurora is now a Base effect. Move this layer to cover all keys and control its brightness directly.'
-                              )}
-                            </p>
-                            <button
-                              className="secondary-button"
-                              disabled={disabled}
-                              onClick={moveAuroraToBase}
-                            >
-                              {tr('Move Aurora to Base')}
-                            </button>
-                          </div>
-                        )}
-                        {!metadata.semanticColor &&
-                          (metadata.gradient ? (
-                            <>
-                              <div className="custom-palette-options">
-                                {Object.entries(RGB_GRADIENT_PALETTES).map(([id, palette]) => (
-                                  <button
-                                    key={id}
-                                    disabled={disabled}
-                                    aria-pressed={
-                                      layer.multicolor &&
-                                      (layer.palette ?? metadata.defaults?.palette ?? 'aurora') ===
-                                        id
-                                    }
-                                    onClick={() =>
-                                      patchLayer({
-                                        multicolor: true,
-                                        palette: id as RgbGradientPalette
-                                      })
-                                    }
-                                  >
-                                    <span
-                                      style={{
-                                        background: `linear-gradient(90deg,${palette.colors.join(',')})`
-                                      }}
-                                    />
-                                    {tr(palette.name)}
-                                  </button>
-                                ))}
-                              </div>
-                              {(layer.effect === 'wave' || layer.effect === 'trigger') && (
-                                <div className="rgb-color-controls">
-                                  <div className="rgb-color-header">
-                                    <span className="rgb-color-label">{tr('Effect color')}</span>
-                                    <div
-                                      className={`rgb-custom-color-box ${!layer.multicolor ? 'is-active' : 'is-multicolor'}`}
-                                    >
-                                      <label
-                                        className="rgb-color-picker-trigger"
-                                        title={tr('Layer color')}
-                                      >
-                                        <RgbColorPicker
-                                          label={tr('Layer color')}
-                                          value={layerHex}
-                                          disabled={disabled}
-                                          onChange={v =>
-                                            patchLayer({
-                                              color: rgb(v),
-                                              multicolor: false
-                                            })
-                                          }
-                                        />
-                                      </label>
-                                      <span className="rgb-color-hex-readout">
-                                        {layerHex.toUpperCase()}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div
-                                    className="rgb-swatch-grid"
-                                    role="group"
-                                    aria-label={tr('Color slot')}
-                                  >
-                                    {XSYD_COLOR_SLOTS.map(slotInfo => {
-                                      const isMulticolor = slotInfo.index === 0;
-                                      const presetHex = hex(slotInfo.rgb);
-                                      const selectedSlot = isMulticolor
-                                        ? Boolean(layer.multicolor)
-                                        : !layer.multicolor &&
-                                          layerHex.toLowerCase() === presetHex.toLowerCase();
-                                      return (
-                                        <button
-                                          key={slotInfo.index}
-                                          type="button"
-                                          className={`rgb-swatch-chip ${isMulticolor ? 'is-multicolor' : ''}`}
-                                          disabled={disabled}
-                                          aria-pressed={selectedSlot}
-                                          title={tr(slotInfo.name)}
-                                          onClick={() => {
-                                            if (isMulticolor) {
-                                              patchLayer({ multicolor: true });
-                                            } else {
-                                              patchLayer({
-                                                color: [...slotInfo.rgb] as RgbColor,
-                                                multicolor: false
-                                              });
-                                            }
-                                          }}
-                                        >
-                                          <span
-                                            className={`rgb-swatch-dot ${isMulticolor ? 'is-rainbow' : ''}`}
-                                            style={
-                                              isMulticolor ? undefined : { background: presetHex }
-                                            }
-                                            aria-hidden="true"
-                                          />
-                                          <span className="rgb-swatch-name">
-                                            {tr(slotInfo.name)}
-                                          </span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <div className="custom-rgb-direction">
-                                <span>{tr('Color mode')}</span>
-                                <div>
-                                  <button
-                                    disabled={disabled}
-                                    aria-pressed={!layer.multicolor}
-                                    onClick={() =>
-                                      patchLayer({
-                                        multicolor: false
-                                      })
-                                    }
-                                  >
-                                    {tr('Single color')}
-                                  </button>
-                                  <button
-                                    disabled={disabled}
-                                    aria-pressed={layer.multicolor}
-                                    onClick={() =>
-                                      patchLayer({
-                                        multicolor: true
-                                      })
-                                    }
-                                  >
-                                    {tr('Multicolor')}
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="rgb-color-controls">
-                                <div className="rgb-color-header">
-                                  <span className="rgb-color-label">{tr('Effect color')}</span>
-                                  <div
-                                    className={`rgb-custom-color-box ${!layer.multicolor ? 'is-active' : 'is-multicolor'}`}
-                                  >
-                                    <label
-                                      className="rgb-color-picker-trigger"
-                                      title={tr('Layer color')}
-                                    >
-                                      <RgbColorPicker
-                                        label={tr('Layer color')}
-                                        value={layerHex}
-                                        disabled={disabled}
-                                        onChange={v =>
-                                          patchLayer({
-                                            color: rgb(v),
-                                            multicolor: false
-                                          })
-                                        }
-                                      />
-                                    </label>
-                                    <span className="rgb-color-hex-readout">
-                                      {layerHex.toUpperCase()}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div
-                                  className="rgb-swatch-grid"
-                                  role="group"
-                                  aria-label={tr('Color slot')}
-                                >
-                                  {XSYD_COLOR_SLOTS.map(slotInfo => {
-                                    const isMulticolor = slotInfo.index === 0;
-                                    const presetHex = hex(slotInfo.rgb);
-                                    const selectedSlot = isMulticolor
-                                      ? Boolean(layer.multicolor)
-                                      : !layer.multicolor &&
-                                        layerHex.toLowerCase() === presetHex.toLowerCase();
-                                    return (
-                                      <button
-                                        key={slotInfo.index}
-                                        type="button"
-                                        className={`rgb-swatch-chip ${isMulticolor ? 'is-multicolor' : ''}`}
-                                        disabled={disabled}
-                                        aria-pressed={selectedSlot}
-                                        title={tr(slotInfo.name)}
-                                        onClick={() => {
-                                          if (isMulticolor) {
-                                            patchLayer({ multicolor: true });
-                                          } else {
-                                            patchLayer({
-                                              color: [...slotInfo.rgb] as RgbColor,
-                                              multicolor: false
-                                            });
-                                          }
-                                        }}
-                                      >
-                                        <span
-                                          className={`rgb-swatch-dot ${isMulticolor ? 'is-rainbow' : ''}`}
-                                          style={
-                                            isMulticolor ? undefined : { background: presetHex }
-                                          }
-                                          aria-hidden="true"
-                                        />
-                                        <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </>
-                          ))}
-                        <div className="custom-slider-grid">
-                          <Slider
-                            label="Opacity"
-                            value={layer.opacity}
-                            min={0}
-                            max={100}
-                            unit="%"
-                            disabled={disabled}
-                            onChange={v =>
-                              patchLayer({
-                                opacity: v
-                              })
-                            }
-                          />
-                          {metadata.width && (
-                            <Slider
-                              label={metadata.width}
-                              value={layer.width}
-                              min={metadata.widthRange?.[0] ?? 0.25}
-                              max={metadata.widthRange?.[1] ?? 12}
-                              step={metadata.widthRange?.[2] ?? 0.25}
-                              unit={metadata.widthUnit ?? 'keys'}
-                              disabled={disabled}
-                              onChange={v =>
-                                patchLayer({
-                                  width: v
-                                })
-                              }
-                            />
-                          )}
-                          {metadata.speed && (
-                            <Slider
-                              label={metadata.speedLabel ?? 'Speed'}
-                              value={layer.speed}
-                              min={metadata.speedRange?.[0] ?? 0.5}
-                              max={metadata.speedRange?.[1] ?? 30}
-                              step={metadata.speedRange?.[2] ?? 0.5}
-                              unit={metadata.speed}
-                              disabled={disabled}
-                              onChange={v =>
-                                patchLayer({
-                                  speed: v
-                                })
-                              }
-                            />
-                          )}
-                          {metadata.scanPause && (
-                            <Slider
-                              label={metadata.scanPause}
-                              value={layer.scanPauseMs ?? 0}
-                              min={0}
-                              max={5000}
-                              step={50}
-                              unit="ms"
-                              disabled={disabled}
-                              onChange={v =>
-                                patchLayer({
-                                  scanPauseMs: v
-                                })
-                              }
-                            />
-                          )}
-                          {metadata.duration && (
-                            <Slider
-                              label={metadata.duration}
-                              value={layer.duration}
-                              min={100}
-                              max={4000}
-                              step={50}
-                              unit="ms"
-                              disabled={disabled}
-                              onChange={v =>
-                                patchLayer({
-                                  duration: v
-                                })
-                              }
-                            />
-                          )}
-                        </div>
-                        {metadata.direction &&
-                          (metadata.multiDirection ? (
-                            <div className="custom-rgb-direction is-grid">
-                              <span>{tr('Direction')}</span>
-                              <div className="custom-rgb-direction-grid">
-                                {CUSTOM_RGB_DIRECTIONS.map(dirItem => (
-                                  <button
-                                    key={dirItem.id}
-                                    type="button"
-                                    disabled={disabled}
-                                    aria-pressed={
-                                      normalizeDirection9(layer.direction) === dirItem.id
-                                    }
-                                    onClick={() =>
-                                      patchLayer({
-                                        direction: dirItem.id
-                                      })
-                                    }
-                                  >
-                                    {tr(dirItem.label)}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="custom-rgb-direction">
-                              <span>{tr('Direction')}</span>
-                              <div>
-                                {(['horizontal', 'vertical'] as const).map(direction => (
-                                  <button
-                                    key={direction}
-                                    disabled={disabled}
-                                    aria-pressed={layer.direction === direction}
-                                    onClick={() =>
-                                      patchLayer({
-                                        direction
-                                      })
-                                    }
-                                  >
-                                    {direction === 'horizontal' ? tr('Horizontal') : tr('Vertical')}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        {metadata.hall && (
-                          <p className="custom-rgb-description">
-                            {live
-                              ? tr('Analog feedback runs automatically in the background app.')
-                              : tr(
-                                  'Use Try effect to simulate presses. Start Custom for actual analog feedback.'
-                                )}
-                          </p>
-                        )}
-                      </>
+                      <CustomRgbLayerParameters
+                        layer={layer}
+                        metadata={metadata}
+                        detailText={definition?.detail ?? ''}
+                        layerHex={layerHex}
+                        disabled={disabled}
+                        live={live}
+                        onPatchLayer={patchLayer}
+                        onMoveAuroraToBase={moveAuroraToBase}
+                      />
                     )
                   )}
-                  {savedPresets.length > 0 && (
-                    <div className="rgb-saved-presets">
-                      <h3>{tr('Saved')} RGB</h3>
-                      <div className="rgb-zone-tabs" role="group" aria-label="Saved RGB">
-                        {savedPresets.map(item => (
-                          <div
-                            key={item.id}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                          >
-                            <button
-                              type="button"
-                              disabled={disabled}
-                              onClick={() => onApplySavedPreset?.(item)}
-                            >
-                              {item.name}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={disabled}
-                              aria-label={`Delete ${item.name}`}
-                              onClick={() => onDeleteSavedPreset?.(item.id)}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <SavedRgbPresetsSection
+                    presets={savedPresets}
+                    disabled={disabled}
+                    onApply={onApplySavedPreset}
+                    onDelete={onDeleteSavedPreset}
+                  />
                   {active === 'base' && !customBase && (
                     <details className="service-details">
                       <summary>{tr('Advanced')}</summary>
@@ -1818,70 +948,25 @@ export default function CustomRgbEditor({
               )}
             </div>
           </div>
-          <details className="service-details">
-            <summary>{tr('Details')}</summary>
-            <div>
-              <p>
-                {isWin68
-                  ? `${xsydConnected ? tr('Keyboard connected (WebHID XSYD 0x2A)') : tr('Local preview · connect WIN 68 HE MAX to stream live')} · ${live ? tr('Streaming Custom RGB') : tr('Draft preview')}`
-                  : status
-                    ? `${status.fps.toFixed(1)} FPS · ${status.connected ? tr('Keyboard connected') : tr('Waiting for keyboard')} · ${synced ? tr('Preview synced') : tr('Local preview or waiting for frames')}`
-                    : tr('The background service is not responding.')}
-              </p>
-              {status?.lastError && <p>{status.lastError}</p>}
-              {!isWin68 && (
-                <div className="custom-rgb-actions">
-                  <button className="secondary-button" onClick={onSetup}>
-                    {tr('Setup / Update')}
-                  </button>
-                  {status && (
-                    <a
-                      className="secondary-button"
-                      href="http://127.0.0.1:16868/"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {tr('Service panel')}
-                    </a>
-                  )}
-                  <button className="secondary-button" onClick={() => void refreshRgbService()}>
-                    {tr('Check again')}
-                  </button>
-                </div>
-              )}
-            </div>
-          </details>
-          <p className="rgb-preview-note">
-            {!isWin68 && `${tr('Side lights keep their onboard effect.')} `}
-            {demo
-              ? tr('Demo only changes the preview.')
-              : tr('Custom runs in the background; changes sync automatically.')}
-          </p>
+          <CustomRgbServiceDetails
+            isWin68={isWin68}
+            xsydConnected={xsydConnected}
+            live={live}
+            synced={synced}
+            demo={demo}
+            status={status}
+            onSetup={onSetup}
+            onRefreshService={() => void refreshRgbService()}
+          />
         </section>
       </div>
       {locked && (
-        <div className="custom-rgb-lock-overlay">
-          <div className="custom-rgb-lock-card" role="status">
-            <span className="custom-lock-icon">
-              <Layers size={27} />
-            </span>
-            <h2>
-              {checking ? tr('Checking background service…') : tr('Background service required')}
-            </h2>
-            <p>{tr('Run the background app to use Custom Effects, or try a preview.')}</p>
-            <div className="custom-rgb-actions">
-              <button className="apply-button" onClick={onSetup}>
-                <Download size={16} /> {tr('Download app')}
-              </button>
-              <button className="secondary-button" onClick={() => previewDemo(true)}>
-                {tr('Try demo')}
-              </button>
-              <button className="custom-text-button" onClick={() => void refreshRgbService()}>
-                {tr('Check again')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <CustomRgbLockOverlay
+          checking={checking}
+          onSetup={onSetup}
+          onTryDemo={() => previewDemo(true)}
+          onRefreshService={() => void refreshRgbService()}
+        />
       )}
     </div>
   );

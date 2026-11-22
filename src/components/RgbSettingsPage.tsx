@@ -1,18 +1,11 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Lightbulb,
-  Sparkles,
-  Waves,
-  Palette,
-  RotateCcw,
-  ArrowLeftRight,
-  Save,
-  Trash2
-} from 'lucide-react';
+import { RotateCcw, Save } from 'lucide-react';
 import CustomRgbEditor from './CustomRgbEditor';
 import RhythmSyncEditor from './RhythmSyncEditor';
 import Hero68Preview from './Hero68Preview';
-import RgbColorPicker from './RgbColorPicker';
+import { RgbEffectLibraryPanel } from './rgb/RgbEffectLibraryPanel';
+import { RgbParametersCard } from './rgb/RgbParametersCard';
+import { RgbTachyonPausedView } from './rgb/RgbTachyonPausedView';
 import RgbKeyPaintTools from './RgbKeyPaintTools';
 import { RgbPreviewPanel, RgbToolbarSlot, RgbWorkspace } from './RgbWorkspace';
 import { UndoRedoButtons, useUndoRedoState } from '../app/components/UndoRedoButtons';
@@ -89,30 +82,8 @@ type RgbSettingsProps = {
 };
 export default function RgbSettingsPage(props: RgbSettingsProps) {
   const tachyon = useContext(TachyonContext);
-  const { tr } = useI18n();
   if (tachyon) {
-    return (
-      <div className="page settings-page rgb-settings-page page-enter">
-        <div className="settings-hero">
-          <div>
-            <h1>{tr('RGB Settings')}</h1>
-            <p>{tr('RGB is paused while Tachyon Mode is enabled.')}</p>
-          </div>
-          <span className="rgb-basic-badge">{tr('Tachyon Mode')}</span>
-        </div>
-        <div className="rgb-preview-stage">
-          <Hero68Preview selectedKeys={new Set()} onToggleKey={() => {}} selectionEnabled={false} />
-        </div>
-        <section className="settings-card">
-          <h2>{tr('Brightness')} · 0%</h2>
-          <p>
-            {tr(
-              'Key and side lighting, Custom Effects and Rhythm Sync are off. Turn off Tachyon Mode to use RGB again.'
-            )}
-          </p>
-        </section>
-      </div>
-    );
+    return <RgbTachyonPausedView />;
   }
   return <ActiveRgbSettingsPage {...props} />;
 }
@@ -791,284 +762,38 @@ function ActiveRgbSettingsPage({
             )}
           </RgbPreviewPanel>
           <div className="rgb-editor-layout">
-            <aside className="settings-card rgb-effect-library">
-              {!isWin68 ? (
-                <div className="rgb-zone-tabs" role="group" aria-label={tr('Lighting zone')}>
-                  {(['keys', 'side'] as const).map(id => (
-                    <button key={id} aria-pressed={zone === id} onClick={() => setZone(id)}>
-                      {id === 'keys' ? tr('Keys') : tr('Side Light')}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="rgb-section-heading">
-                  <h2>{tr('WIN 68 HE MAX Effects')}</h2>
-                  <span>
-                    {effects.length} {tr('effects stored on your keyboard')}
-                  </span>
-                </div>
-              )}
-              {!isWin68 && <h2>{tr('Choose effect')}</h2>}
-              <div className="rgb-mode-grid">
-                {effects.map((mode, i) => {
-                  const Icon = [Lightbulb, Waves, Sparkles, Palette][i % 4];
-                  return (
-                    <button
-                      key={mode.id}
-                      disabled={busy}
-                      className={config.mode === mode.id ? 'active' : ''}
-                      aria-pressed={config.mode === mode.id}
-                      onClick={() =>
-                        change({
-                          mode: mode.id
-                        })
-                      }
-                    >
-                      <Icon size={16} />
-                      <span>{tr(mode.name)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </aside>
-            <section className="settings-card rgb-basic-card">
-              <div className="rgb-section-heading">
-                <h2>{tr(capability?.name ?? 'Unrecognized onboard mode')}</h2>
-                <span>
-                  {isWin68
-                    ? `XSYD Mode 0x${config.mode.toString(16).padStart(2, '0').toUpperCase()}`
-                    : activeZone === 'keys'
-                      ? tr('Key lighting')
-                      : tr('Side lighting')}
-                </span>
-              </div>
-              {!capability && (
-                <p className="rgb-inline-note">
-                  {tr('Unrecognized onboard mode')} {config.mode}.{' '}
-                  {tr('It is preserved until you select another effect.')}
-                </p>
-              )}
-              {darkReason && (
-                <div className="rgb-dark-preview-note" role="status">
-                  <span>
-                    {tr('Lighting is dark')} · {darkReason}
-                  </span>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={busy}
-                    onClick={() =>
-                      change({
-                        mix: true,
-                        colorIndex: 0,
-                        brightness: effectiveBrightness || brightnessMax
-                      })
-                    }
-                  >
-                    {tr('Use Multicolor')}
-                  </button>
-                </div>
-              )}
-              <div className="rgb-parameters">
-                <label>
-                  {tr('Brightness')}{' '}
-                  <strong>
-                    {effectiveBrightness <= brightnessMax
-                      ? `${effectiveBrightness * (isWin68 || activeZone === 'side' ? 25 : 5)}%`
-                      : tr('Unknown ({value})', {
-                          value: config.brightness
-                        })}
-                  </strong>
-                  <input
-                    aria-label={tr('RGB brightness')}
-                    type="range"
-                    min="0"
-                    max={brightnessMax}
-                    value={Math.min(effectiveBrightness, brightnessMax)}
-                    disabled={busy || !capability || (!isWin68 && config.mode === 0)}
-                    onChange={e =>
-                      change({
-                        brightness: Number(e.target.value)
-                      })
-                    }
-                  />
-                </label>
-                {capability?.speed && (
-                  <label>
-                    {tr('Speed')} <strong>{config.speed + 1} / 5</strong>
-                    <input
-                      aria-label={tr('RGB speed')}
-                      type="range"
-                      min="0"
-                      max="4"
-                      value={config.speed}
-                      disabled={busy}
-                      onChange={e =>
-                        change({
-                          speed: Number(e.target.value)
-                        })
-                      }
-                    />
-                  </label>
-                )}
-                {win68Capability?.reverse && (
-                  <div className="rgb-reverse-row">
-                    <label className="rgb-reverse-toggle">
-                      <span className="rgb-reverse-label">
-                        <ArrowLeftRight size={15} />
-                        <span>{tr('Reverse direction')}</span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(config.reverse)}
-                        disabled={busy}
-                        onChange={e => change({ reverse: e.target.checked })}
-                      />
-                    </label>
-                  </div>
-                )}
-                {capability?.color && (
-                  <div className="rgb-color-controls">
-                    <div className="rgb-color-header">
-                      <span className="rgb-color-label">{tr('Color')}</span>
-                      <div
-                        className={`rgb-custom-color-box ${!config.mix ? (matchesPresetColor ? 'is-active' : 'is-custom-active') : 'is-multicolor'}`}
-                      >
-                        <label className="rgb-color-picker-trigger" title={tr('Effect color')}>
-                          <RgbColorPicker
-                            label={tr('Effect color')}
-                            value={activeHex}
-                            disabled={busy}
-                            onChange={applyCustomColor}
-                          />
-                        </label>
-                        <input
-                          type="text"
-                          className="rgb-color-hex-input"
-                          aria-label="HEX color"
-                          value={hexInput}
-                          maxLength={7}
-                          spellCheck={false}
-                          disabled={busy}
-                          onChange={e => {
-                            const next = e.target.value;
-                            setHexInput(next);
-                            if (/^#?[0-9a-f]{6}$/i.test(next)) {
-                              applyCustomColor(next);
-                            }
-                          }}
-                          onBlur={() => setHexInput(activeHex.toUpperCase())}
-                        />
-                      </div>
-                    </div>
-                    <div className="rgb-swatch-grid" role="group" aria-label={tr('Color slot')}>
-                      {XSYD_COLOR_SLOTS.map(slotInfo => {
-                        const isMulticolor = slotInfo.index === 0;
-                        const presetHex = colorHex(slotInfo.rgb);
-                        const selectedSlot = isMulticolor
-                          ? Boolean(config.mix)
-                          : !config.mix &&
-                            activeColorIndex === slotInfo.index &&
-                            activeHex.toLowerCase() === presetHex.toLowerCase();
-                        return (
-                          <button
-                            key={slotInfo.index}
-                            type="button"
-                            className={`rgb-swatch-chip ${isMulticolor ? 'is-multicolor' : ''}`}
-                            disabled={busy}
-                            aria-pressed={selectedSlot}
-                            title={tr(slotInfo.name)}
-                            onClick={() => {
-                              if (isMulticolor) {
-                                change({ mix: true, colorIndex: 0 });
-                              } else {
-                                const presetRgb: RgbColor = [...slotInfo.rgb] as RgbColor;
-                                const nextPalette = paletteSlots.map((c, idx) =>
-                                  idx === slotInfo.index - 1 ? presetRgb : ([...c] as RgbColor)
-                                );
-                                change({
-                                  mix: false,
-                                  colorIndex: slotInfo.index,
-                                  rgb: presetRgb,
-                                  palette: nextPalette
-                                });
-                              }
-                            }}
-                          >
-                            <span
-                              className={`rgb-swatch-dot ${isMulticolor ? 'is-rainbow' : ''}`}
-                              style={isMulticolor ? undefined : { background: presetHex }}
-                              aria-hidden="true"
-                            />
-                            <span className="rgb-swatch-name">{tr(slotInfo.name)}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-              {savedPresets.length > 0 && (
-                <div className="rgb-saved-presets">
-                  <h3>{tr('Saved')} RGB</h3>
-                  <div className="rgb-zone-tabs" role="group" aria-label="Saved RGB">
-                    {savedPresets.map(item => (
-                      <div
-                        key={item.id}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                      >
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => handleApplySavedPreset(item)}
-                        >
-                          {item.name}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          aria-label={`Delete ${item.name}`}
-                          onClick={() => handleDeleteSavedPreset(item.id)}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {capability?.reactive && (
-                <p className="rgb-inline-note">
-                  {tr(
-                    'Preview only · sample key presses repeat automatically. Click or type to try your own keys.'
-                  )}
-                </p>
-              )}
-              {!isWin68 && config.brightness > brightnessMax && (
-                <p className="rgb-inline-note">
-                  {tr(
-                    'This draft has an unrecognized brightness value. Choose a supported level before saving this zone.'
-                  )}
-                </p>
-              )}
-              {error && (
-                <p className="stream-error">
-                  {tr('Preview unavailable')}: {error}
-                </p>
-              )}
-              <details className="service-details">
-                <summary>{tr('Details')}</summary>
-                <p>
-                  {isWin68
-                    ? tr(
-                        'Preview uses WIN 68 HE MAX firmware v1.1.4 (XSYD 0x18 / 0x2A) integer RGB & HSV calculations.'
-                      )
-                    : tr(
-                        'Preview uses firmware V3.20 RGB calculations. Screen colors may differ from the LEDs.'
-                      )}
-                </p>
-              </details>
-            </section>
+            <RgbEffectLibraryPanel
+              isWin68={isWin68}
+              zone={zone}
+              onZoneChange={setZone}
+              effects={effects}
+              activeModeId={config.mode}
+              busy={busy}
+              onSelectMode={modeId => change({ mode: modeId })}
+            />
+            <RgbParametersCard
+              isWin68={isWin68}
+              activeZone={activeZone}
+              config={config}
+              capability={capability}
+              supportsReverse={Boolean(win68Capability?.reverse)}
+              darkReason={darkReason}
+              effectiveBrightness={effectiveBrightness}
+              brightnessMax={brightnessMax}
+              activeHex={activeHex}
+              activeColorIndex={activeColorIndex}
+              matchesPresetColor={matchesPresetColor}
+              hexInput={hexInput}
+              onHexInputChange={setHexInput}
+              paletteSlots={paletteSlots}
+              busy={busy}
+              error={error}
+              savedPresets={savedPresets}
+              onChangeZone={change}
+              onApplyCustomColor={applyCustomColor}
+              onApplySavedPreset={handleApplySavedPreset}
+              onDeleteSavedPreset={handleDeleteSavedPreset}
+            />
           </div>
         </>
       )}

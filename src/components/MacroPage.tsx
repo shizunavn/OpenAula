@@ -1,18 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ArrowDown,
-  ArrowUp,
-  Circle,
-  Copy,
-  Download,
-  ListOrdered,
-  Play,
-  Plus,
-  Search,
-  Square,
-  Trash2,
-  Upload
-} from 'lucide-react';
+import { Circle, Copy, Download, ListOrdered, Plus, Square, Trash2, Upload } from 'lucide-react';
 import FeatureHelp from './FeatureHelp';
 import {
   MACRO_ACTIONS,
@@ -22,7 +9,6 @@ import {
   heldMacroKeys,
   loadMacroLibrary,
   macroExport,
-  macroKeyLabel,
   newMacro,
   parseMacroImport,
   saveMacroLibrary,
@@ -32,18 +18,15 @@ import {
 } from '../state/macros';
 import { syncHero68MacroLibrary } from '../protocol/hero68/macroDevice';
 import { hero68DeviceManager, useHero68Device } from '../protocol/hero68/webhid';
-import { AppSelect } from '../app/components/AppSelect';
 import { UndoRedoButtons, useUndoRedoState } from '../app/components/UndoRedoButtons';
 import './MacroPage.css';
 import { useI18n } from '../i18n';
 import { BRAND } from '../brand';
 import { loadWorkspace } from './macro/macroWorkspace';
-const playbackLabels = {
-  once: 'Play once',
-  repeat: 'Repeat a set number of times',
-  hold: 'Repeat while held',
-  toggle: 'Tap to start / stop'
-};
+import { MacroLibrarySidebar } from './macro/MacroLibrarySidebar';
+import { MacroEventSequence } from './macro/MacroEventSequence';
+import { MacroPlaybackFooter } from './macro/MacroPlaybackFooter';
+import { MacroDiscardModal } from './macro/MacroDiscardModal';
 const mouseButtonToMacroKey: Record<number, string> = {
   0: 'MouseKey0',
   1: 'MouseKey2',
@@ -573,52 +556,15 @@ export default function MacroPage() {
       )}
 
       <div className="macro-workspace">
-        <aside className="macro-library">
-          <div className="macro-section-title">
-            <h2>{tr('Your macros')}</h2>
-            <span>{macros.length}</span>
-          </div>
-          <label className="macro-search">
-            <Search size={16} />
-            <input
-              type="search"
-              aria-label={tr('Search macros…')}
-              placeholder={tr('Search macros…')}
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-            />
-          </label>
-          <div className="macro-library-list">
-            {filtered.map(macro => (
-              <button
-                key={macro.id}
-                disabled={locked}
-                className={draft?.id === macro.id ? 'is-active' : ''}
-                onClick={() => select(macro)}
-              >
-                <ListOrdered size={19} />
-                <span>
-                  <strong>{macro.name}</strong>
-                  <small>
-                    {tr(macro.events.length === 1 ? '{count} event' : '{count} events', {
-                      count: macro.events.length
-                    })}{' '}
-                    ·{' '}
-                    {(macro.events.reduce((sum, event) => sum + event.delayMs, 0) / 1000).toFixed(
-                      2
-                    )}{' '}
-                    s
-                  </small>
-                </span>
-              </button>
-            ))}
-            {!macros.length && <p>{tr('Create a macro to start your library.')}</p>}
-            {!!macros.length && !filtered.length && <p>{tr('No macros match your search.')}</p>}
-          </div>
-          <p className="macro-local-note">
-            {tr('Stored on this computer. Export your library to move it to another device.')}
-          </p>
-        </aside>
+        <MacroLibrarySidebar
+          macros={macros}
+          filtered={filtered}
+          activeMacroId={draft?.id ?? null}
+          query={query}
+          locked={locked}
+          onQueryChange={setQuery}
+          onSelect={select}
+        />
         {!draft ? (
           <section className="macro-empty">
             <span className="macro-empty-icon">
@@ -772,368 +718,67 @@ export default function MacroPage() {
                 </>
               )}
             </div>
-            <div className="macro-sequence-heading">
-              <div>
-                <h2>{tr('Sequence')}</h2>
-                <span>
-                  {tr(draft.events.length === 1 ? '{count} event' : '{count} events', {
-                    count: draft.events.length
-                  })}{' '}
-                  ·{' '}
-                  {tr('{seconds} s per cycle', {
-                    seconds: (duration / 1000).toFixed(2)
-                  })}
-                </span>
-              </div>
-              <button
-                className="secondary-button"
-                disabled={recording || !draft.events.length}
-                onClick={playing ? stopPreview : preview}
-              >
-                {playing ? <Square size={14} /> : <Play size={14} />}{' '}
-                {playing ? tr('Stop preview') : tr('Preview one cycle')}
-              </button>
-            </div>
-            {(playing || previewIndex !== null) && (
-              <div className="macro-preview" role="status">
-                <span>
-                  {playing ? tr('Previewing') : tr('Preview complete')} ·{' '}
-                  {tr('Event {count} / {total}', {
-                    count: (previewIndex ?? -1) + 1,
-                    total: draft.events.length
-                  })}
-                </span>
-                <div>
-                  {previewHeld.length ? (
-                    previewHeld.map(key => <kbd key={key}>{macroKeyLabel(key)}</kbd>)
-                  ) : (
-                    <span>{tr('No keys held')}</span>
-                  )}
-                </div>
-                <small>{tr('Visual preview only — no keys are sent to applications.')}</small>
-              </div>
-            )}
-            {!draft.events.length ? (
-              <div className="macro-sequence-empty">
-                <p>{tr('No events yet. Record your keys or add a keystroke below.')}</p>
-              </div>
-            ) : (
-              <div className="macro-event-list">
-                <div className="macro-event-columns">
-                  <span>#</span>
-                  <span>{tr('Wait before')}</span>
-                  <span>{tr('Action')}</span>
-                  <span>{tr('Key / button')}</span>
-                  <span />
-                </div>
-                {draft.events.map((event, index) => (
-                  <div
-                    key={index}
-                    className={`macro-event-row ${previewIndex === index ? 'is-previewed' : ''}`}
-                  >
-                    <span className="macro-event-index">{index + 1}</span>
-                    <label className="macro-delay-input">
-                      <input
-                        type="number"
-                        min={0}
-                        max={60000}
-                        aria-label={tr('Event {count} delay', {
-                          count: index + 1
-                        })}
-                        value={event.delayMs}
-                        disabled={locked}
-                        onChange={e =>
-                          updateEvents(
-                            draft.events.map((item, i) =>
-                              i === index
-                                ? {
-                                    ...item,
-                                    delayMs: Number(e.target.value)
-                                  }
-                                : item
-                            )
-                          )
-                        }
-                      />
-                      <span>ms</span>
-                    </label>
-                    <AppSelect<'down' | 'up'>
-                      label={tr('Event {count} action', {
-                        count: index + 1
-                      })}
-                      value={event.type}
-                      disabled={locked}
-                      onChange={type =>
-                        updateEvents(
-                          draft.events.map((item, i) =>
-                            i === index
-                              ? {
-                                  ...item,
-                                  type
-                                }
-                              : item
-                          )
-                        )
-                      }
-                      options={[
-                        {
-                          value: 'down',
-                          label: '↓ ' + tr('Press')
-                        },
-                        {
-                          value: 'up',
-                          label: '↑ ' + tr('Release')
-                        }
-                      ]}
-                    />
-                    <AppSelect
-                      label={tr('Event {count} key', {
-                        count: index + 1
-                      })}
-                      value={event.key}
-                      disabled={locked}
-                      onChange={key =>
-                        updateEvents(
-                          draft.events.map((item, i) =>
-                            i === index
-                              ? {
-                                  ...item,
-                                  key
-                                }
-                              : item
-                          )
-                        )
-                      }
-                      options={MACRO_ACTIONS.map(action => ({
-                        value: action.name,
-                        label: action.label
-                      }))}
-                    />
-                    <div className="macro-row-actions">
-                      <button
-                        className="icon-button"
-                        aria-label={tr('Move event {count} up', {
-                          count: index + 1
-                        })}
-                        disabled={locked || index === 0}
-                        onClick={() => move(index, -1)}
-                      >
-                        <ArrowUp size={14} />
-                      </button>
-                      <button
-                        className="icon-button"
-                        aria-label={tr('Move event {count} down', {
-                          count: index + 1
-                        })}
-                        disabled={locked || index === draft.events.length - 1}
-                        onClick={() => move(index, 1)}
-                      >
-                        <ArrowDown size={14} />
-                      </button>
-                      <button
-                        className="icon-button"
-                        aria-label={tr('Remove event {count}', {
-                          count: index + 1
-                        })}
-                        disabled={locked}
-                        onClick={() => updateEvents(draft.events.filter((_, i) => i !== index))}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="macro-add-controls">
-              <AppSelect
-                label={tr('Key to add')}
-                value={addKey}
-                disabled={locked}
-                onChange={setAddKey}
-                options={MACRO_ACTIONS.map(action => ({
-                  value: action.name,
-                  label: action.label
-                }))}
-              />
-              <button className="secondary-button" disabled={locked} onClick={appendKeystroke}>
-                <Plus size={15} />
-                {tr('Add keystroke')}
-              </button>
-              {heldMacroKeys(draft.events).length > 0 && !recording && (
-                <button
-                  className="secondary-button"
-                  disabled={locked}
-                  onClick={() =>
-                    updateEvents([
-                      ...draft.events,
-                      ...heldMacroKeys(draft.events).map(key => ({
-                        key,
-                        type: 'up' as const,
-                        delayMs: 0
-                      }))
-                    ])
-                  }
-                >
-                  {tr('Release held keys')}
-                </button>
-              )}
-            </div>
-            <details className="macro-single-event">
-              <summary>{tr('Add a single press or release')}</summary>
-              <AppSelect<'down' | 'up'>
-                label={tr('Single event action')}
-                value={eventType}
-                disabled={locked}
-                onChange={setEventType}
-                options={[
-                  {
-                    value: 'down',
-                    label: tr('Press')
-                  },
-                  {
-                    value: 'up',
-                    label: tr('Release')
-                  }
-                ]}
-              />
-              <button
-                className="secondary-button"
-                disabled={locked}
-                onClick={() =>
-                  updateEvents([
-                    ...draft.events,
-                    {
-                      key: addKey,
-                      type: eventType,
-                      delayMs: fixedDelay
-                    }
-                  ])
-                }
-              >
-                {tr(eventType === 'down' ? 'Add press of {key}' : 'Add release of {key}', {
-                  key: macroKeyLabel(addKey)
-                })}
-              </button>
-            </details>
-            <footer className="macro-playback">
-              <div>
-                <label>
-                  <span>{tr('Playback behavior')}</span>
-                  <AppSelect<MacroDefinition['playback']>
-                    label={tr('Playback behavior')}
-                    value={draft.playback}
-                    disabled={locked}
-                    onChange={playback =>
-                      setDraft({
-                        ...draft,
-                        playback
-                      })
-                    }
-                    options={Object.entries(playbackLabels).map(([value, label]) => ({
-                      value: value as MacroDefinition['playback'],
-                      label: tr(label)
-                    }))}
-                  />
-                </label>
-                {draft.playback === 'repeat' && (
-                  <label className="macro-delay-input">
-                    <input
-                      type="number"
-                      aria-label={tr('Repeat count')}
-                      min={1}
-                      max={255}
-                      value={draft.repeatCount}
-                      disabled={locked}
-                      onChange={event =>
-                        setDraft({
-                          ...draft,
-                          repeatCount: Number(event.target.value)
-                        })
-                      }
-                    />
-                    <span>{tr('times')}</span>
-                  </label>
-                )}
-              </div>
-              <p>
-                {draft.playback === 'once'
-                  ? tr('Play the complete sequence once per trigger.')
-                  : draft.playback === 'repeat'
-                    ? tr('Play the sequence {count} times per trigger.', {
-                        count: draft.repeatCount
-                      })
-                    : draft.playback === 'hold'
-                      ? tr('Keep repeating while the trigger key is held.')
-                      : tr('Tap the trigger to start repeating; tap again to stop.')}
-              </p>
-              <div className="macro-hardware-note">
-                <strong>
-                  {device.state === 'connected'
-                    ? tr('On-device sync ready')
-                    : tr('Local + device library')}
-                </strong>
-                <span>
-                  {device.state === 'connected'
-                    ? tr(
-                        'Save writes the complete macro definition library to HERO68 using CMD 0x05. Playback behavior takes effect only after a macro is assigned to a key.'
-                      )
-                    : tr(
-                        'Your editable copy is kept locally. Connect HERO68, then save to write the definitions; assign them from Key Remap → Macros.'
-                      )}
-                </span>
-              </div>
-            </footer>
+            <MacroEventSequence
+              events={draft.events}
+              durationMs={duration}
+              locked={locked}
+              recording={recording}
+              playing={playing}
+              previewIndex={previewIndex}
+              previewHeld={previewHeld}
+              addKey={addKey}
+              eventType={eventType}
+              fixedDelay={fixedDelay}
+              onAddKeyChange={setAddKey}
+              onEventTypeChange={setEventType}
+              onUpdateEvents={updateEvents}
+              onMoveEvent={move}
+              onAppendKeystroke={appendKeystroke}
+              onStartPreview={preview}
+              onStopPreview={stopPreview}
+            />
+            <MacroPlaybackFooter
+              playback={draft.playback}
+              repeatCount={draft.repeatCount}
+              locked={locked}
+              deviceConnected={device.state === 'connected'}
+              onPlaybackChange={playback =>
+                setDraft({
+                  ...draft,
+                  playback
+                })
+              }
+              onRepeatCountChange={repeatCount =>
+                setDraft({
+                  ...draft,
+                  repeatCount
+                })
+              }
+            />
           </section>
         )}
       </div>
       {switchTarget && (
-        <div className="macro-modal-backdrop">
-          <section
-            className="macro-discard-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="macro-draft-title"
-          >
-            <h2 id="macro-draft-title">{tr('Keep this draft?')}</h2>
-            <p>
-              {tr('Save “{name}” to your library before switching, or discard its unsaved edits.', {
-                name: draft?.name ?? ''
-              })}
-            </p>
-            <div>
-              <button autoFocus className="secondary-button" onClick={() => setSwitchTarget(null)}>
-                {tr('Cancel')}
-              </button>
-              <button
-                className="secondary-button"
-                onClick={() => {
-                  setDraft(switchTarget);
-                  setSwitchTarget(null);
-                  setError('');
-                  setNotice('');
-                }}
-              >
-                {tr('Discard edits')}
-              </button>
-              <button
-                className="apply-button"
-                disabled={deviceSaving}
-                onClick={() =>
-                  void (async () => {
-                    if (await save()) {
-                      setDraft(switchTarget);
-                      setSwitchTarget(null);
-                    }
-                  })()
-                }
-              >
-                {deviceSaving ? tr('Saving…') : tr('Save & continue')}
-              </button>
-            </div>
-            {error && <p role="alert">{tr(error)}</p>}
-          </section>
-        </div>
+        <MacroDiscardModal
+          draftName={draft?.name ?? ''}
+          deviceSaving={deviceSaving}
+          error={error}
+          onCancel={() => setSwitchTarget(null)}
+          onDiscard={() => {
+            setDraft(switchTarget);
+            setSwitchTarget(null);
+            setError('');
+            setNotice('');
+          }}
+          onSaveAndContinue={() =>
+            void (async () => {
+              if (await save()) {
+                setDraft(switchTarget);
+                setSwitchTarget(null);
+              }
+            })()
+          }
+        />
       )}
     </div>
   );
